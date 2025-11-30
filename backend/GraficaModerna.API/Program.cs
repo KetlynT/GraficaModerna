@@ -14,6 +14,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using GraficaModerna.API.Data;
+
+var app = builder.Build();
+
+// ==========================================
+// SEEDER DE BANCO DE DADOS (Executa ao iniciar)
+// ==========================================
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRef<AppDbContext>();
+    await DbSeeder.SeedAsync(context);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 

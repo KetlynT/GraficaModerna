@@ -1,60 +1,75 @@
-using AutoMapper;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
-using GraficaModerna.Domain.Entities;
-using GraficaModerna.Domain.Interfaces;
+using Microsoft.AspNetCore.Authorization; // Adicionado para usar [Authorize]
+using Microsoft.AspNetCore.Mvc;
 
-namespace GraficaModerna.Application.Services;
+namespace GraficaModerna.API.Controllers;
 
-public class ProductService : IProductService
+[Route("api/[controller]")]
+[ApiController]
+public class ProductsController : ControllerBase
 {
-    private readonly IProductRepository _repository;
-    private readonly IMapper _mapper;
+    private readonly IProductService _service;
 
-    public ProductService(IProductRepository repository, IMapper mapper)
+    public ProductsController(IProductService service)
     {
-        _repository = repository;
-        _mapper = mapper;
+        _service = service;
     }
 
-    public async Task<IEnumerable<ProductResponseDto>> GetCatalogAsync()
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetAll()
     {
-        var products = await _repository.GetAllAsync();
-        return _mapper.Map<IEnumerable<ProductResponseDto>>(products);
+        var products = await _service.GetCatalogAsync();
+        return Ok(products);
     }
 
-    public async Task<ProductResponseDto> GetByIdAsync(Guid id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<ProductResponseDto>> GetById(Guid id)
     {
-        var product = await _repository.GetByIdAsync(id);
-        return _mapper.Map<ProductResponseDto>(product);
+        var product = await _service.GetByIdAsync(id);
+        if (product == null) return NotFound();
+        return Ok(product);
     }
 
-    public async Task<ProductResponseDto> CreateAsync(CreateProductDto dto)
+    [HttpPost]
+    [Authorize(Roles = "Admin")] // Proteção Ativada
+    public async Task<ActionResult<ProductResponseDto>> Create([FromBody] CreateProductDto dto)
     {
-        var product = new Product(dto.Name, dto.Description, dto.Price, dto.ImageUrl);
-        var created = await _repository.CreateAsync(product);
-        return _mapper.Map<ProductResponseDto>(created);
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var result = await _service.CreateAsync(dto);
+        return CreatedAtAction(nameof(GetAll), new { id = result.Id }, result);
     }
 
-    public async Task UpdateAsync(Guid id, CreateProductDto dto)
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")] // Proteção Ativada
+    public async Task<ActionResult> Update(Guid id, [FromBody] CreateProductDto dto)
     {
-        var product = await _repository.GetByIdAsync(id);
-        if (product == null) throw new KeyNotFoundException("Produto não encontrado");
+        if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        // Atualiza a entidade usando o método de domínio
-        product.Update(dto.Name, dto.Description, dto.Price, dto.ImageUrl);
-
-        await _repository.UpdateAsync(product);
+        try
+        {
+            await _service.UpdateAsync(id, dto);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
-    public async Task DeleteAsync(Guid id)
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")] // Proteção Ativada
+    public async Task<ActionResult> Delete(Guid id)
     {
-        var product = await _repository.GetByIdAsync(id);
-        if (product == null) throw new KeyNotFoundException("Produto não encontrado");
-
-        // Soft Delete (apenas desativa)
-        product.Deactivate();
-
-        await _repository.UpdateAsync(product);
+        try
+        {
+            await _service.DeleteAsync(id);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 }

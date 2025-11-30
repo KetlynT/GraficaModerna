@@ -1,12 +1,15 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+
+import { MainLayout } from './components/layout/MainLayout';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { ProductDetails } from './pages/ProductDetails';
+import { GenericPage } from './pages/GenericPage'; // Nova página
 import { AuthService } from './services/authService';
 
-// Componente para proteger rotas privadas
 const PrivateRoute = ({ children }) => {
   return AuthService.isAuthenticated() ? children : <Navigate to="/login" />;
 };
@@ -14,12 +17,18 @@ const PrivateRoute = ({ children }) => {
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" />
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/produto/:id" element={<ProductDetails />} />
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/produto/:id" element={<ProductDetails />} />
+          
+          {/* Rota Dinâmica para páginas de conteúdo (Sobre, Política, etc) */}
+          <Route path="/pagina/:slug" element={<GenericPage />} />
+        </Route>
+
         <Route path="/login" element={<Login />} />
         
-        {/* Rota Protegida */}
         <Route 
           path="/admin" 
           element={
@@ -28,6 +37,10 @@ function App() {
             </PrivateRoute>
           } 
         />
+
+        {/* REDIRECIONAMENTO AUTOMÁTICO 404 -> HOME */}
+        {/* Se tentar acessar qualquer rota não definida acima, vai para a Home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
