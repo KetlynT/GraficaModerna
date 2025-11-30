@@ -1,5 +1,6 @@
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GraficaModerna.API.Controllers;
@@ -15,6 +16,7 @@ public class ProductsController : ControllerBase
         _service = service;
     }
 
+    // Público: Qualquer um pode ver o catálogo
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetAll()
     {
@@ -22,6 +24,7 @@ public class ProductsController : ControllerBase
         return Ok(products);
     }
 
+    // Público: Ver detalhes
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductResponseDto>> GetById(Guid id)
     {
@@ -30,8 +33,9 @@ public class ProductsController : ControllerBase
         return Ok(product);
     }
 
+    // Protegido: Apenas Admin cria
     [HttpPost]
-    [Authorize(Roles = "Admin")] // Descomentar futuramente
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ProductResponseDto>> Create([FromBody] CreateProductDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -40,6 +44,7 @@ public class ProductsController : ControllerBase
         return CreatedAtAction(nameof(GetAll), new { id = result.Id }, result);
     }
 
+    // Protegido: Apenas Admin atualiza
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult> Update(Guid id, [FromBody] CreateProductDto dto)
@@ -57,6 +62,7 @@ public class ProductsController : ControllerBase
         }
     }
 
+    // Protegido: Apenas Admin deleta
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult> Delete(Guid id)

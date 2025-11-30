@@ -9,13 +9,20 @@ export const Footer = () => {
     contact_email: 'Carregando...',
     address: 'Carregando...'
   });
+  const [pages, setPages] = useState([]);
 
   useEffect(() => {
-    const loadSettings = async () => {
-      const data = await ContentService.getSettings();
-      if (data) setSettings(data);
+    const loadData = async () => {
+      // Carrega configurações e lista de páginas em paralelo
+      const [settingsData, pagesData] = await Promise.all([
+        ContentService.getSettings(),
+        ContentService.getAllPages()
+      ]);
+
+      if (settingsData) setSettings(settingsData);
+      if (pagesData) setPages(pagesData);
     };
-    loadSettings();
+    loadData();
   }, []);
 
   return (
@@ -41,15 +48,17 @@ export const Footer = () => {
                     Início
                 </Link>
             </li>
-            {/* Estes links usam o GenericPage via rota dinâmica */}
-            <li>
-                <Link to="/pagina/sobre-nos" className="hover:text-blue-400 transition-colors flex items-center justify-center md:justify-start gap-2">
-                    Sobre Nós
+            {/* Renderiza links para todas as páginas criadas no CMS */}
+            {pages.map(page => (
+              <li key={page.id}>
+                <Link to={`/pagina/${page.slug}`} className="hover:text-blue-400 transition-colors flex items-center justify-center md:justify-start gap-2">
+                    {page.title}
                 </Link>
-            </li>
+              </li>
+            ))}
             <li>
-                <Link to="/pagina/politica-privacidade" className="hover:text-blue-400 transition-colors flex items-center justify-center md:justify-start gap-2">
-                    Política de Privacidade
+                <Link to="/contato" className="hover:text-blue-400 transition-colors flex items-center justify-center md:justify-start gap-2">
+                    Contato
                 </Link>
             </li>
           </ul>
@@ -76,7 +85,7 @@ export const Footer = () => {
       </div>
       
       <div className="text-center mt-12 pt-8 border-t border-gray-800 text-xs text-gray-600">
-        © {new Date().getFullYear()} Gráfica A Moderna. Dados gerenciados via Database.
+        © {new Date().getFullYear()} Gráfica A Moderna. Sistema Gerenciado.
       </div>
     </footer>
   );

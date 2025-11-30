@@ -13,22 +13,33 @@ export const GenericPage = () => {
   useEffect(() => {
     const loadContent = async () => {
       setLoading(true);
-      const data = await ContentService.getPage(slug);
-      
-      if (!data) {
-        // Se a página não existir no banco, redireciona para Home (como pedido)
+      try {
+        const data = await ContentService.getPage(slug);
+        
+        if (!data) {
+          navigate('/', { replace: true });
+          return;
+        }
+        
+        setPage(data);
+      } catch (error) {
+        console.error("Erro ao carregar página:", error);
         navigate('/', { replace: true });
-        return;
+      } finally {
+        setLoading(false);
       }
-      
-      setPage(data);
-      setLoading(false);
     };
     
     loadContent();
   }, [slug, navigate]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div></div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+    </div>
+  );
+
+  if (!page) return null;
 
   return (
     <motion.div 
@@ -38,11 +49,6 @@ export const GenericPage = () => {
     >
       <h1 className="text-4xl font-bold text-gray-900 mb-8 border-b pb-4">{page.title}</h1>
       
-      {/* Renderiza o HTML vindo do banco (Cuidado com XSS em produção real!) */}
-      <div 
-        className="prose prose-lg prose-blue text-gray-600 max-w-none"
-        dangerouslySetInnerHTML={{ __html: page.content }} 
-      />
       <div 
         className="prose prose-lg prose-blue text-gray-600 max-w-none"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(page.content) }} 

@@ -12,11 +12,13 @@ export const Home = () => {
   const [searchTerm, setSearchTerm] = useState("");
   
   const [settings, setSettings] = useState({
-    hero_badge: '🚀 A melhor gráfica da região',
-    hero_title: 'Imprima suas ideias com perfeição.',
-    hero_subtitle: 'Cartões de visita, banners e materiais promocionais com entrega rápida e qualidade premium.',
-    whatsapp_number: '5511999999999',
-    hero_bg_url: 'https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1?q=80&w=1932' // Valor padrão se não houver no banco
+    hero_badge: 'Carregando...',
+    hero_title: '...',
+    hero_subtitle: '...',
+    home_products_title: 'Nossos Produtos', // Default
+    home_products_subtitle: 'Confira nosso catálogo', // Default
+    whatsapp_number: '',
+    hero_bg_url: '' 
   });
 
   useEffect(() => {
@@ -50,9 +52,8 @@ export const Home = () => {
 
   return (
     <>
-      {/* Hero Section com Background Dinâmico */}
+      {/* Hero Section */}
       <div className="relative bg-blue-900 text-white overflow-hidden transition-all duration-500">
-        {/* Camada de Imagem com Fallback */}
         <div 
             className="absolute inset-0 bg-cover bg-center opacity-20 transform scale-105"
             style={{ 
@@ -79,13 +80,6 @@ export const Home = () => {
               <Button variant="success" className="rounded-full px-8 py-4 text-lg shadow-xl shadow-green-900/20" onClick={() => document.getElementById('catalogo').scrollIntoView({behavior: 'smooth'})}>
                 Ver Catálogo
               </Button>
-              <Button 
-                variant="outline" 
-                className="rounded-full px-8 py-4 text-lg backdrop-blur-sm hover:bg-white/10"
-                onClick={() => window.open(`https://wa.me/${settings.whatsapp_number}`, '_blank')}
-              >
-                Falar com Consultor
-              </Button>
             </div>
           </motion.div>
         </div>
@@ -96,9 +90,9 @@ export const Home = () => {
           <div>
             <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Printer className="text-blue-600" />
-              Nossos Produtos
+              {settings.home_products_title}
             </h2>
-            <p className="text-gray-500 mt-2">Explore as opções disponíveis para o seu negócio.</p>
+            <p className="text-gray-500 mt-2">{settings.home_products_subtitle}</p>
           </div>
           
           <div className="relative w-full md:w-96">
@@ -114,11 +108,7 @@ export const Home = () => {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="bg-gray-200 h-96 rounded-2xl shadow-sm animate-pulse"></div>
-            ))}
-          </div>
+          <div className="text-center py-20">Carregando catálogo...</div>
         ) : filteredProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {filteredProducts.map((prod) => (

@@ -8,8 +8,9 @@ import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { ProductDetails } from './pages/ProductDetails';
 import { GenericPage } from './pages/GenericPage';
-import { Contact } from './pages/Contact'; // <--- IMPORT NOVO
+import { Contact } from './pages/Contact';
 import { AuthService } from './services/authService';
+import ScrollToTop from './components/ScrollToTop'; // <--- 1. IMPORTAR AQUI
 
 const PrivateRoute = ({ children }) => {
   return AuthService.isAuthenticated() ? children : <Navigate to="/login" />;
@@ -18,11 +19,13 @@ const PrivateRoute = ({ children }) => {
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop /> {/* <--- 2. ADICIONAR AQUI (Dentro do Router, antes das Rotas) */}
+      
       <Toaster position="top-right" />
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/contato" element={<Contact />} /> {/* <--- ROTA NOVA */}
+          <Route path="/contato" element={<Contact />} />
           <Route path="/produto/:id" element={<ProductDetails />} />
           
           {/* Rota Dinâmica para páginas de conteúdo */}
