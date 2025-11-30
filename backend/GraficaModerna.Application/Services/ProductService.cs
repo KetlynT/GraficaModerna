@@ -17,10 +17,17 @@ public class ProductService : IProductService
         _mapper = mapper;
     }
 
-    public async Task<IEnumerable<ProductResponseDto>> GetCatalogAsync()
+    public async Task<PagedResultDto<ProductResponseDto>> GetCatalogAsync(string? search, string? sort, string? order, int page, int pageSize)
     {
-        var products = await _repository.GetAllAsync();
-        return _mapper.Map<IEnumerable<ProductResponseDto>>(products);
+        var (products, totalCount) = await _repository.GetAllAsync(search, sort, order, page, pageSize);
+
+        return new PagedResultDto<ProductResponseDto>
+        {
+            Items = _mapper.Map<IEnumerable<ProductResponseDto>>(products),
+            TotalItems = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
     }
 
     public async Task<ProductResponseDto> GetByIdAsync(Guid id)
@@ -31,9 +38,7 @@ public class ProductService : IProductService
 
     public async Task<ProductResponseDto> CreateAsync(CreateProductDto dto)
     {
-        // O AutoMapper vai usar o construtor da entidade Product
         var product = _mapper.Map<Product>(dto);
-
         var created = await _repository.CreateAsync(product);
         return _mapper.Map<ProductResponseDto>(created);
     }
@@ -43,9 +48,7 @@ public class ProductService : IProductService
         var product = await _repository.GetByIdAsync(id);
         if (product == null) throw new KeyNotFoundException("Produto não encontrado.");
 
-        // Atualiza usando o método de domínio
         product.Update(dto.Name, dto.Description, dto.Price, dto.ImageUrl);
-
         await _repository.UpdateAsync(product);
     }
 
@@ -54,7 +57,7 @@ public class ProductService : IProductService
         var product = await _repository.GetByIdAsync(id);
         if (product == null) throw new KeyNotFoundException("Produto não encontrado.");
 
-        product.Deactivate(); // Soft Delete (desativação lógica)
+        product.Deactivate();
         await _repository.UpdateAsync(product);
     }
 }

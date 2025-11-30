@@ -4,7 +4,7 @@ namespace GraficaModerna.Application.Interfaces;
 
 public interface IProductService
 {
-    Task<IEnumerable<ProductResponseDto>> GetCatalogAsync();
+    Task<PagedResultDto<ProductResponseDto>> GetCatalogAsync(string? search, string? sort, string? order, int page, int pageSize);
     Task<ProductResponseDto> GetByIdAsync(Guid id);
     Task<ProductResponseDto> CreateAsync(CreateProductDto dto);
     Task UpdateAsync(Guid id, CreateProductDto dto);

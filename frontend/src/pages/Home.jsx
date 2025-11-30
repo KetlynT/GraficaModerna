@@ -3,52 +3,79 @@ import { ProductService } from '../services/productService';
 import { ContentService } from '../services/contentService';
 import { ProductCard } from '../components/ProductCard';
 import { Button } from '../components/ui/Button';
-import { Search, Printer } from 'lucide-react';
+import { Search, Printer, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const Home = () => {
+  // Estado dos Dados
   const [products, setProducts] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalItems: 0 });
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
   
+  // Estado dos Filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOption, setSortOption] = useState(""); // formato: "price-asc"
+  
+  // Estado das Configurações
   const [settings, setSettings] = useState({
     hero_badge: 'Carregando...',
     hero_title: '...',
     hero_subtitle: '...',
-    home_products_title: 'Nossos Produtos', // Default
-    home_products_subtitle: 'Confira nosso catálogo', // Default
+    home_products_title: 'Nossos Produtos',
+    home_products_subtitle: 'Confira nosso catálogo',
     whatsapp_number: '',
     hero_bg_url: '' 
   });
 
+  // Debounce para busca
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [prods, serverSettings] = await Promise.all([
-           ProductService.getAll(),
-           ContentService.getSettings()
-        ]);
-        setProducts(prods);
-        if (serverSettings) {
-            setSettings(prev => ({...prev, ...serverSettings}));
-        }
-      } catch (error) {
-        console.error("Erro dados:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+    const timer = setTimeout(() => {
+      loadProducts(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, sortOption]);
+
+  useEffect(() => {
+    ContentService.getSettings().then(data => {
+      if (data) setSettings(prev => ({...prev, ...data}));
+    });
   }, []);
+
+  const loadProducts = async (page) => {
+    setLoading(true);
+    try {
+      let sort = '', order = '';
+      if (sortOption) {
+        [sort, order] = sortOption.split('-');
+      }
+
+      const data = await ProductService.getAll(page, 8, searchTerm, sort, order);
+      
+      setProducts(data.items);
+      setPagination({
+        page: data.page,
+        totalPages: data.totalPages,
+        totalItems: data.totalItems
+      });
+    } catch (error) {
+      console.error("Erro ao carregar catálogo:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      loadProducts(newPage);
+      const section = document.getElementById('catalogo');
+      if (section) section.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   const handleQuoteRedirect = (product) => {
     const message = `Olá! Gostaria de cotar: *${product.name}*.`;
     window.open(`https://wa.me/${settings.whatsapp_number}?text=${encodeURIComponent(message)}`, '_blank');
   };
-
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <>
@@ -86,7 +113,8 @@ export const Home = () => {
       </div>
 
       <section id="catalogo" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+        {/* Barra de Ferramentas */}
+        <div className="flex flex-col lg:flex-row justify-between items-end mb-12 gap-6">
           <div>
             <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Printer className="text-blue-600" />
@@ -95,33 +123,88 @@ export const Home = () => {
             <p className="text-gray-500 mt-2">{settings.home_products_subtitle}</p>
           </div>
           
-          <div className="relative w-full md:w-96">
-            <input 
-              type="text" 
-              placeholder="Buscar produto..." 
-              className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none shadow-sm transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+          <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-4">
+            {/* Campo de Busca */}
+            <div className="relative flex-grow sm:w-80">
+              <input 
+                type="text" 
+                placeholder="Buscar produto..." 
+                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+            </div>
+
+            {/* Filtro de Ordenação */}
+            <div className="relative min-w-[200px]">
+                <Filter className="absolute left-4 top-3.5 text-gray-400" size={20} />
+                <select 
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none cursor-pointer"
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value)}
+                >
+                    <option value="">Mais Recentes</option>
+                    <option value="name-asc">Nome (A-Z)</option>
+                    <option value="name-desc">Nome (Z-A)</option>
+                    <option value="price-asc">Menor Preço</option>
+                    <option value="price-desc">Maior Preço</option>
+                </select>
+            </div>
           </div>
         </div>
 
+        {/* Grid de Produtos */}
         {loading ? (
-          <div className="text-center py-20">Carregando catálogo...</div>
-        ) : filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {filteredProducts.map((prod) => (
-              <ProductCard 
-                key={prod.id} 
-                product={prod} 
-                onQuote={handleQuoteRedirect} 
-              />
-            ))}
-          </div>
-        ) : (
           <div className="text-center py-20">
-            <p className="text-gray-500 text-lg">Nenhum produto encontrado.</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
+            <p className="text-gray-500">Carregando catálogo...</p>
+          </div>
+        ) : products.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+              {products.map((prod) => (
+                <ProductCard 
+                  key={prod.id} 
+                  product={prod} 
+                  onQuote={handleQuoteRedirect} 
+                />
+              ))}
+            </div>
+
+            {/* Paginação */}
+            {pagination.totalPages > 1 && (
+                <div className="flex justify-center items-center gap-4 mt-16">
+                    <Button 
+                        variant="outline" 
+                        className="text-gray-600 border-gray-300 hover:bg-gray-50"
+                        onClick={() => handlePageChange(pagination.page - 1)}
+                        disabled={pagination.page === 1}
+                    >
+                        <ChevronLeft size={20} /> Anterior
+                    </Button>
+                    
+                    <span className="text-gray-600 font-medium">
+                        Página {pagination.page} de {pagination.totalPages}
+                    </span>
+
+                    <Button 
+                        variant="outline"
+                        className="text-gray-600 border-gray-300 hover:bg-gray-50" 
+                        onClick={() => handlePageChange(pagination.page + 1)}
+                        disabled={pagination.page === pagination.totalPages}
+                    >
+                        Próximo <ChevronRight size={20} />
+                    </Button>
+                </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 text-center">
+            <p className="text-gray-500 text-lg mb-4">Nenhum produto encontrado com estes filtros.</p>
+            <Button variant="ghost" className="text-blue-600" onClick={() => {setSearchTerm(''); setSortOption('');}}>
+                Limpar Filtros
+            </Button>
           </div>
         )}
       </section>

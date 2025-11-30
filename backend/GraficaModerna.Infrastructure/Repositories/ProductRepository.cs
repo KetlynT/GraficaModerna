@@ -14,12 +14,42 @@ public class ProductRepository : IProductRepository
         _context = context;
     }
 
-    public async Task<IEnumerable<Product>> GetAllAsync()
+    public async Task<(IEnumerable<Product> Items, int TotalCount)> GetAllAsync(
+        string? searchTerm,
+        string? sortColumn,
+        string? sortOrder,
+        int page,
+        int pageSize)
     {
-        return await _context.Products
-            .AsNoTracking() // Performance: não rastreia mudanças (read-only)
-            .Where(p => p.IsActive)
+        var query = _context.Products
+            .AsNoTracking()
+            .Where(p => p.IsActive);
+
+        // 1. Filtro de Busca (Seguro contra SQL Injection via EF Core)
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.ToLower();
+            query = query.Where(p => p.Name.ToLower().Contains(term) || p.Description.ToLower().Contains(term));
+        }
+
+        // 2. Contagem Total (Necessário para o cálculo de páginas)
+        var totalCount = await query.CountAsync();
+
+        // 3. Ordenação Dinâmica
+        query = sortColumn?.ToLower() switch
+        {
+            "price" => sortOrder?.ToLower() == "desc" ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
+            "name" => sortOrder?.ToLower() == "desc" ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+            _ => query.OrderByDescending(p => p.CreatedAt) // Padrão: Mais recentes primeiro
+        };
+
+        // 4. Paginação (Skip/Take)
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
+
+        return (items, totalCount);
     }
 
     public async Task<Product?> GetByIdAsync(Guid id)

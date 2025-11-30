@@ -16,15 +16,23 @@ public class ProductsController : ControllerBase
         _service = service;
     }
 
-    // Público: Qualquer um pode ver o catálogo
+    // GET: api/Products?page=1&pageSize=8&search=cartao&sort=price&order=asc
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetAll()
+    public async Task<ActionResult<PagedResultDto<ProductResponseDto>>> GetAll(
+        [FromQuery] string? search,
+        [FromQuery] string? sort,
+        [FromQuery] string? order,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 8)
     {
-        var products = await _service.GetCatalogAsync();
-        return Ok(products);
+        // Proteção contra valores absurdos
+        if (page < 1) page = 1;
+        if (pageSize > 50) pageSize = 50;
+
+        var result = await _service.GetCatalogAsync(search, sort, order, page, pageSize);
+        return Ok(result);
     }
 
-    // Público: Ver detalhes
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductResponseDto>> GetById(Guid id)
     {
@@ -33,7 +41,6 @@ public class ProductsController : ControllerBase
         return Ok(product);
     }
 
-    // Protegido: Apenas Admin cria
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ProductResponseDto>> Create([FromBody] CreateProductDto dto)
@@ -44,7 +51,6 @@ public class ProductsController : ControllerBase
         return CreatedAtAction(nameof(GetAll), new { id = result.Id }, result);
     }
 
-    // Protegido: Apenas Admin atualiza
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult> Update(Guid id, [FromBody] CreateProductDto dto)
@@ -62,7 +68,6 @@ public class ProductsController : ControllerBase
         }
     }
 
-    // Protegido: Apenas Admin deleta
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult> Delete(Guid id)

@@ -1,7 +1,6 @@
 import api from './api';
 import { AuthService } from './authService';
 
-// Interceptor para adicionar o Token automaticamente nas requisições
 api.interceptors.request.use(config => {
   const token = AuthService.getToken();
   if (token) {
@@ -11,9 +10,19 @@ api.interceptors.request.use(config => {
 });
 
 export const ProductService = {
-  getAll: async () => {
-    const response = await api.get('/products');
-    return response.data;
+  // Atualizado para receber parâmetros de paginação e filtro
+  getAll: async (page = 1, pageSize = 8, search = '', sort = '', order = '') => {
+    const params = new URLSearchParams({
+      page,
+      pageSize,
+    });
+    
+    if (search) params.append('search', search);
+    if (sort) params.append('sort', sort);
+    if (order) params.append('order', order);
+
+    const response = await api.get(`/products?${params.toString()}`);
+    return response.data; // Retorna { items, totalItems, page, totalPages, pageSize }
   },
 
   getById: async (id) => {
@@ -27,8 +36,7 @@ export const ProductService = {
   },
 
   update: async (id, productData) => {
-    constYZ = await api.put(`/products/${id}`, productData);
-    returnYZ.data;
+    await api.put(`/products/${id}`, productData);
   },
 
   delete: async (id) => {
