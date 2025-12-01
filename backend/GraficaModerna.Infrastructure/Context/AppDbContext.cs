@@ -1,10 +1,9 @@
 using GraficaModerna.Domain.Entities;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore; // Necessário para Identity
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Context;
 
-// CORRIGIDO: Herdar de IdentityDbContext<ApplicationUser> em vez de DbContext simples
 public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
@@ -15,7 +14,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
-        base.OnModelCreating(builder); // Importante para o Identity configurar as tabelas dele
+        base.OnModelCreating(builder);
 
         builder.Entity<Product>(e =>
         {
@@ -23,6 +22,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.Property(p => p.Name).IsRequired().HasMaxLength(100);
             e.Property(p => p.Price).HasPrecision(10, 2);
             e.Property(p => p.IsActive).HasDefaultValue(true);
+
+            // Novas propriedades de Frete
+            e.Property(p => p.Weight).HasPrecision(10, 3); // 3 casas decimais para Kg
+            e.Property(p => p.Width).IsRequired();
+            e.Property(p => p.Height).IsRequired();
+            e.Property(p => p.Length).IsRequired();
         });
 
         builder.Entity<ContentPage>(e => {

@@ -1,17 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import { MainLayout } from './components/layout/MainLayout';
-import { Home } from './pages/Home';
-import { Login } from './pages/Login';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { ProductDetails } from './pages/ProductDetails';
-import { GenericPage } from './pages/GenericPage';
-import { Contact } from './pages/Contact';
 import { AuthService } from './services/authService';
-import { ContentService } from './services/contentService'; // Importar serviço
+import { ContentService } from './services/contentService';
 import ScrollToTop from './components/ScrollToTop';
+
+// Lazy Loading das páginas para melhor performance inicial
+const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
+const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const ProductDetails = lazy(() => import('./pages/ProductDetails').then(module => ({ default: module.ProductDetails })));
+const GenericPage = lazy(() => import('./pages/GenericPage').then(module => ({ default: module.GenericPage })));
+const Contact = lazy(() => import('./pages/Contact').then(module => ({ default: module.Contact })));
+
+// Componente de Carregamento para as transições
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+  </div>
+);
 
 const PrivateRoute = ({ children }) => {
   const isAuth = AuthService.isAuthenticated();
@@ -31,14 +40,12 @@ function App() {
       try {
         const settings = await ContentService.getSettings();
         if (settings && settings.site_logo) {
-          // Encontra a tag do favicon existente ou cria uma nova
           let link = document.querySelector("link[rel~='icon']");
           if (!link) {
             link = document.createElement('link');
             link.rel = 'icon';
             document.getElementsByTagName('head')[0].appendChild(link);
           }
-          // Atualiza a URL do favicon
           link.href = settings.site_logo;
         }
       } catch (error) {
@@ -54,34 +61,41 @@ function App() {
       <ScrollToTop />
       
       <Toaster position="top-right" />
-      <Routes>
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/contato" element={<Contact />} />
-          <Route path="/produto/:id" element={<ProductDetails />} />
-          <Route path="/pagina/:slug" element={<GenericPage />} />
-        </Route>
+      
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/contato" element={<Contact />} />
+            <Route path="/produto/:id" element={<ProductDetails />} />
+            <Route path="/pagina/:slug" element={<GenericPage />} />
+          </Route>
 
-        <Route 
-          path="/login" 
-          element={
-            <PublicOnlyRoute>
-              <Login />
-            </PublicOnlyRoute>
-          } 
-        />
-        
-        <Route 
-          path="/painel-restrito-gerencial" 
-          element={
-            <PrivateRoute>
-              <AdminDashboard />
-            </PrivateRoute>
-          } 
-        />
+          {/* Rota secreta para login administrativo */}
+          <Route 
+            path="/portal-acesso-secreto-gm" 
+            element={
+              <PublicOnlyRoute>
+                <Login />
+              </PublicOnlyRoute>
+            } 
+          />
+          
+          {/* Redireciona tentativas de acesso ao /login padrão para a Home */}
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          
+          <Route 
+            path="/painel-restrito-gerencial" 
+            element={
+              <PrivateRoute>
+                <AdminDashboard />
+              </PrivateRoute>
+            } 
+          />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

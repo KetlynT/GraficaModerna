@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, MessageSquare } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { ContentService } from '../../services/contentService';
 
 export const Header = () => {
@@ -45,11 +45,8 @@ export const Header = () => {
             <MessageSquare size={20} />
             <span className="hidden sm:inline">Fale Conosco</span>
           </Link>
-
-          <Link to="/painel-restrito-gerencial" className="flex items-center gap-2 text-gray-500 hover:text-blue-600 transition-colors font-medium">
-            <User size={20} />
-            <span className="hidden sm:inline">Área Restrita</span>
-          </Link>
+          
+          {/* Botão de Área Restrita removido para segurança por obscuridade */}
         </nav>
       </div>
     </header>

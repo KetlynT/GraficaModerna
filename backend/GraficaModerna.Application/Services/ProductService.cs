@@ -38,6 +38,7 @@ public class ProductService : IProductService
 
     public async Task<ProductResponseDto> CreateAsync(CreateProductDto dto)
     {
+        // O AutoMapper vai usar o construtor do Product automaticamente
         var product = _mapper.Map<Product>(dto);
         var created = await _repository.CreateAsync(product);
         return _mapper.Map<ProductResponseDto>(created);
@@ -48,7 +49,18 @@ public class ProductService : IProductService
         var product = await _repository.GetByIdAsync(id);
         if (product == null) throw new KeyNotFoundException("Produto não encontrado.");
 
-        product.Update(dto.Name, dto.Description, dto.Price, dto.ImageUrl);
+        // CORREÇÃO: Passando os novos parâmetros de frete para o método Update
+        product.Update(
+            dto.Name, 
+            dto.Description, 
+            dto.Price, 
+            dto.ImageUrl,
+            dto.Weight,
+            dto.Width,
+            dto.Height,
+            dto.Length
+        );
+
         await _repository.UpdateAsync(product);
     }
 
