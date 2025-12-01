@@ -12,9 +12,12 @@ export const Home = () => {
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalItems: 0 });
   const [loading, setLoading] = useState(true);
   
+  // Estado para Input de Página Manual
+  const [inputPage, setInputPage] = useState(1);
+
   // Estado dos Filtros
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortOption, setSortOption] = useState(""); // formato: "price-asc"
+  const [sortOption, setSortOption] = useState(""); 
   
   // Estado das Configurações
   const [settings, setSettings] = useState({
@@ -49,7 +52,7 @@ export const Home = () => {
         [sort, order] = sortOption.split('-');
       }
 
-      const data = await ProductService.getAll(page, 8, searchTerm, sort, order);
+      const data = await ProductService.getAll(page, 8, searchTerm, sort, order); // 8 itens por página
       
       setProducts(data.items);
       setPagination({
@@ -57,6 +60,7 @@ export const Home = () => {
         totalPages: data.totalPages,
         totalItems: data.totalItems
       });
+      setInputPage(data.page); // Sincroniza o input com a página atual
     } catch (error) {
       console.error("Erro ao carregar catálogo:", error);
     } finally {
@@ -67,14 +71,21 @@ export const Home = () => {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       loadProducts(newPage);
-      const section = document.getElementById('catalogo');
-      if (section) section.scrollIntoView({ behavior: 'smooth' });
+      scrollToCatalog();
     }
   };
 
-  const handleQuoteRedirect = (product) => {
-    const message = `Olá! Gostaria de cotar: *${product.name}*.`;
-    window.open(`https://wa.me/${settings.whatsapp_number}?text=${encodeURIComponent(message)}`, '_blank');
+  const handleManualPageSubmit = (e) => {
+    e.preventDefault();
+    const pageNum = parseInt(inputPage);
+    if (!isNaN(pageNum)) {
+        handlePageChange(pageNum);
+    }
+  };
+
+  const scrollToCatalog = () => {
+    const section = document.getElementById('catalogo');
+    if (section) section.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
@@ -84,7 +95,7 @@ export const Home = () => {
         <div 
             className="absolute inset-0 bg-cover bg-center opacity-20 transform scale-105"
             style={{ 
-                backgroundImage: `url('${settings.hero_bg_url || 'https://images.unsplash.com/photo-1562654501-a0ccc0fc3fb1?q=80&w=1932'}')` 
+                backgroundImage: `url('${settings.hero_bg_url || 'https://images.unsplash.com/photo-1562564055-71e051d33c19?q=80&w=2070'}' )` 
             }}
         ></div>
         
@@ -104,7 +115,7 @@ export const Home = () => {
               {settings.hero_subtitle}
             </p>
             <div className="flex gap-4 justify-center">
-              <Button variant="success" className="rounded-full px-8 py-4 text-lg shadow-xl shadow-green-900/20" onClick={() => document.getElementById('catalogo').scrollIntoView({behavior: 'smooth'})}>
+              <Button variant="success" className="rounded-full px-8 py-4 text-lg shadow-xl shadow-green-900/20" onClick={scrollToCatalog}>
                 Ver Catálogo
               </Button>
             </div>
@@ -167,14 +178,13 @@ export const Home = () => {
                 <ProductCard 
                   key={prod.id} 
                   product={prod} 
-                  onQuote={handleQuoteRedirect} 
                 />
               ))}
             </div>
 
-            {/* Paginação */}
+            {/* Paginação Melhorada com Input */}
             {pagination.totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 mt-16">
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-16">
                     <Button 
                         variant="outline" 
                         className="text-gray-600 border-gray-300 hover:bg-gray-50"
@@ -184,9 +194,19 @@ export const Home = () => {
                         <ChevronLeft size={20} /> Anterior
                     </Button>
                     
-                    <span className="text-gray-600 font-medium">
-                        Página {pagination.page} de {pagination.totalPages}
-                    </span>
+                    <form onSubmit={handleManualPageSubmit} className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+                        <span className="text-gray-600 text-sm font-medium">Página</span>
+                        <input 
+                            type="number" 
+                            min="1" 
+                            max={pagination.totalPages}
+                            value={inputPage}
+                            onChange={(e) => setInputPage(e.target.value)}
+                            onBlur={() => handlePageChange(parseInt(inputPage) || 1)}
+                            className="w-12 text-center border border-gray-300 rounded p-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800"
+                        />
+                        <span className="text-gray-400 text-sm">de {pagination.totalPages}</span>
+                    </form>
 
                     <Button 
                         variant="outline"

@@ -15,7 +15,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CartItem> CartItems { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
-    public DbSet<Coupon> Coupons { get; set; } // NOVO
+    public DbSet<Coupon> Coupons { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -31,20 +31,30 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.Property(p => p.Weight).HasPrecision(10, 3);
         });
 
-        // Cupom (NOVO)
+        // Configurações do Site (CORREÇÃO AQUI)
+        builder.Entity<SiteSetting>(e =>
+        {
+            // Define 'Key' como a chave primária
+            e.HasKey(s => s.Key);
+            e.Property(s => s.Key).HasMaxLength(100); // Limita o tamanho da chave
+            e.Property(s => s.Value).HasMaxLength(500); // Limita o tamanho do valor (opcional)
+        });
+
+        // Cupom
         builder.Entity<Coupon>(e => {
             e.HasKey(c => c.Id);
-            e.HasIndex(c => c.Code).IsUnique(); // Códigos únicos
+            e.HasIndex(c => c.Code).IsUnique();
             e.Property(c => c.DiscountPercentage).HasPrecision(5, 2);
         });
 
-        // Pedido (Atualizado com Precisão)
+        // Pedido
         builder.Entity<Order>(e => {
             e.Property(o => o.SubTotal).HasPrecision(10, 2);
             e.Property(o => o.Discount).HasPrecision(10, 2);
             e.Property(o => o.TotalAmount).HasPrecision(10, 2);
         });
 
+        // Itens do Pedido
         builder.Entity<OrderItem>(e => {
             e.Property(oi => oi.UnitPrice).HasPrecision(10, 2);
         });

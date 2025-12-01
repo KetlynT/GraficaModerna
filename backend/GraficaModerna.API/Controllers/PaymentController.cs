@@ -6,18 +6,18 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+[Authorize(Roles = "User")] // MUDANÇA: Apenas Clientes podem executar pagamentos
 public class PaymentController : ControllerBase
 {
-    private readonly ICartService _cartService;
+    private readonly IOrderService _orderService;
 
-    public PaymentController(ICartService cartService) { _cartService = cartService; }
+    public PaymentController(IOrderService orderService) { _orderService = orderService; }
 
     [HttpPost("pay/{orderId}")]
     public async Task<IActionResult> SimulatePayment(Guid orderId)
     {
-        await Task.Delay(1000); // Delay fake
-        try { await _cartService.UpdateOrderStatusAsync(orderId, "Pago"); return Ok(new { message = "Aprovado!" }); }
+        await Task.Delay(1000);
+        try { await _orderService.UpdateOrderStatusAsync(orderId, "Pago"); return Ok(new { message = "Aprovado!" }); }
         catch (Exception ex) { return BadRequest(ex.Message); }
     }
 }

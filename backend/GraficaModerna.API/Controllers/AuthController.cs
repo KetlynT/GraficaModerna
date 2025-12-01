@@ -1,8 +1,8 @@
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
-using Microsoft.AspNetCore.Authorization; // Importante para o [Authorize]
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims; // Importante para pegar o ID do token
+using System.Security.Claims;
 
 namespace GraficaModerna.API.Controllers;
 
@@ -29,10 +29,10 @@ public class AuthController : ControllerBase
         return Ok(await _authService.LoginAsync(dto));
     }
 
-    // --- NOVAS ROTAS ---
+    // --- PERFIL DO CLIENTE ---
 
     [HttpGet("profile")]
-    [Authorize] // Requer login
+    [Authorize(Roles = "User")] // MUDANÇA: Apenas Clientes acessam dados de entrega
     public async Task<ActionResult<UserProfileDto>> GetProfile()
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -40,7 +40,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPut("profile")]
-    [Authorize]
+    [Authorize(Roles = "User")] // MUDANÇA: Apenas Clientes atualizam dados de entrega
     public async Task<IActionResult> UpdateProfile(UpdateProfileDto dto)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);

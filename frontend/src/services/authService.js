@@ -14,6 +14,21 @@ export const AuthService = {
     }
   },
 
+  // NOVA FUNÇÃO
+  register: async (fullName, email, password) => {
+    try {
+      const response = await api.post('/auth/register', { fullName, email, password });
+      // Já loga o usuário automaticamente após o cadastro
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data));
+      }
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -22,7 +37,6 @@ export const AuthService = {
 
   isAuthenticated: () => {
     const token = localStorage.getItem('token');
-    // Aqui poderia ter uma validação mais robusta de expiração do token
     return !!token;
   },
 

@@ -8,14 +8,18 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+// MUDANÇA: Agora, toda a controller exige que o usuário seja 'User' (Cliente)
+// Admins receberão 403 Forbidden se tentarem acessar qualquer rota aqui.
+[Authorize(Roles = "User")]
 public class CartController : ControllerBase
 {
     private readonly ICartService _cartService;
+    private readonly IOrderService _orderService;
 
-    public CartController(ICartService cartService)
+    public CartController(ICartService cartService, IOrderService orderService)
     {
         _cartService = cartService;
+        _orderService = orderService;
     }
 
     private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
@@ -49,7 +53,7 @@ public class CartController : ControllerBase
     {
         try
         {
-            var order = await _cartService.CheckoutAsync(GetUserId(), request.Address, request.ZipCode, request.CouponCode);
+            var order = await _orderService.CreateOrderFromCartAsync(GetUserId(), request.Address, request.ZipCode, request.CouponCode);
             return Ok(order);
         }
         catch (Exception ex) { return BadRequest(ex.Message); }

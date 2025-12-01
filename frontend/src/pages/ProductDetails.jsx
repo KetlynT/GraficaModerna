@@ -1,21 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ProductService } from '../services/productService';
 import { ContentService } from '../services/contentService';
 import { ShippingService } from '../services/shippingService';
-import { Truck, Box } from 'lucide-react';
+import { useCart } from '../context/CartContext';
+import { AuthService } from '../services/authService'; // Importar Auth
+import { Truck, ShoppingCart, MessageSquare, Plus, Minus } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 
 export const ProductDetails = () => {
   const { id } = useParams();
+  const { addToCart } = useCart();
+  
   const [product, setProduct] = useState(null);
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [loading, setLoading] = useState(true);
+  const [quantity, setQuantity] = useState(1);
 
-  // Estados da Calculadora de Frete
+  // Estados Frete
   const [cep, setCep] = useState('');
   const [shippingOptions, setShippingOptions] = useState(null);
   const [calcLoading, setCalcLoading] = useState(false);
   const [calcError, setCalcError] = useState('');
+
+  // Verifica se é admin
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = AuthService.isAuthenticated() && user.role === 'Admin';
 
   useEffect(() => {
     const loadData = async () => {
@@ -58,14 +68,23 @@ export const ProductDetails = () => {
     }
   };
 
-  if (loading) return <div className="text-center py-20">Carregando...</div>;
-  if (!product) return <div className="text-center py-20">Produto não encontrado.</div>;
+  const handleAddToCart = async () => {
+    await addToCart(product.id, quantity);
+  };
 
-  const handleQuote = () => {
-    const message = `Olá! Vi o produto *${product.name}* no site e gostaria de mais detalhes.`;
+  const handleCustomQuote = () => {
+    const message = `Olá! Gostaria de um *orçamento personalizado* para o produto: *${product.name}*. Tenho necessidades específicas...`;
     const number = whatsappNumber || '5511999999999'; 
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, '_blank');
   };
+
+  const handleImageError = (e) => {
+    e.target.src = 'https://via.placeholder.com/600x400?text=Sem+Imagem';
+    e.target.onerror = null;
+  };
+
+  if (loading) return <div className="text-center py-20">Carregando...</div>;
+  if (!product) return <div className="text-center py-20">Produto não encontrado.</div>;
 
   const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price);
 
@@ -74,27 +93,75 @@ export const ProductDetails = () => {
       <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden md:flex">
         
         {/* Coluna Esquerda: Imagem */}
-        <div className="md:w-1/2 h-96 md:h-auto bg-gray-100 relative">
+        <div className="md:w-1/2 h-96 md:h-auto bg-gray-100 relative group">
           <img 
-            src={product.imageUrl || 'https://via.placeholder.com/400'} 
+            src={product.imageUrl} 
             alt={product.name} 
-            className="w-full h-full object-cover"
+            onError={handleImageError}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         </div>
 
-        {/* Coluna Direita: Detalhes e Frete */}
+        {/* Coluna Direita: Detalhes e Ações */}
         <div className="md:w-1/2 p-8 flex flex-col">
           <div className="mb-auto">
             <Link to="/" className="text-blue-500 hover:underline text-sm mb-4 block">← Voltar para o catálogo</Link>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
-            <div className="text-3xl font-bold text-blue-600 mb-6">{formattedPrice}</div>
+            <div className="text-3xl font-bold text-blue-600 mb-6">{formattedPrice} <span className="text-sm text-gray-400 font-normal">/ unidade</span></div>
             
-            <p className="text-gray-500 mb-6 leading-relaxed whitespace-pre-line border-b pb-6">
+            <p className="text-gray-500 mb-8 leading-relaxed whitespace-pre-line border-b pb-6">
                 {product.description}
             </p>
 
+            <div className="flex flex-col gap-4 mb-8">
+                {/* Seletor de Quantidade: Apenas para NÃO Admin */}
+                {!isAdmin && (
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center border border-gray-300 rounded-lg">
+                            <button 
+                                onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                                className="p-3 text-gray-600 hover:bg-gray-100 transition-colors"
+                            >
+                                <Minus size={16} />
+                            </button>
+                            <span className="w-12 text-center font-bold text-gray-800">{quantity}</span>
+                            <button 
+                                onClick={() => setQuantity(q => q + 1)}
+                                className="p-3 text-gray-600 hover:bg-gray-100 transition-colors"
+                            >
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                            {product.stockQuantity > 0 ? `${product.stockQuantity} disponíveis` : 'Produto Indisponível'}
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Botão Adicionar ao Carrinho: Apenas para NÃO Admin */}
+                    {!isAdmin && (
+                        <Button 
+                            onClick={handleAddToCart}
+                            disabled={product.stockQuantity < 1}
+                            className="w-full py-3 text-base"
+                        >
+                            <ShoppingCart size={20}/> Adicionar ao Carrinho
+                        </Button>
+                    )}
+                    
+                    {/* Botão de Orçamento (Visível para todos) */}
+                    <button 
+                        onClick={handleCustomQuote}
+                        className={`w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors ${isAdmin ? 'col-span-2' : ''}`}
+                    >
+                        <MessageSquare size={20}/> Orçamento Personalizado
+                    </button>
+                </div>
+            </div>
+
             {/* Calculadora de Frete */}
-            <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 mb-6">
+            <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
                 <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                     <Truck size={18} className="text-blue-600"/> Calcular Frete e Prazo
                 </h3>
@@ -110,9 +177,9 @@ export const ProductDetails = () => {
                     <button 
                         type="submit" 
                         disabled={calcLoading}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-bold transition-colors disabled:opacity-50"
+                        className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded text-sm font-bold transition-colors disabled:opacity-50"
                     >
-                        {calcLoading ? '...' : 'Calcular'}
+                        {calcLoading ? '...' : 'OK'}
                     </button>
                 </form>
 
@@ -135,13 +202,6 @@ export const ProductDetails = () => {
                 )}
             </div>
           </div>
-
-          <button 
-            onClick={handleQuote}
-            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg hover:shadow-green-500/30 mt-4"
-          >
-            <Box size={20}/> Solicitar Orçamento no WhatsApp
-          </button>
         </div>
       </div>
     </div>

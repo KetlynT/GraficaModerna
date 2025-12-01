@@ -1,13 +1,31 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion'; // Animações
-import { MessageCircle, Search } from 'lucide-react'; // Ícones
+import { motion } from 'framer-motion';
+import { ShoppingCart, Search } from 'lucide-react';
 import { Button } from './ui/Button';
+import { useCart } from '../context/CartContext';
+import { AuthService } from '../services/authService'; // Importar Auth
 
-export const ProductCard = ({ product, onQuote }) => {
+export const ProductCard = ({ product }) => {
+  const { addToCart } = useCart();
+
+  // Verifica se é admin
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = AuthService.isAuthenticated() && user.role === 'Admin';
+
   const formattedPrice = new Intl.NumberFormat('pt-BR', {
     style: 'currency', currency: 'BRL'
   }).format(product.price);
+
+  const handleQuickAdd = (e) => {
+    e.preventDefault();
+    addToCart(product.id, 1);
+  };
+
+  const handleImageError = (e) => {
+    e.target.src = 'https://via.placeholder.com/400x300?text=Sem+Imagem';
+    e.target.onerror = null;
+  };
 
   return (
     <motion.div 
@@ -18,16 +36,16 @@ export const ProductCard = ({ product, onQuote }) => {
       className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col h-full overflow-hidden"
     >
       {/* Imagem com Overlay */}
-      <div className="relative h-64 overflow-hidden">
+      <div className="relative h-64 overflow-hidden bg-gray-50">
         <img 
-          src={product.imageUrl || 'https://via.placeholder.com/400?text=Sem+Imagem'} 
+          src={product.imageUrl} 
           alt={product.name} 
+          onError={handleImageError}
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" 
         />
-        {/* Overlay ao passar o mouse */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
             <Link to={`/produto/${product.id}`}>
-                <Button variant="ghost" className="bg-white text-gray-900 hover:bg-gray-100 rounded-full p-3">
+                <Button variant="ghost" className="bg-white text-gray-900 hover:bg-gray-100 rounded-full p-3 shadow-lg">
                     <Search size={20} />
                 </Button>
             </Link>
@@ -37,7 +55,7 @@ export const ProductCard = ({ product, onQuote }) => {
       <div className="p-6 flex flex-col flex-grow">
         <div className="flex justify-between items-start mb-2">
             <h3 className="text-lg font-bold text-gray-800 line-clamp-1 group-hover:text-blue-600 transition-colors">
-            {product.name}
+                <Link to={`/produto/${product.id}`}>{product.name}</Link>
             </h3>
         </div>
         
@@ -45,20 +63,23 @@ export const ProductCard = ({ product, onQuote }) => {
           {product.description}
         </p>
         
-        <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+        <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-auto">
           <div>
             <span className="text-xs text-gray-400 uppercase font-bold block">A partir de</span>
             <span className="text-xl font-bold text-blue-600">{formattedPrice}</span>
           </div>
           
-          <Button 
-            variant="success" 
-            onClick={() => onQuote(product)}
-            className="px-4 py-2 rounded-full text-sm shadow-none hover:shadow-lg"
-          >
-            <MessageCircle size={18} />
-            <span className="hidden lg:inline">Orçar</span>
-          </Button>
+          {/* Botão de Adicionar Rápido: Só exibe se NÃO for Admin */}
+          {!isAdmin && (
+            <Button 
+                size="sm"
+                onClick={handleQuickAdd}
+                className="rounded-full px-3 py-2 shadow-sm hover:shadow-md"
+                title="Adicionar ao Carrinho"
+            >
+                <ShoppingCart size={18} />
+            </Button>
+          )}
         </div>
       </div>
     </motion.div>

@@ -20,12 +20,14 @@ export const CartService = {
   },
 
   // --- Cliente: Checkout & Pedidos ---
+  // A rota de checkout ainda está no CartController por conveniência de URL, mas usa OrderService no backend
   checkout: async (checkoutData) => {
     // checkoutData espera: { address, zipCode, couponCode? }
     const response = await api.post('/cart/checkout', checkoutData);
     return response.data;
   },
   
+  // Alterado para chamar o endpoint correto de Orders
   getMyOrders: async () => {
     const response = await api.get('/orders');
     return response.data;
@@ -43,7 +45,7 @@ export const CartService = {
   },
 
   updateOrderStatus: async (orderId, newStatus) => {
-    // O backend espera uma string crua no body, por isso o JSON.stringify e o header manual
+    // O backend espera uma string crua no body
     await api.patch(`/orders/${orderId}/status`, JSON.stringify(newStatus), {
         headers: { 'Content-Type': 'application/json' }
     });

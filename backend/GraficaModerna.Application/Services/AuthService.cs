@@ -35,11 +35,8 @@ public class AuthService : IAuthService
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            throw new Exception(errors); // O Middleware de erro vai pegar isso
+            throw new Exception(errors);
         }
-
-        // Opcional: Adicionar Role padrão
-        // await _userManager.AddToRoleAsync(user, "User");
 
         return GenerateToken(user);
     }
@@ -54,13 +51,19 @@ public class AuthService : IAuthService
         return GenerateToken(user);
     }
 
+    // Método corrigido para diferenciar Admin de User
     private AuthResponseDto GenerateToken(ApplicationUser user)
     {
+        // Verifica se é o admin definido no appsettings (ou fallback)
+        var adminEmail = _configuration["AdminSettings:Email"] ?? "admin@graficamoderna.com";
+        var role = user.Email!.Equals(adminEmail, StringComparison.OrdinalIgnoreCase) ? "Admin" : "User";
+
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
             new Claim(ClaimTypes.Email, user.Email!),
-            new Claim(ClaimTypes.Name, user.FullName)
+            new Claim(ClaimTypes.Name, user.FullName),
+            new Claim(ClaimTypes.Role, role) // Claim de Role dinâmica
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
@@ -78,8 +81,9 @@ public class AuthService : IAuthService
         var tokenHandler = new JwtSecurityTokenHandler();
         var token = tokenHandler.CreateToken(tokenDescriptor);
 
-        return new AuthResponseDto(tokenHandler.WriteToken(token), user.Email!, "Admin");
+        return new AuthResponseDto(tokenHandler.WriteToken(token), user.Email!, role);
     }
+
     public async Task<UserProfileDto> GetProfileAsync(string userId)
     {
         var user = await _userManager.FindByIdAsync(userId);

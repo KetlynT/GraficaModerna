@@ -3,21 +3,16 @@ using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
-using System;
 
-namespace GraficaModerna.Infrastructure.Services; // Namespace Corrigido
+namespace GraficaModerna.Infrastructure.Services;
 
 public class CartService : ICartService
 {
     private readonly AppDbContext _context;
-    private readonly IEmailService _emailService;
-    private readonly ICouponService _couponService;
 
-    public CartService(AppDbContext context, IEmailService emailService, ICouponService couponService)
+    public CartService(AppDbContext context)
     {
         _context = context;
-        _emailService = emailService;
-        _couponService = couponService;
     }
 
     private async Task<Cart> GetCartEntity(string userId)
@@ -39,9 +34,15 @@ public class CartService : ICartService
     {
         var cart = await GetCartEntity(userId);
         var itemsDto = cart.Items.Select(i => new CartItemDto(
-            i.Id, i.ProductId, i.Product?.Name ?? "Indisponível", i.Product?.ImageUrl ?? "",
-            i.Product?.Price ?? 0, i.Quantity, (i.Product?.Price ?? 0) * i.Quantity
+            i.Id,
+            i.ProductId,
+            i.Product?.Name ?? "Indisponível",
+            i.Product?.ImageUrl ?? "",
+            i.Product?.Price ?? 0,
+            i.Quantity,
+            (i.Product?.Price ?? 0) * i.Quantity
         )).ToList();
+
         return new CartDto(cart.Id, itemsDto, itemsDto.Sum(i => i.TotalPrice));
     }
 
@@ -49,6 +50,7 @@ public class CartService : ICartService
     {
         var product = await _context.Products.FindAsync(dto.ProductId);
         if (product == null) throw new Exception("Produto não encontrado.");
+        if (!product.IsActive) throw new Exception("Produto indisponível.");
         if (product.StockQuantity < dto.Quantity) throw new Exception($"Estoque insuficiente. Restam {product.StockQuantity}.");
 
         var cart = await GetCartEntity(userId);
@@ -72,7 +74,11 @@ public class CartService : ICartService
     {
         var cart = await GetCartEntity(userId);
         var item = cart.Items.FirstOrDefault(i => i.Id == itemId);
-        if (item != null) { _context.CartItems.Remove(item); await _context.SaveChangesAsync(); }
+        if (item != null)
+        {
+            _context.CartItems.Remove(item);
+            await _context.SaveChangesAsync();
+        }
     }
 
     public async Task ClearCartAsync(string userId)
@@ -80,114 +86,5 @@ public class CartService : ICartService
         var cart = await GetCartEntity(userId);
         _context.CartItems.RemoveRange(cart.Items);
         await _context.SaveChangesAsync();
-    }
-
-    public async Task<OrderDto> CheckoutAsync(string userId, string shippingAddress, string shippingZip, string? couponCode)
-    {
-        // Usa transação para garantir integridade
-        using var transaction = await _context.Database.BeginTransactionAsync();
-
-        try
-        {
-            var cart = await _context.Carts
-                .Include(c => c.Items).ThenInclude(i => i.Product)
-                .FirstOrDefaultAsync(c => c.UserId == userId);
-
-            if (cart == null || !cart.Items.Any()) throw new Exception("Carrinho vazio.");
-
-            decimal subTotal = 0;
-            var orderItems = new List<OrderItem>();
-
-            foreach (var item in cart.Items)
-            {
-                if (item.Product == null) continue;
-
-                // Revalida estoque dentro da transação
-                if (item.Product.StockQuantity < item.Quantity)
-                    throw new Exception($"Estoque insuficiente para {item.Product.Name}.");
-
-                item.Product.DebitStock(item.Quantity);
-                subTotal += item.Quantity * item.Product.Price;
-
-                orderItems.Add(new OrderItem
-                {
-                    ProductId = item.ProductId,
-                    ProductName = item.Product.Name,
-                    Quantity = item.Quantity,
-                    UnitPrice = item.Product.Price
-                });
-            }
-
-            decimal discount = 0;
-            if (!string.IsNullOrEmpty(couponCode))
-            {
-                var coupon = await _couponService.GetValidCouponAsync(couponCode);
-                if (coupon != null) discount = subTotal * (coupon.DiscountPercentage / 100m);
-            }
-
-            var order = new Order
-            {
-                UserId = userId,
-                ShippingAddress = shippingAddress,
-                ShippingZipCode = shippingZip,
-                Status = "Pendente",
-                OrderDate = DateTime.UtcNow,
-                SubTotal = subTotal,
-                Discount = discount,
-                TotalAmount = subTotal - discount,
-                AppliedCoupon = !string.IsNullOrEmpty(couponCode) ? couponCode.ToUpper() : null,
-                Items = orderItems
-            };
-
-            _context.Orders.Add(order);
-            _context.CartItems.RemoveRange(cart.Items);
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            // Envio de e-mail isolado (falha não cancela o pedido)
-            try
-            {
-                var user = await _context.Users.FindAsync(userId);
-                if (user != null) _ = _emailService.SendEmailAsync(user.Email!, "Pedido Recebido", $"Seu pedido #{order.Id} foi recebido.");
-            }
-            catch { /* Log de erro de email */ }
-
-            return new OrderDto(
-                order.Id, order.OrderDate, order.TotalAmount, order.Status, order.ShippingAddress,
-                order.Items.Select(i => new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)).ToList()
-            );
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
-
-    public async Task<List<OrderDto>> GetUserOrdersAsync(string userId)
-    {
-        var orders = await _context.Orders.Include(o => o.Items).Where(o => o.UserId == userId).OrderByDescending(o => o.OrderDate).ToListAsync();
-        return MapToDto(orders);
-    }
-
-    public async Task<List<OrderDto>> GetAllOrdersAsync()
-    {
-        var orders = await _context.Orders.Include(o => o.Items).OrderByDescending(o => o.OrderDate).ToListAsync();
-        return MapToDto(orders);
-    }
-
-    public async Task UpdateOrderStatusAsync(Guid orderId, string status)
-    {
-        var order = await _context.Orders.FindAsync(orderId);
-        if (order != null) { order.Status = status; await _context.SaveChangesAsync(); }
-    }
-
-    private List<OrderDto> MapToDto(List<Order> orders)
-    {
-        return orders.Select(o => new OrderDto(
-            o.Id, o.OrderDate, o.TotalAmount, o.Status, o.ShippingAddress,
-            o.Items.Select(i => new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)).ToList()
-        )).ToList();
     }
 }
