@@ -51,13 +51,13 @@ builder.Services.AddRateLimiter(options =>
             factory: partition => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
-                PermitLimit = 300, // Aumentei um pouco para não bloquear o dashboard
+                PermitLimit = 300,
                 QueueLimit = 2,
                 Window = TimeSpan.FromMinutes(1)
             }));
 });
 
-// --- 3. Banco de Dados & Identity ---
+// --- 3. Base de Dados & Identity ---
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -101,13 +101,13 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 // Services de Aplicação
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<ICartService, CartService>();       // Carrinho e Pedidos
-builder.Services.AddScoped<ICouponService, CouponService>();   // Cupons
+builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<ICouponService, CouponService>();
 
 // Services de Infraestrutura
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<IShippingService, MelhorEnvioShippingService>();
-builder.Services.AddScoped<IEmailService, ConsoleEmailService>(); // Mock de Email
+builder.Services.AddScoped<IEmailService, ConsoleEmailService>();
 builder.Services.AddSingleton<IHtmlSanitizer, HtmlSanitizer>(s => new HtmlSanitizer());
 
 // Ferramentas
@@ -142,11 +142,15 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// CORS
+// CORS - Atualizado para permitir origens específicas (produção e dev)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
-        b => b.WithOrigins("http://localhost:5173")
+        b => b.WithOrigins(
+                "http://localhost:5173",
+                "http://localhost:3000", // Caso use outra porta
+                "https://aminhagrafica.com.br" // Domínio de produção
+              )
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
@@ -158,6 +162,7 @@ app.UseMiddleware<ExceptionMiddleware>();
 app.UseResponseCompression();
 app.UseRateLimiter();
 
+// Seeding da Base de Dados
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -165,10 +170,12 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<AppDbContext>();
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var config = services.GetRequiredService<IConfiguration>(); // Obter Configuração
 
         if (app.Environment.IsDevelopment())
         {
-            await DbSeeder.SeedAsync(context, userManager);
+            // Passa a configuração para o Seeder
+            await DbSeeder.SeedAsync(context, userManager, config);
         }
     }
     catch (Exception ex)

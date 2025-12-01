@@ -5,7 +5,7 @@ using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
 using System;
 
-namespace GraficaModerna.Application.Services;
+namespace GraficaModerna.Infrastructure.Services; // Namespace Corrigido
 
 public class CartService : ICartService
 {
@@ -84,65 +84,85 @@ public class CartService : ICartService
 
     public async Task<OrderDto> CheckoutAsync(string userId, string shippingAddress, string shippingZip, string? couponCode)
     {
-        var cart = await _context.Carts
-            .Include(c => c.Items).ThenInclude(i => i.Product)
-            .FirstOrDefaultAsync(c => c.UserId == userId);
+        // Usa transação para garantir integridade
+        using var transaction = await _context.Database.BeginTransactionAsync();
 
-        if (cart == null || !cart.Items.Any()) throw new Exception("Carrinho vazio.");
-
-        decimal subTotal = 0;
-        var orderItems = new List<OrderItem>();
-
-        // Valida e debita estoque
-        foreach (var item in cart.Items)
+        try
         {
-            if (item.Product == null) continue;
-            item.Product.DebitStock(item.Quantity);
-            subTotal += item.Quantity * item.Product.Price;
+            var cart = await _context.Carts
+                .Include(c => c.Items).ThenInclude(i => i.Product)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
 
-            orderItems.Add(new OrderItem
+            if (cart == null || !cart.Items.Any()) throw new Exception("Carrinho vazio.");
+
+            decimal subTotal = 0;
+            var orderItems = new List<OrderItem>();
+
+            foreach (var item in cart.Items)
             {
-                ProductId = item.ProductId,
-                ProductName = item.Product.Name,
-                Quantity = item.Quantity,
-                UnitPrice = item.Product.Price
-            });
+                if (item.Product == null) continue;
+
+                // Revalida estoque dentro da transação
+                if (item.Product.StockQuantity < item.Quantity)
+                    throw new Exception($"Estoque insuficiente para {item.Product.Name}.");
+
+                item.Product.DebitStock(item.Quantity);
+                subTotal += item.Quantity * item.Product.Price;
+
+                orderItems.Add(new OrderItem
+                {
+                    ProductId = item.ProductId,
+                    ProductName = item.Product.Name,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.Product.Price
+                });
+            }
+
+            decimal discount = 0;
+            if (!string.IsNullOrEmpty(couponCode))
+            {
+                var coupon = await _couponService.GetValidCouponAsync(couponCode);
+                if (coupon != null) discount = subTotal * (coupon.DiscountPercentage / 100m);
+            }
+
+            var order = new Order
+            {
+                UserId = userId,
+                ShippingAddress = shippingAddress,
+                ShippingZipCode = shippingZip,
+                Status = "Pendente",
+                OrderDate = DateTime.UtcNow,
+                SubTotal = subTotal,
+                Discount = discount,
+                TotalAmount = subTotal - discount,
+                AppliedCoupon = !string.IsNullOrEmpty(couponCode) ? couponCode.ToUpper() : null,
+                Items = orderItems
+            };
+
+            _context.Orders.Add(order);
+            _context.CartItems.RemoveRange(cart.Items);
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            // Envio de e-mail isolado (falha não cancela o pedido)
+            try
+            {
+                var user = await _context.Users.FindAsync(userId);
+                if (user != null) _ = _emailService.SendEmailAsync(user.Email!, "Pedido Recebido", $"Seu pedido #{order.Id} foi recebido.");
+            }
+            catch { /* Log de erro de email */ }
+
+            return new OrderDto(
+                order.Id, order.OrderDate, order.TotalAmount, order.Status, order.ShippingAddress,
+                order.Items.Select(i => new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)).ToList()
+            );
         }
-
-        // Aplica Cupom
-        decimal discount = 0;
-        if (!string.IsNullOrEmpty(couponCode))
+        catch
         {
-            var coupon = await _couponService.GetValidCouponAsync(couponCode);
-            if (coupon != null) discount = subTotal * (coupon.DiscountPercentage / 100m);
+            await transaction.RollbackAsync();
+            throw;
         }
-
-        var order = new Order
-        {
-            UserId = userId,
-            ShippingAddress = shippingAddress,
-            ShippingZipCode = shippingZip,
-            Status = "Pendente",
-            OrderDate = DateTime.UtcNow,
-            SubTotal = subTotal,
-            Discount = discount,
-            TotalAmount = subTotal - discount,
-            AppliedCoupon = !string.IsNullOrEmpty(couponCode) ? couponCode.ToUpper() : null,
-            Items = orderItems
-        };
-
-        _context.Orders.Add(order);
-        _context.CartItems.RemoveRange(cart.Items);
-        await _context.SaveChangesAsync();
-
-        // Envia Email
-        var user = await _context.Users.FindAsync(userId);
-        if (user != null) _ = _emailService.SendEmailAsync(user.Email!, "Pedido Recebido", $"Seu pedido #{order.Id} foi recebido.");
-
-        return new OrderDto(
-            order.Id, order.OrderDate, order.TotalAmount, order.Status, order.ShippingAddress,
-            order.Items.Select(i => new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)).ToList()
-        );
     }
 
     public async Task<List<OrderDto>> GetUserOrdersAsync(string userId)

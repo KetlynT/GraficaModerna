@@ -1,19 +1,22 @@
 ﻿using GraficaModerna.Domain.Entities;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration; // Adicionado
 
 namespace GraficaModerna.API.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(AppDbContext context, UserManager<ApplicationUser> userManager)
+    public static async Task SeedAsync(AppDbContext context, UserManager<ApplicationUser> userManager, IConfiguration config)
     {
-        // Recria o banco para garantir schema novo (Cuidado em produção!)
+        // Recria a base de dados para garantir schema novo (Cuidado em produção!)
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
 
-        // 1. Admin
-        var adminEmail = "admin@graficamoderna.com";
+        // 1. Admin - Credenciais via Configuração ou Environment Variables
+        var adminEmail = config["AdminSettings:Email"] ?? "admin@graficamoderna.com";
+        var adminPassword = config["AdminSettings:Password"] ?? "SenhaSegura!123";
+
         if (await userManager.FindByEmailAsync(adminEmail) == null)
         {
             var newAdmin = new ApplicationUser
@@ -23,7 +26,7 @@ public static class DbSeeder
                 FullName = "Administrador Sistema",
                 EmailConfirmed = true
             };
-            await userManager.CreateAsync(newAdmin, "Admin@123");
+            await userManager.CreateAsync(newAdmin, adminPassword);
         }
 
         // 2. Settings
@@ -37,10 +40,10 @@ public static class DbSeeder
                 new SiteSetting("contact_email", "contato@graficamoderna.com.br"),
                 new SiteSetting("address", "Av. Paulista, 1000 - São Paulo, SP"),
                 new SiteSetting("hero_badge", "🚀 A melhor gráfica da região"),
-                new SiteSetting("hero_title", "Imprima suas ideias com perfeição."),
+                new SiteSetting("hero_title", "Imprima as suas ideias com perfeição."),
                 new SiteSetting("hero_subtitle", "Cartões de visita, banners e materiais promocionais com entrega rápida."),
                 new SiteSetting("home_products_title", "Nossos Produtos"),
-                new SiteSetting("home_products_subtitle", "Explore nosso catálogo."),
+                new SiteSetting("home_products_subtitle", "Explore o nosso catálogo."),
                 new SiteSetting("sender_cep", "01310-100")
             );
             await context.SaveChangesAsync();

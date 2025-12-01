@@ -5,7 +5,7 @@ using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
 using System;
 
-namespace GraficaModerna.Application.Services;
+namespace GraficaModerna.Infrastructure.Services; // Namespace Corrigido
 
 public class CouponService : ICouponService
 {
