@@ -1,10 +1,10 @@
-﻿namespace GraficaModerna.Application.DTOs;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace GraficaModerna.Application.DTOs;
 
 // --- CARRINHO ---
-public record AddToCartDto(Guid ProductId, int Quantity);
-
-public record UpdateCartItemDto(int Quantity);
-
+public record AddToCartDto(Guid ProductId, [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser no mínimo 1.")] int Quantity);
+public record UpdateCartItemDto([Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser no mínimo 1.")] int Quantity);
 public record CartItemDto(
     Guid Id,
     Guid ProductId,

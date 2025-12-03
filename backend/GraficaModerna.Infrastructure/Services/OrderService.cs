@@ -96,6 +96,25 @@ public class OrderService : IOrderService
         }
     }
 
+    // --- NOVO MÉTODO SEGURO DE PAGAMENTO (CORREÇÃO IDOR) ---
+    public async Task PayOrderAsync(Guid orderId, string userId)
+    {
+        var order = await _context.Orders.FindAsync(orderId);
+
+        if (order == null)
+            throw new Exception("Pedido não encontrado.");
+
+        // TRAVA DE SEGURANÇA: Verifica se o dono do pedido é quem está tentando pagar
+        if (order.UserId != userId)
+            throw new Exception("Acesso negado: Você não pode pagar um pedido que não é seu.");
+
+        if (order.Status != "Pendente")
+            throw new Exception($"Pedido não pode ser pago pois está: {order.Status}");
+
+        order.Status = "Pago";
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<List<OrderDto>> GetUserOrdersAsync(string userId)
     {
         var orders = await _context.Orders
@@ -128,7 +147,6 @@ public class OrderService : IOrderService
         }
     }
 
-    // NOVO: Lógica de Solicitação de Reembolso
     public async Task RequestRefundAsync(Guid orderId, string userId)
     {
         var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);

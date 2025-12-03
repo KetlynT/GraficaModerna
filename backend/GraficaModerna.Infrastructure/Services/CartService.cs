@@ -58,15 +58,21 @@ public class CartService : ICartService
         var product = await _context.Products.FindAsync(dto.ProductId);
         if (product == null) throw new Exception("Produto não encontrado.");
         if (!product.IsActive) throw new Exception("Produto indisponível.");
-        if (product.StockQuantity < dto.Quantity) throw new Exception($"Estoque insuficiente. Restam {product.StockQuantity}.");
+
+        // --- PROTEÇÃO 2: Validação de Estoque (Adicionar Novo) ---
+        // Mesmo que o DTO permita 1 milhão, aqui o banco barra se não tiver estoque real.
+        if (product.StockQuantity < dto.Quantity)
+            throw new Exception($"Estoque insuficiente. Restam {product.StockQuantity}.");
 
         var cart = await GetCartEntity(userId);
         var existing = cart.Items.FirstOrDefault(i => i.ProductId == dto.ProductId);
 
         if (existing != null)
         {
+            // --- PROTEÇÃO 2: Validação de Estoque (Incrementar Existente) ---
             if (product.StockQuantity < (existing.Quantity + dto.Quantity))
                 throw new Exception("Estoque insuficiente para adicionar mais.");
+
             existing.Quantity += dto.Quantity;
         }
         else
@@ -92,6 +98,7 @@ public class CartService : ICartService
         if (item == null) throw new Exception("Item não encontrado no carrinho.");
         if (item.Product == null) throw new Exception("Produto inválido.");
 
+        // --- PROTEÇÃO 2: Validação de Estoque (Atualização direta) ---
         if (item.Product.StockQuantity < quantity)
             throw new Exception($"Estoque insuficiente. Máximo disponível: {item.Product.StockQuantity}");
 

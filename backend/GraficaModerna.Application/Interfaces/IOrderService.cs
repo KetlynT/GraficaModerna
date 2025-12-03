@@ -11,9 +11,13 @@ public interface IOrderService
     Task<List<OrderDto>> GetUserOrdersAsync(string userId);
     Task<List<OrderDto>> GetAllOrdersAsync();
 
-    // Gestão de Status
+    // Gestão de Status (Uso Admin)
     Task UpdateOrderStatusAsync(Guid orderId, string status, string? trackingCode);
 
-    // NOVO: Cliente solicita reembolso
+    // NOVO: Método seguro para pagamento (Uso Cliente)
+    // Exige o userId para validar a propriedade do pedido
+    Task PayOrderAsync(Guid orderId, string userId);
+
+    // Cliente solicita reembolso
     Task RequestRefundAsync(Guid orderId, string userId);
 }

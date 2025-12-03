@@ -8,11 +8,11 @@ public record CreateProductDto(
     string Description,
     [Range(0.01, double.MaxValue, ErrorMessage = "Preço deve ser maior que zero")] decimal Price,
     string ImageUrl,
-    [Range(0.001, 1000, ErrorMessage = "Peso inválido (kg)")] decimal Weight,
-    [Range(1, 1000, ErrorMessage = "Largura inválida (cm)")] int Width,
-    [Range(1, 1000, ErrorMessage = "Altura inválida (cm)")] int Height,
-    [Range(1, 1000, ErrorMessage = "Comprimento inválido (cm)")] int Length,
-    [Range(0, 10000, ErrorMessage = "Estoque inválido")] int StockQuantity // NOVO
+    [Range(0.001, double.MaxValue, ErrorMessage = "Peso inválido (kg)")] decimal Weight,
+    [Range(1, int.MaxValue, ErrorMessage = "Largura inválida (cm)")] int Width,
+    [Range(1, int.MaxValue, ErrorMessage = "Altura inválida (cm)")] int Height,
+    [Range(1, int.MaxValue, ErrorMessage = "Comprimento inválido (cm)")] int Length,
+    [Range(0, int.MaxValue, ErrorMessage = "Estoque inválido")] int StockQuantity
 );
 
 // Output (Response)
