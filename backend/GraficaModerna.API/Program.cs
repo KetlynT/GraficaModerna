@@ -24,6 +24,11 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (builder.Environment.IsDevelopment())
+{
+    DotNetEnv.Env.Load();
+}
+
 // --- 1. CONFIGURAÇÃO DE AMBIENTE ---
 builder.Configuration.AddEnvironmentVariables();
 
