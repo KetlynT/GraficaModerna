@@ -8,8 +8,6 @@ namespace GraficaModerna.API.Controllers;
 [ApiController]
 public class ShippingController : ControllerBase
 {
-    // AQUI ESTÁ A MÁGICA DA ESCALABILIDADE:
-    // Injetamos uma COLEÇÃO de serviços. Hoje só tem Correios, amanhã pode ter 10.
     private readonly IEnumerable<IShippingService> _shippingServices;
     private readonly IProductService _productService;
 
@@ -25,25 +23,52 @@ public class ShippingController : ControllerBase
         if (string.IsNullOrEmpty(request.DestinationCep) || request.DestinationCep.Length < 8)
             return BadRequest("CEP de destino inválido.");
 
-        if (!request.Items.Any())
+        if (request.Items == null || !request.Items.Any())
             return BadRequest("Nenhum item informado para cálculo.");
+
+        // --- CORREÇÃO DE SEGURANÇA (PARAMETER TAMPERING) ---
+        // Recriamos a lista de itens buscando os dados REAIS no banco de dados.
+        // Isso impede que um usuário malicioso envie um peso de 0.001kg para pagar menos frete.
+        var validatedItems = new List<ShippingItemDto>();
+
+        foreach (var item in request.Items)
+        {
+            if (item.ProductId != Guid.Empty)
+            {
+                var product = await _productService.GetByIdAsync(item.ProductId);
+                if (product != null)
+                {
+                    validatedItems.Add(new ShippingItemDto
+                    {
+                        ProductId = product.Id,
+                        // Usamos APENAS os dados do banco de dados
+                        Weight = product.Weight,
+                        Width = product.Width,
+                        Height = product.Height,
+                        Length = product.Length,
+                        Quantity = item.Quantity
+                    });
+                }
+            }
+        }
+
+        if (!validatedItems.Any())
+            return BadRequest("Nenhum produto válido encontrado para cálculo.");
 
         var allOptions = new List<ShippingOptionDto>();
 
-        // Dispara o cálculo para TODOS os provedores registrados em paralelo
-        var tasks = _shippingServices.Select(service => service.CalculateAsync(request.DestinationCep, request.Items));
+        // Executa o cálculo com os itens validados
+        var tasks = _shippingServices.Select(service => service.CalculateAsync(request.DestinationCep, validatedItems));
 
         try
         {
             var results = await Task.WhenAll(tasks);
 
-            // Junta todas as listas de opções em uma só
             foreach (var result in results)
             {
                 allOptions.AddRange(result);
             }
 
-            // Ordena pelo menor preço para o cliente
             return Ok(allOptions.OrderBy(x => x.Price));
         }
         catch (Exception ex)
@@ -60,6 +85,7 @@ public class ShippingController : ControllerBase
 
         var item = new ShippingItemDto
         {
+            ProductId = product.Id,
             Weight = product.Weight,
             Height = product.Height,
             Width = product.Width,

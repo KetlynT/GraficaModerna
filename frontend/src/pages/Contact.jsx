@@ -10,6 +10,9 @@ export const Contact = () => {
     address: 'Carregando...'
   });
 
+  // Honeypot: Campo oculto para enganar bots
+  const [honey, setHoney] = useState('');
+
   useEffect(() => {
     const loadSettings = async () => {
       const data = await ContentService.getSettings();
@@ -20,7 +23,16 @@ export const Contact = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Simulação de envio
+    
+    // SEGURANÇA: Se o honeypot estiver preenchido, é um bot.
+    if (honey) {
+        // Simulamos sucesso para o bot não tentar de novo
+        console.log("Bot detectado e bloqueado.");
+        alert("Mensagem enviada com sucesso!");
+        return;
+    }
+
+    // Simulação de envio real
     alert("Mensagem enviada com sucesso!");
   };
 
@@ -29,7 +41,6 @@ export const Contact = () => {
       <h1 className="text-4xl font-bold text-center mb-12 text-gray-800">Fale Conosco</h1>
       
       <div className="grid md:grid-cols-2 gap-12">
-        {/* Informações de Contato Dinâmicas */}
         <div className="space-y-8">
           <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-blue-800">
@@ -56,9 +67,20 @@ export const Contact = () => {
           </div>
         </div>
 
-        {/* Formulário */}
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
           <div className="space-y-4">
+            
+            {/* CAMPO HONEYPOT: Invisível para usuários, visível para bots */}
+            <input 
+                type="text" 
+                name="website_url" 
+                style={{ display: 'none', opacity: 0, position: 'absolute', left: '-9999px' }} 
+                tabIndex="-1" 
+                autoComplete="off"
+                value={honey}
+                onChange={(e) => setHoney(e.target.value)}
+            />
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
               <input 

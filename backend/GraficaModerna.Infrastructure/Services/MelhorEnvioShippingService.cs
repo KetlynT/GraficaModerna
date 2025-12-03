@@ -25,16 +25,23 @@ public class MelhorEnvioShippingService : IShippingService
 
     public async Task<List<ShippingOptionDto>> CalculateAsync(string destinationCep, List<ShippingItemDto> items)
     {
-        // 1. Pega configurações
         var baseUrl = _configuration["MelhorEnvio:BaseUrl"];
-        var token = _configuration["MelhorEnvio:Token"];
         var userAgent = _configuration["MelhorEnvio:UserAgent"];
 
-        // 2. Pega CEP de Origem do Banco
-        var originCepSetting = await _context.SiteSettings.FirstOrDefaultAsync(s => s.Key == "sender_cep");
-        string originCep = originCepSetting?.Value?.Replace("-", "") ?? "01001000"; // Fallback SP
+        // SEGURANÇA: Prioriza a variável de ambiente do servidor.
+        // Se não existir (dev), tenta o appsettings.json, mas o ideal é nunca ter o token lá.
+        var token = Environment.GetEnvironmentVariable("MELHOR_ENVIO_TOKEN")
+                    ?? _configuration["MelhorEnvio:Token"];
 
-        // 3. Monta o Payload do Melhor Envio
+        if (string.IsNullOrEmpty(token))
+        {
+            // Logar erro silenciosamente ou retornar lista vazia
+            return new List<ShippingOptionDto>();
+        }
+
+        var originCepSetting = await _context.SiteSettings.FirstOrDefaultAsync(s => s.Key == "sender_cep");
+        string originCep = originCepSetting?.Value?.Replace("-", "") ?? "01001000";
+
         var requestPayload = new
         {
             from = new { postal_code = originCep },
@@ -44,13 +51,12 @@ public class MelhorEnvioShippingService : IShippingService
                 width = i.Width,
                 height = i.Height,
                 length = i.Length,
-                weight = i.Weight, // Melhor Envio aceita peso em KG (ex: 0.5)
-                insurance_value = 0, // Opcional: poderia vir do preço do produto
+                weight = i.Weight,
+                insurance_value = 0,
                 quantity = i.Quantity
             }).ToList()
         };
 
-        // 4. Configura a Requisição
         var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/v2/me/shipment/calculate");
 
         requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -63,74 +69,46 @@ public class MelhorEnvioShippingService : IShippingService
 
         try
         {
-            // 5. Envia
             var response = await _httpClient.SendAsync(requestMessage);
 
             if (!response.IsSuccessStatusCode)
             {
-                // Logar o erro aqui se necessário
-                // var errorBody = await response.Content.ReadAsStringAsync();
                 return new List<ShippingOptionDto>();
             }
 
             var responseBody = await response.Content.ReadAsStringAsync();
-
-            // 6. Deserializa e Mapeia para o DTO do seu sistema
             var meOptions = JsonSerializer.Deserialize<List<MelhorEnvioResponse>>(responseBody, jsonOptions);
 
             if (meOptions == null) return new List<ShippingOptionDto>();
 
-            // Filtra opções com erro e mapeia
             return meOptions
                 .Where(x => string.IsNullOrEmpty(x.Error))
                 .Select(x => new ShippingOptionDto
                 {
-                    Name = $"{x.Company?.Name} {x.Name}", // Ex: "Correios SEDEX" ou "Jadlog .Package"
+                    Name = $"{x.Company?.Name} {x.Name}",
                     Provider = "Melhor Envio",
-                    Price = decimal.Parse(x.Price ?? "0", System.Globalization.CultureInfo.InvariantCulture), // Melhor envio pode mandar string "25.50"
-                    DeliveryDays = x.DeliveryRange?.Max ?? x.DeliveryTime // Pega o prazo máximo
+                    Price = decimal.Parse(x.Price ?? "0", System.Globalization.CultureInfo.InvariantCulture),
+                    DeliveryDays = x.DeliveryRange?.Max ?? x.DeliveryTime
                 })
                 .OrderBy(x => x.Price)
                 .ToList();
         }
         catch (Exception)
         {
-            // Em caso de falha de conexão ou timeout
             return new List<ShippingOptionDto>();
         }
     }
 
-    // Classes auxiliares para deserialização (internas)
     private class MelhorEnvioResponse
     {
-        [JsonPropertyName("name")]
-        public string? Name { get; set; }
-
-        [JsonPropertyName("price")]
-        public string? Price { get; set; }
-
-        [JsonPropertyName("delivery_time")]
-        public int DeliveryTime { get; set; }
-
-        [JsonPropertyName("delivery_range")]
-        public DeliveryRange? DeliveryRange { get; set; }
-
-        [JsonPropertyName("company")]
-        public CompanyObj? Company { get; set; }
-
-        [JsonPropertyName("error")]
-        public string? Error { get; set; }
+        [JsonPropertyName("name")] public string? Name { get; set; }
+        [JsonPropertyName("price")] public string? Price { get; set; }
+        [JsonPropertyName("delivery_time")] public int DeliveryTime { get; set; }
+        [JsonPropertyName("delivery_range")] public DeliveryRange? DeliveryRange { get; set; }
+        [JsonPropertyName("company")] public CompanyObj? Company { get; set; }
+        [JsonPropertyName("error")] public string? Error { get; set; }
     }
 
-    private class DeliveryRange
-    {
-        [JsonPropertyName("max")]
-        public int Max { get; set; }
-    }
-
-    private class CompanyObj
-    {
-        [JsonPropertyName("name")]
-        public string? Name { get; set; }
-    }
+    private class DeliveryRange { [JsonPropertyName("max")] public int Max { get; set; } }
+    private class CompanyObj { [JsonPropertyName("name")] public string? Name { get; set; } }
 }

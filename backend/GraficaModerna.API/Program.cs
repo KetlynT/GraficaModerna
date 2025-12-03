@@ -29,7 +29,6 @@ builder.Configuration.AddEnvironmentVariables();
 
 var jwtKey = builder.Configuration["Jwt:Key"];
 
-// Validação de Segurança (Só falha em produção se não tiver chave)
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
     if (!builder.Environment.IsDevelopment())
@@ -53,7 +52,7 @@ builder.Services.AddResponseCompression(options =>
     options.Providers.Add<GzipCompressionProvider>();
 });
 
-// Rate Limiting (Proteção contra ataques de força bruta)
+// Rate Limiting
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -79,7 +78,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => {
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
-// --- 3. AUTENTICAÇÃO SEGURA (COOKIES) ---
+// --- 3. AUTENTICAÇÃO SEGURA ---
 var key = Encoding.ASCII.GetBytes(jwtKey!);
 builder.Services.AddAuthentication(options =>
 {
@@ -102,7 +101,6 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 
-    // Extrai o token do Cookie automaticamente
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
@@ -135,28 +133,35 @@ builder.Services.AddSwaggerGen(c => {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Grafica API", Version = "v1" });
 });
 
-// CORS: Configuração vital para o Frontend acessar o Backend
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", b => b
-        .WithOrigins("http://localhost:5173", "http://localhost:3000") // Permite o seu Frontend
+        .WithOrigins("http://localhost:5173", "http://localhost:3000")
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials()); // Permite o envio dos Cookies de Segurança
+        .AllowCredentials());
 });
 
 var app = builder.Build();
 
-// --- 4. PIPELINE DE EXECUÇÃO (A ordem importa!) ---
+// --- 4. PIPELINE DE EXECUÇÃO ---
+
+// Middleware de Headers de Segurança (NOVO)
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Frame-Options", "DENY"); // Previne Clickjacking
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff"); // Previne MIME sniffing
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block"); // Proteção legado XSS
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    await next();
+});
 
 app.UseMiddleware<ExceptionMiddleware>();
 
-// 1º: CORS deve vir antes de tudo para garantir que o navegador aceite a resposta
 app.UseCors("AllowFrontend");
 
 app.UseResponseCompression();
 
-// Só força HTTPS se NÃO estiver em desenvolvimento
 if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
@@ -164,7 +169,6 @@ if (!app.Environment.IsDevelopment())
 
 app.UseRateLimiter();
 
-// Seeding do Banco
 using (var scope = app.Services.CreateScope())
 {
     try

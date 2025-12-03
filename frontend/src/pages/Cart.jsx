@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useCart } from '../context/CartContext'; // Usamos o estado global agora
+import { useCart } from '../context/CartContext';
 import { CouponService } from '../services/couponService';
 import { ShippingService } from '../services/shippingService';
 import { Button } from '../components/ui/Button';
@@ -9,11 +9,9 @@ import toast from 'react-hot-toast';
 import { AuthService } from '../services/authService';
 
 export const Cart = () => {
-  // Pega itens e funções do Contexto, não mais load manual
   const { cartItems, updateQuantity, removeFromCart } = useCart();
   const navigate = useNavigate();
 
-  // Estados locais apenas para features da página
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
@@ -27,7 +25,6 @@ export const Cart = () => {
     const newQty = currentQty + delta;
     if (newQty < 1) return;
     await updateQuantity(productId, newQty);
-    // Limpa frete pois peso mudou
     if (shippingOptions) {
         setShippingOptions(null);
         setSelectedShipping(null);
@@ -58,8 +55,11 @@ export const Cart = () => {
     
     setShippingLoading(true);
     try {
+        // CORREÇÃO DE SEGURANÇA:
+        // Enviamos o productId para que o backend use o peso real do banco de dados
         const shippingItems = cartItems.map(i => ({
-            weight: i.weight,
+            productId: i.productId, // ESSENCIAL PARA A SEGURANÇA
+            weight: i.weight, // Mantemos para compatibilidade, mas backend deve ignorar
             width: i.width,
             height: i.height,
             length: i.length,
@@ -78,7 +78,6 @@ export const Cart = () => {
 
   const handleCheckout = () => {
     if (!AuthService.isAuthenticated()) {
-        // Redireciona para Login com intenção de voltar
         toast("Faça login para finalizar a compra.");
         navigate('/login');
         return;
@@ -92,7 +91,6 @@ export const Cart = () => {
     navigate('/checkout', { state: { coupon: appliedCoupon } });
   };
 
-  // Cálculos
   const subTotal = cartItems.reduce((acc, i) => acc + i.totalPrice, 0);
   const discountAmount = appliedCoupon ? subTotal * (appliedCoupon.discountPercentage / 100) : 0;
   const shippingCost = selectedShipping ? selectedShipping.price : 0;
@@ -168,7 +166,6 @@ export const Cart = () => {
             </table>
             </div>
 
-            {/* Frete */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Truck size={18}/> Calcular Frete</h3>
                 <form onSubmit={handleCalculateShipping} className="flex gap-2 max-w-sm mb-4">
