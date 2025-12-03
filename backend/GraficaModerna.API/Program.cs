@@ -32,13 +32,10 @@ if (builder.Environment.IsDevelopment())
 // --- 1. CONFIGURAÇÃO DE AMBIENTE ---
 builder.Configuration.AddEnvironmentVariables();
 
-// SEGURANÇA: A chave deve vir do Ambiente, não do arquivo JSON hardcoded.
-// Em produção: Defina a variável de ambiente 'JWT_SECRET_KEY'
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? builder.Configuration["Jwt:Key"];
 
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    // Falha rápida se a segurança não estiver configurada
     throw new Exception("FATAL: A chave JWT (JWT_SECRET_KEY) não está configurada ou é muito curta.");
 }
 
@@ -49,7 +46,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 
-// Compressão
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -57,7 +53,6 @@ builder.Services.AddResponseCompression(options =>
     options.Providers.Add<GzipCompressionProvider>();
 });
 
-// Rate Limiting (Proteção contra DDOS / Brute Force)
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -72,7 +67,6 @@ builder.Services.AddRateLimiter(options =>
             factory: _ => new FixedWindowRateLimiterOptions { AutoReplenishment = true, PermitLimit = 10, QueueLimit = 0, Window = TimeSpan.FromMinutes(1) }));
 });
 
-// Banco de Dados
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -92,7 +86,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false; // Em produção deve ser TRUE
+    options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -106,7 +100,6 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 
-    // Extrai o token do Cookie HttpOnly (Proteção XSS)
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
@@ -127,6 +120,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<ICouponService, CouponService>();
+builder.Services.AddScoped<IAddressService, AddressService>(); // <--- NOVO REGISTRO DO SERVIÇO DE ENDEREÇOS
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<IShippingService, MelhorEnvioShippingService>();
 builder.Services.AddScoped<IEmailService, ConsoleEmailService>();
@@ -142,22 +136,21 @@ builder.Services.AddSwaggerGen(c => {
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", b => b
-        .WithOrigins("http://localhost:5173", "http://localhost:3000") // Origens permitidas
+        .WithOrigins("http://localhost:5173", "http://localhost:3000")
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials()); // Permite Cookies
+        .AllowCredentials());
 });
 
 var app = builder.Build();
 
 // --- 4. PIPELINE DE EXECUÇÃO ---
 
-// Middleware de Headers de Segurança
 app.Use(async (context, next) =>
 {
-    context.Response.Headers.Append("X-Frame-Options", "DENY"); // Previne Clickjacking
-    context.Response.Headers.Append("X-Content-Type-Options", "nosniff"); // Previne MIME sniffing
-    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block"); // Proteção legado XSS
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
     await next();
 });

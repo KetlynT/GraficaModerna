@@ -3,10 +3,7 @@ import api from './api';
 export const AuthService = {
   login: async (email, password) => {
     try {
-      // O backend define o cookie automaticamente aqui
       const response = await api.post('/auth/login', { email, password });
-      
-      // Salvamos apenas dados úteis para a UI (nome, role), nada sensível
       if (response.data) {
         localStorage.setItem('user', JSON.stringify(response.data));
       }
@@ -16,9 +13,16 @@ export const AuthService = {
     }
   },
 
-  register: async (fullName, email, password) => {
+  // CORREÇÃO: Adicionado phoneNumber nos parâmetros e no payload
+  register: async (fullName, email, password, phoneNumber) => {
     try {
-      const response = await api.post('/auth/register', { fullName, email, password });
+      const response = await api.post('/auth/register', { 
+        fullName, 
+        email, 
+        password, 
+        phoneNumber 
+      });
+      
       if (response.data) {
         localStorage.setItem('user', JSON.stringify(response.data));
       }
@@ -30,7 +34,7 @@ export const AuthService = {
 
   logout: async () => {
     try {
-        await api.post('/auth/logout'); // Backend apaga o cookie
+        await api.post('/auth/logout');
     } finally {
         localStorage.removeItem('user');
         window.location.href = '/login';
@@ -38,11 +42,9 @@ export const AuthService = {
   },
 
   isAuthenticated: () => {
-    // Verificação de UI apenas. A segurança real é feita no backend validando o Cookie.
     const user = localStorage.getItem('user');
     return !!user;
   },
 
-  // Método getToken removido, pois o JS não tem mais acesso ao token
   getUser: () => JSON.parse(localStorage.getItem('user') || '{}')
 };

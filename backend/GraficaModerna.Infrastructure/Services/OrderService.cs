@@ -19,7 +19,7 @@ public class OrderService : IOrderService
         _couponService = couponService;
     }
 
-    public async Task<OrderDto> CreateOrderFromCartAsync(string userId, string shippingAddress, string shippingZip, string? couponCode)
+    public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode)
     {
         // SEGURANÇA: Execução dentro de transação para garantir integridade
         using var transaction = await _context.Database.BeginTransactionAsync();
@@ -40,7 +40,6 @@ public class OrderService : IOrderService
                 if (item.Product == null) continue;
 
                 // SEGURANÇA: Preços devem vir do banco, nunca do cliente/cache antigo
-                // A validação de estoque aqui é preliminar. O erro real ocorre no SaveChanges se houver concorrência.
                 if (item.Product.StockQuantity < item.Quantity)
                     throw new Exception($"Estoque insuficiente para {item.Product.Name}.");
 
@@ -63,11 +62,19 @@ public class OrderService : IOrderService
                 if (coupon != null) discount = subTotal * (coupon.DiscountPercentage / 100m);
             }
 
+            // FORMATAÇÃO DO ENDEREÇO PARA O SNAPSHOT DO PEDIDO
+            // Convertemos os campos separados em uma string única para registro histórico
+            var formattedAddress = $"{addressDto.Street}, {addressDto.Number}";
+            if (!string.IsNullOrWhiteSpace(addressDto.Complement)) formattedAddress += $" - {addressDto.Complement}";
+            formattedAddress += $" - {addressDto.Neighborhood}, {addressDto.City}/{addressDto.State}";
+            if (!string.IsNullOrWhiteSpace(addressDto.Reference)) formattedAddress += $" (Ref: {addressDto.Reference})";
+            formattedAddress += $" - A/C: {addressDto.ReceiverName} - Tel: {addressDto.PhoneNumber}";
+
             var order = new Order
             {
                 UserId = userId,
-                ShippingAddress = shippingAddress,
-                ShippingZipCode = shippingZip,
+                ShippingAddress = formattedAddress, // Snapshot formatado
+                ShippingZipCode = addressDto.ZipCode,
                 Status = "Pendente",
                 OrderDate = DateTime.UtcNow,
                 SubTotal = subTotal,
@@ -94,7 +101,6 @@ public class OrderService : IOrderService
         }
         catch (DbUpdateConcurrencyException)
         {
-            // SEGURANÇA: Captura a Race Condition do estoque
             await transaction.RollbackAsync();
             throw new Exception("Ops! Um dos itens do seu carrinho acabou de esgotar enquanto você finalizava. Por favor, revise o carrinho.");
         }
@@ -105,29 +111,18 @@ public class OrderService : IOrderService
         }
     }
 
-    // --- NOVO MÉTODO SEGURO DE PAGAMENTO (CORREÇÃO IDOR + ATOMICIDADE) ---
     public async Task PayOrderAsync(Guid orderId, string userId)
     {
-        // Transação para evitar leitura suja de status
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
             var order = await _context.Orders.FindAsync(orderId);
 
-            if (order == null)
-                throw new Exception("Pedido não encontrado.");
-
-            // TRAVA DE SEGURANÇA: Verifica se o dono do pedido é quem está tentando pagar
-            if (order.UserId != userId)
-                throw new Exception("Acesso negado: Você não pode pagar um pedido que não é seu.");
-
-            if (order.Status != "Pendente")
-                throw new Exception($"Pedido não pode ser pago pois está: {order.Status}");
+            if (order == null) throw new Exception("Pedido não encontrado.");
+            if (order.UserId != userId) throw new Exception("Acesso negado: Você não pode pagar um pedido que não é seu.");
+            if (order.Status != "Pendente") throw new Exception($"Pedido não pode ser pago pois está: {order.Status}");
 
             order.Status = "Pago";
-            // Aqui você adicionaria lógica para salvar o ID da transação do Gateway (Stripe/PayPal)
-            // order.PaymentTransactionId = "txn_12345..."; 
-
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -144,22 +139,13 @@ public class OrderService : IOrderService
         try
         {
             var order = await _context.Orders.FindAsync(orderId);
-
             if (order == null) throw new Exception("Pedido não encontrado.");
-
-            // Permite reprocessamento se já estiver pago (idempotência), mas não faz nada
             if (order.Status == "Pago") return;
-
-            if (order.Status != "Pendente")
-                throw new Exception($"Pedido não pode ser pago pois está: {order.Status}");
+            if (order.Status != "Pendente") throw new Exception($"Pedido não pode ser pago pois está: {order.Status}");
 
             order.Status = "Pago";
-            // order.TransactionId = transactionId; // Futuramente salve o ID do Gateway aqui
-
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
-
-            // Opcional: Enviar email de confirmação aqui
         }
         catch
         {
@@ -205,14 +191,12 @@ public class OrderService : IOrderService
         var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
         if (order == null) throw new Exception("Pedido não encontrado.");
 
-        // Regras: Só pode pedir reembolso se estiver Pago ou Enviado (antes de entregue)
         var allowedStatuses = new[] { "Pago", "Enviado" };
         if (!allowedStatuses.Contains(order.Status))
         {
             throw new Exception($"Não é possível solicitar reembolso para pedidos com status: {order.Status}");
         }
 
-        // Não alterar diretamente para "Reembolsado", apenas marcar a solicitação
         order.Status = "Reembolso Solicitado";
         await _context.SaveChangesAsync();
     }

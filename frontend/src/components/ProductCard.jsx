@@ -25,11 +25,12 @@ export const ProductCard = ({ product }) => {
 
   const handleQuickAdd = (e) => {
     e.preventDefault();
-    addToCart(product.id, 1);
+    // CORREÇÃO: Passamos o objeto 'product' inteiro, não apenas o ID.
+    // O CartContext precisa do objeto para pegar nome, preço e imagem.
+    addToCart(product, 1); 
   };
 
   const handleImageError = () => {
-    // Define a imagem de fallback apenas se ainda não estiver definida
     const fallbackUrl = 'https://placehold.co/400x300?text=Sem+Imagem';
     if (imgSrc !== fallbackUrl) {
       setImgSrc(fallbackUrl);
@@ -78,7 +79,7 @@ export const ProductCard = ({ product }) => {
             <span className="text-xl font-bold text-blue-600">{formattedPrice}</span>
           </div>
           
-          {/* Botão de Adicionar Rápido: Só exibe se NÃO for Admin */}
+          {/* Botão de Adicionar Rápido */}
           {!isAdmin && (
             <Button 
                 size="sm"

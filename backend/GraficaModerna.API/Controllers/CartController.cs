@@ -32,7 +32,6 @@ public class CartController : ControllerBase
         catch (Exception ex) { return BadRequest(ex.Message); }
     }
 
-    // NOVO ENDPOINT: Atualizar Quantidade
     [HttpPatch("items/{itemId}")]
     public async Task<IActionResult> UpdateQuantity(Guid itemId, [FromBody] UpdateCartItemDto dto)
     {
@@ -63,11 +62,16 @@ public class CartController : ControllerBase
     {
         try
         {
-            var order = await _orderService.CreateOrderFromCartAsync(GetUserId(), request.Address, request.ZipCode, request.CouponCode);
+            // Valida se o endereço foi enviado corretamente
+            if (string.IsNullOrEmpty(request.Address.ZipCode) || string.IsNullOrEmpty(request.Address.Street))
+                return BadRequest("Endereço de entrega inválido ou incompleto.");
+
+            var order = await _orderService.CreateOrderFromCartAsync(GetUserId(), request.Address, request.CouponCode);
             return Ok(order);
         }
         catch (Exception ex) { return BadRequest(ex.Message); }
     }
 }
 
-public record CheckoutRequest(string Address, string ZipCode, string? CouponCode);
+// O Address agora é um objeto completo, não apenas uma string
+public record CheckoutRequest(CreateAddressDto Address, string? CouponCode);

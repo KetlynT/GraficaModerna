@@ -28,7 +28,7 @@ public class AuthService : IAuthService
             UserName = dto.Email,
             Email = dto.Email,
             FullName = dto.FullName,
-            PhoneNumber = dto.PhoneNumber // Mapeamento do Telefone
+            PhoneNumber = dto.PhoneNumber
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
@@ -97,11 +97,7 @@ public class AuthService : IAuthService
         return new UserProfileDto(
             user.FullName,
             user.Email!,
-            user.PhoneNumber,
-            user.ZipCode,
-            user.Address,
-            user.City,
-            user.State
+            user.PhoneNumber
         );
     }
 
@@ -112,10 +108,6 @@ public class AuthService : IAuthService
 
         user.FullName = dto.FullName;
         user.PhoneNumber = dto.PhoneNumber;
-        user.ZipCode = dto.ZipCode;
-        user.Address = dto.Address;
-        user.City = dto.City;
-        user.State = dto.State;
 
         await _userManager.UpdateAsync(user);
     }

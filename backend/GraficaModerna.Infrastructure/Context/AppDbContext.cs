@@ -16,6 +16,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
     public DbSet<Coupon> Coupons { get; set; }
+    public DbSet<UserAddress> UserAddresses { get; set; } // NOVO
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -31,13 +32,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.Property(p => p.Weight).HasPrecision(10, 3);
         });
 
-        // Configurações do Site (CORREÇÃO AQUI)
+        // Configurações
         builder.Entity<SiteSetting>(e =>
         {
-            // Define 'Key' como a chave primária
             e.HasKey(s => s.Key);
-            e.Property(s => s.Key).HasMaxLength(100); // Limita o tamanho da chave
-            e.Property(s => s.Value).HasMaxLength(500); // Limita o tamanho do valor (opcional)
+            e.Property(s => s.Key).HasMaxLength(100);
+            e.Property(s => s.Value).HasMaxLength(500);
         });
 
         // Cupom
@@ -57,6 +57,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         // Itens do Pedido
         builder.Entity<OrderItem>(e => {
             e.Property(oi => oi.UnitPrice).HasPrecision(10, 2);
+        });
+
+        // Endereços (NOVO)
+        builder.Entity<UserAddress>(e => {
+            e.HasKey(a => a.Id);
+            e.HasOne(a => a.User)
+             .WithMany(u => u.Addresses)
+             .HasForeignKey(a => a.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

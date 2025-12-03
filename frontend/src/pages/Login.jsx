@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom'; // Add useLocation
 import { AuthService } from '../services/authService';
 import { useCart } from '../context/CartContext';
 import { LogIn } from 'lucide-react';
@@ -11,6 +11,7 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
+  const location = useLocation(); // Hook para ler o estado da navegação
   const { syncGuestCart } = useCart();
 
   const handleLogin = async (e) => {
@@ -21,26 +22,32 @@ export const Login = () => {
     try {
       const data = await AuthService.login(email, password);
       
-      // TRAVA DE SEGURANÇA: Impede login de Admin nesta página
       if (data.role === 'Admin') {
-          await AuthService.logout(); // Desloga imediatamente
-          setError('Acesso negado. Administradores devem usar o portal corporativo.');
+          await AuthService.logout();
+          setError('Acesso negado. Use o portal administrativo.');
           setLoading(false);
           return;
       }
       
-      // Fluxo normal de Cliente
       await syncGuestCart();
-      navigate('/'); 
+      
+      // LÓGICA DE REDIRECIONAMENTO CORRIGIDA:
+      // Se houver um "from" no estado, vai para lá. Senão, vai para Home.
+      const from = location.state?.from || '/';
+      
+      // Se veio do carrinho, mandamos para o carrinho para ele clicar em checkout de novo
+      // (Ou poderíamos mandar direto para checkout se o carrinho não estiver vazio)
+      navigate(from, { replace: true }); 
       
     } catch (err) {
-      setError('Login falhou. Verifique suas credenciais.');
+      setError('Credenciais inválidas.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    // ... (Resto do JSX do Login igual ao anterior)
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg border border-gray-100 p-8">
         <div className="text-center mb-8">
