@@ -2,7 +2,9 @@
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Services;
 
@@ -11,29 +13,78 @@ public class OrderService : IOrderService
     private readonly IUnitOfWork _uow;
     private readonly IEmailService _emailService;
     private readonly UserManager<ApplicationUser> _userManager;
+    // Dependências novas para segurança
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IEnumerable<IShippingService> _shippingServices;
 
-    public OrderService(IUnitOfWork uow, IEmailService emailService, UserManager<ApplicationUser> userManager)
+    public OrderService(
+        IUnitOfWork uow,
+        IEmailService emailService,
+        UserManager<ApplicationUser> userManager,
+        IHttpContextAccessor httpContextAccessor,
+        IEnumerable<IShippingService> shippingServices)
     {
         _uow = uow;
         _emailService = emailService;
         _userManager = userManager;
+        _httpContextAccessor = httpContextAccessor;
+        _shippingServices = shippingServices;
     }
 
-    public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode, decimal shippingCost, string shippingMethod)
+    public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode, decimal frontendShippingCost, string shippingMethod)
     {
+        // 1. Recálculo de Frete (SEGURANÇA CRÍTICA: Não confiar no frontendShippingCost)
+        var cart = await _uow.Carts.GetByUserIdAsync(userId);
+        if (cart == null || !cart.Items.Any()) throw new Exception("Carrinho vazio.");
+
+        // Monta os itens para cálculo de frete usando dados do banco (Product)
+        var shippingItems = cart.Items.Select(i => new ShippingItemDto
+        {
+            ProductId = i.ProductId,
+            Weight = i.Product!.Weight,
+            Width = i.Product.Width,
+            Height = i.Product.Height,
+            Length = i.Product.Length,
+            Quantity = i.Quantity
+        }).ToList();
+
+        decimal verifiedShippingCost = 0;
+        bool shippingMethodFound = false;
+
+        // Executa cálculo real nos provedores
+        var shippingTasks = _shippingServices.Select(s => s.CalculateAsync(addressDto.ZipCode, shippingItems));
+        var shippingResults = await Task.WhenAll(shippingTasks);
+        var allOptions = shippingResults.SelectMany(x => x).ToList();
+
+        // Tenta encontrar a opção escolhida pelo usuário
+        var selectedOption = allOptions.FirstOrDefault(o => o.Name == shippingMethod);
+
+        if (selectedOption != null)
+        {
+            verifiedShippingCost = selectedOption.Price;
+            shippingMethodFound = true;
+        }
+        else
+        {
+            // Fallback: Se o método não existir mais, pega o mais barato ou lança erro
+            // Aqui vamos lançar erro para segurança
+            throw new Exception("O método de envio selecionado não está mais disponível ou é inválido.");
+        }
+
+        // --- Início da Transação ---
         using var transaction = await _uow.BeginTransactionAsync();
         try
         {
-            var cart = await _uow.Carts.GetByUserIdAsync(userId);
-            if (cart == null || !cart.Items.Any()) throw new Exception("Carrinho vazio.");
-
             decimal subTotal = 0;
             var orderItems = new List<OrderItem>();
 
             foreach (var item in cart.Items)
             {
                 if (item.Product == null) continue;
+
+                // Controle de Concorrência (DebitStock)
                 item.Product.DebitStock(item.Quantity);
+
                 subTotal += item.Quantity * item.Product.Price;
 
                 orderItems.Add(new OrderItem
@@ -53,7 +104,8 @@ public class OrderService : IOrderService
                     discount = subTotal * (coupon.DiscountPercentage / 100m);
             }
 
-            decimal totalAmount = (subTotal - discount) + shippingCost;
+            // Usa o custo verificado, não o do parâmetro
+            decimal totalAmount = (subTotal - discount) + verifiedShippingCost;
 
             var formattedAddress = $"{addressDto.Street}, {addressDto.Number}";
             if (!string.IsNullOrWhiteSpace(addressDto.Complement)) formattedAddress += $" - {addressDto.Complement}";
@@ -61,12 +113,15 @@ public class OrderService : IOrderService
             if (!string.IsNullOrWhiteSpace(addressDto.Reference)) formattedAddress += $" (Ref: {addressDto.Reference})";
             formattedAddress += $" - A/C: {addressDto.ReceiverName} - Tel: {addressDto.PhoneNumber}";
 
+            // Captura de IP para Auditoria
+            var clientIp = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+
             var order = new Order
             {
                 UserId = userId,
                 ShippingAddress = formattedAddress,
                 ShippingZipCode = addressDto.ZipCode,
-                ShippingCost = shippingCost,
+                ShippingCost = verifiedShippingCost, // Valor Seguro
                 ShippingMethod = shippingMethod,
                 Status = "Pendente",
                 OrderDate = DateTime.UtcNow,
@@ -74,7 +129,8 @@ public class OrderService : IOrderService
                 Discount = discount,
                 TotalAmount = totalAmount,
                 AppliedCoupon = !string.IsNullOrEmpty(couponCode) ? couponCode.ToUpper() : null,
-                Items = orderItems
+                Items = orderItems,
+                CustomerIp = clientIp // Auditoria
             };
 
             await _uow.Orders.AddAsync(order);
@@ -83,6 +139,7 @@ public class OrderService : IOrderService
             await _uow.CommitAsync();
             await transaction.CommitAsync();
 
+            // Envio de e-mail (Fire and forget)
             try
             {
                 var user = await _userManager.FindByIdAsync(userId);
@@ -92,12 +149,19 @@ public class OrderService : IOrderService
 
             return MapToDto(order);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            throw new Exception("Alguns itens do seu carrinho acabaram de ficar sem estoque. Por favor, revise seu pedido.");
+        }
         catch
         {
             await transaction.RollbackAsync();
             throw;
         }
     }
+
+    // ... (Mantenha os outros métodos existentes abaixo sem alterações: PayOrderAsync, GetUserOrdersAsync, etc.)
 
     public async Task PayOrderAsync(Guid orderId, string userId)
     {
@@ -133,25 +197,8 @@ public class OrderService : IOrderService
         return orders.Select(MapToDto).ToList();
     }
 
-    // ATUALIZADO: Agora aceita dados extras (Logística Reversa)
-    // Note: Precisa atualizar a assinatura na Interface IOrderService também se tiver mudado os parametros, 
-    // mas aqui usamos o DTO no controller, então o método recebe os dados soltos ou DTO. 
-    // Vou manter a assinatura original e adicionar os parametros opcionais ou usar o DTO vindo do controller.
-    // No seu controller você passa (id, status, tracking). Vamos ajustar a implementação para receber tudo.
-    // Assinatura no Controller: UpdateOrderStatusAsync(id, dto.Status, dto.TrackingCode)
-    // Vamos mudar a assinatura aqui para receber os novos campos.
-
     public async Task UpdateOrderStatusAsync(Guid orderId, string status, string? trackingCode)
     {
-        // Este método é chamado pelo Controller antigo.
-        // Para suportar os novos campos, o ideal é criar uma sobrecarga ou alterar a interface.
-        // Como você pediu o código "pronto", vou alterar este método para aceitar os opcionais 
-        // e você deve alterar a chamada no Controller se necessário, mas vou mostrar o método completo aqui.
-
-        // ATENÇÃO: Para funcionar com o DTO novo do Controller, o Controller precisa passar esses dados.
-        // Vou assumir que você vai atualizar o Controller (não solicitado nesta leva, mas necessário).
-        // Ou melhor: Vou criar um método mais robusto.
-
         var order = await _uow.Orders.GetByIdAsync(orderId);
         if (order != null)
         {
@@ -166,7 +213,7 @@ public class OrderService : IOrderService
         }
     }
 
-    // SOBRECARGA PARA O ADMIN (Logística Reversa)
+    // Método auxiliar para Admin
     public async Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto)
     {
         var order = await _uow.Orders.GetByIdAsync(orderId);
@@ -223,7 +270,6 @@ public class OrderService : IOrderService
             order.TotalAmount,
             order.Status,
             order.TrackingCode,
-            // Mapeia novos campos
             order.ReverseLogisticsCode,
             order.ReturnInstructions,
             order.ShippingAddress,

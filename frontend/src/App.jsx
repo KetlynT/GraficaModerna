@@ -7,6 +7,7 @@ import { AuthService } from './services/authService';
 import { ContentService } from './services/contentService';
 import { CartProvider } from './context/CartContext';
 import ScrollToTop from './components/ScrollToTop';
+import { CookieConsent } from './components/CookieConsent';
 
 // Lazy Loading
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
@@ -82,6 +83,7 @@ function App() {
       <BrowserRouter>
         <ScrollToTop />
         <Toaster position="top-right" />
+        <CookieConsent />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* ROTAS PÚBLICAS (SITE) */}
@@ -106,9 +108,6 @@ function App() {
             
             {/* 2. Dashboard Secreto (Protegido) */}
             <Route path="/putiroski/dashboard" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />
-            
-            {/* Compatibilidade com links antigos (se houver) */}
-            <Route path="/painel-restrito-gerencial" element={<Navigate to="/putiroski/dashboard" replace />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

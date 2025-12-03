@@ -12,10 +12,12 @@ namespace GraficaModerna.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly ILogger<AuthController> _logger; // Injetar Logger
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, ILogger<AuthController> logger)
     {
         _authService = authService;
+        _logger = logger;
     }
 
     [EnableRateLimiting("AuthPolicy")]
@@ -24,7 +26,11 @@ public class AuthController : ControllerBase
     {
         var result = await _authService.RegisterAsync(dto);
         SetTokenCookie(result.Token);
-        // Retorna apenas dados não sensíveis
+
+        // Log de Auditoria
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        _logger.LogInformation("Novo registro: {Email} - IP: {IP}", result.Email, ip);
+
         return Ok(new { result.Email, result.Role });
     }
 
@@ -33,6 +39,11 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto dto)
     {
         var result = await _authService.LoginAsync(dto);
+
+        // Log de Auditoria para Segurança
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        _logger.LogInformation("Login efetuado: {Email} - IP: {IP}", dto.Email, ip);
+
         SetTokenCookie(result.Token);
         return Ok(new { result.Email, result.Role });
     }
@@ -40,7 +51,6 @@ public class AuthController : ControllerBase
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        // Remove o cookie do navegador
         Response.Cookies.Delete("jwt");
         return Ok(new { message = "Deslogado com sucesso" });
     }
@@ -62,14 +72,13 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    // --- MÁGICA DE SEGURANÇA: Cria o Cookie HttpOnly ---
     private void SetTokenCookie(string token)
     {
         var cookieOptions = new CookieOptions
         {
-            HttpOnly = true, // JavaScript não consegue ler (Anti-XSS)
-            Secure = true,   // Só trafega em HTTPS (Anti-Sniffing)
-            SameSite = SameSiteMode.Strict, // Previne CSRF
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
             Expires = DateTime.UtcNow.AddHours(8)
         };
         Response.Cookies.Append("jwt", token, cookieOptions);
