@@ -65,7 +65,13 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Role, role)
         };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+                ?? _configuration["Jwt:Key"];
+
+        if (string.IsNullOrEmpty(keyString))
+            throw new Exception("Chave JWT não configurada (JWT_SECRET_KEY ou Jwt:Key).");
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var tokenDescriptor = new SecurityTokenDescriptor

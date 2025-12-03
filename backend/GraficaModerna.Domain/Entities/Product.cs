@@ -24,7 +24,7 @@ public class Product
     // SEGURANÇA: Concorrência Otimista
     // O EF Core verifica automaticamente se esse valor mudou antes de salvar.
     [Timestamp]
-    public byte[] RowVersion { get; set; }
+    public byte[]? RowVersion { get; set; }
 
     protected Product()
     {
