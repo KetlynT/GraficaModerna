@@ -86,7 +86,7 @@ function App() {
       <CartProvider>
         <BrowserRouter>
           <ScrollToTop />
-          <Toaster position="top-right" />
+          <Toaster position="top-right" containerStyle={{top: 80,}}/>
           <CookieConsent />
           <Suspense fallback={<PageLoader />}>
             <Routes>

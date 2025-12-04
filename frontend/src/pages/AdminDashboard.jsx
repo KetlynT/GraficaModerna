@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ProductService } from '../services/productService';
 import { ContentService } from '../services/contentService';
-import { AuthService } from '../services/authService';
+import AuthService from '../services/authService';
 import { CartService } from '../services/cartService';
 import { DashboardService } from '../services/dashboardService';
 import { CouponService } from '../services/couponService';
@@ -12,12 +12,24 @@ import {
   Box, Truck, BarChart2, AlertTriangle, DollarSign, 
   ShoppingBag, Tag, Search, Eye, X, RefreshCcw, ArrowUp, ArrowDown, ArrowUpDown 
 } from 'lucide-react';
-
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import { useAuth } from '../context/AuthContext';
 
 export const AdminDashboard = () => {
+  const { user } = useAuth();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview'); 
+  
+  useEffect(() => {
+    if (user && user.role !== 'Admin') {
+      navigate('/'); // Manda de volta para a Home
+      toast.error("Acesso não autorizado.");
+    }
+  }, [user, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -29,7 +41,7 @@ export const AdminDashboard = () => {
         <div className="flex items-center gap-4">
             <a href="/" className="text-sm text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">Ver Site</a>
             <button 
-            onClick={AuthService.logout} 
+            onClick={logout} 
             className="flex items-center gap-2 text-gray-500 hover:text-red-600 transition-colors font-medium text-sm"
             >
             <LogOut size={18} /> Sair
@@ -161,6 +173,9 @@ const ProductsTab = () => {
   const [products, setProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 10; // Reduzi para 10 para testar a paginação, mas pode ser 20 ou 50
   
   // Estado para filtros
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
@@ -179,15 +194,25 @@ const ProductsTab = () => {
 
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { loadProducts(); }, [sortConfig, searchTerm]);
+  useEffect(() => { loadProducts(); }, [sortConfig, searchTerm, currentPage]);
 
   const loadProducts = async () => {
-      try {
-          // Passa os parâmetros de ordenação para a API (O backend já suporta search/sort/order)
-          const data = await ProductService.getAll(1, 100, searchTerm, sortConfig.key, sortConfig.direction);
-          setProducts(data.items);
-      } catch (e) { toast.error("Erro ao carregar produtos"); }
-  };
+    try {
+        setLoading(true);
+        // Passa currentPage e pageSize dinâmicos
+        const data = await ProductService.getAll(currentPage, pageSize, searchTerm, sortConfig.key, sortConfig.direction);
+
+        setProducts(data.items);
+        // Calcula o total de páginas baseado no total de itens
+        // Nota: Se o backend retornar 'totalPages' direto, use data.totalPages
+        const total = Math.ceil(data.totalCount / pageSize); 
+        setTotalPages(total || 1); 
+    } catch (e) { 
+        toast.error("Erro ao carregar produtos"); 
+    } finally {
+        setLoading(false);
+    }
+};
 
   const handleSort = (key) => {
       let direction = 'asc';
@@ -211,6 +236,14 @@ const ProductsTab = () => {
       try {
           let imageUrl = editingProduct?.imageUrl || '';
           if(imageFile) imageUrl = await ProductService.uploadImage(imageFile);
+          
+          const formattedPrice = parseFloat(price.toString().replace(',', '.'));
+
+        if (isNaN(formattedPrice)) {
+            toast.error("Preço inválido");
+            setLoading(false);
+            return;
+        }
 
           const data = { 
               name, 
@@ -251,7 +284,7 @@ const ProductsTab = () => {
       setEditingProduct(p);
       setName(p?.name || '');
       setDesc(p?.description || '');
-      setPrice(p?.price || '');
+      setPrice(p?.price ? p.price.toString().replace('.', ',') : '');
       setStock(p?.stockQuantity || '');
       setWeight(p?.weight || '');
       setWidth(p?.width || '');
@@ -259,6 +292,19 @@ const ProductsTab = () => {
       setLength(p?.length || '');
       setImageFile(null);
       setIsModalOpen(true);
+  };
+
+  const handlePriceChange = (e) => {
+    let val = e.target.value;
+
+    // Permite apenas números, ponto e vírgula
+    val = val.replace(/[^0-9.,]/g, '');
+
+    // Garante que só existe uma vírgula ou ponto decimal
+    const parts = val.split(/[,.]/);
+    if (parts.length > 2) return; 
+
+    setPrice(val);
   };
 
   return (
@@ -318,6 +364,28 @@ const ProductsTab = () => {
                       ))}
                   </tbody>
               </table>
+              {/* Paginação */}
+<div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+    <span className="text-sm text-gray-500">
+        Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+    </span>
+    <div className="flex gap-2">
+        <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 border rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-gray-600"
+        >
+            Anterior
+        </button>
+        <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 border rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-gray-600"
+        >
+            Próxima
+        </button>
+    </div>
+</div>
           </div>
 
           {/* Modal de Produto (Omitido para não repetir código, mantém o mesmo) */}
@@ -336,9 +404,16 @@ const ProductsTab = () => {
                             <textarea className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none" value={desc} onChange={e=>setDesc(e.target.value)} />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Preço (R$)</label>
-                            <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" type="number" step="0.01" value={price} onChange={e=>setPrice(e.target.value)} required />
-                        </div>
+    <label className="block text-sm font-bold text-gray-700 mb-1">Preço (R$)</label>
+    <input 
+        className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+        type="text" // Mudamos para text para aceitar vírgula visualmente
+        placeholder="0,00"
+        value={price} 
+        onChange={handlePriceChange} // Nova função
+        required 
+    />
+</div>
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Estoque</label>
                             <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" type="number" value={stock} onChange={e=>setStock(e.target.value)} required />
