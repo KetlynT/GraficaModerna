@@ -1,6 +1,6 @@
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
-using GraficaModerna.Domain.Constants; // Lote 1
+using GraficaModerna.Domain.Constants;
 using GraficaModerna.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -32,17 +32,30 @@ public class AuthService : IAuthService
             PhoneNumber = dto.PhoneNumber
         };
 
-        // A senha agora será validada pelas regras fortes definidas no Program.cs
         var result = await _userManager.CreateAsync(user, dto.Password);
 
         if (!result.Succeeded)
         {
-            // Pega a primeira mensagem de erro para ser mais amigável, mas mantém log seguro
-            var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new Exception($"Falha ao registrar: {errors}");
+            // SEGURANÇA: Prevenção de User Enumeration (CWE-204)
+            // Não retornamos "Email já existe" diretamente para evitar varredura de usuários.
+
+            // Filtramos apenas erros de validação de senha (ex: "Senha precisa de um dígito"), 
+            // que são úteis para o usuário legítimo corrigir seu input.
+            var safeErrors = result.Errors
+                .Where(e => e.Code.StartsWith("Password"))
+                .Select(e => e.Description);
+
+            if (safeErrors.Any())
+            {
+                throw new Exception($"A senha não atende aos requisitos: {string.Join("; ", safeErrors)}");
+            }
+
+            // Para outros erros (como duplicidade de email ou erro de banco),
+            // retornamos uma mensagem genérica segura.
+            // Idealmente, o erro original 'result.Errors' deve ser logado (ILogger) aqui.
+            throw new Exception("Não foi possível concluir o cadastro. Verifique os dados informados e tente novamente.");
         }
 
-        // Usa a constante Roles.User para evitar erros de digitação
         await _userManager.AddToRoleAsync(user, Roles.User);
 
         return await GenerateToken(user);
@@ -52,8 +65,9 @@ public class AuthService : IAuthService
     {
         var user = await _userManager.FindByEmailAsync(dto.Email);
 
+        // SEGURANÇA: Mensagem genérica para Login inválido
         if (user == null || !await _userManager.CheckPasswordAsync(user, dto.Password))
-            throw new Exception("Credenciais inválidas."); // Mensagem genérica para evitar User Enumeration
+            throw new Exception("Credenciais inválidas.");
 
         return await GenerateToken(user);
     }
@@ -80,8 +94,6 @@ public class AuthService : IAuthService
     private async Task<AuthResponseDto> GenerateToken(ApplicationUser user)
     {
         var roles = await _userManager.GetRolesAsync(user);
-
-        // Prioriza Admin se o usuário tiver ambos, senão pega o primeiro ou User
         var primaryRole = roles.Contains(Roles.Admin) ? Roles.Admin : (roles.FirstOrDefault() ?? Roles.User);
 
         var claims = new List<Claim>
@@ -92,11 +104,12 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Role, primaryRole)
         };
 
-        // Garante a leitura da mesma chave usada no Program.cs
+        // CORREÇÃO: Removemos a chave hardcoded de fallback.
+        // A consistência da chave deve ser garantida na inicialização (Program.cs).
         var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];
-        // Fallback apenas para garantir que não quebre se a env var falhar (mas deve estar alinhado com Program.cs)
+
         if (string.IsNullOrEmpty(keyString) || keyString.Length < 32)
-            keyString = "chave_temporaria_super_secreta_para_dev_apenas_999";
+            throw new Exception("Erro interno de configuração (Chave JWT ausente).");
 
         var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(keyString));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -104,8 +117,6 @@ public class AuthService : IAuthService
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            // SEGURANÇA: Token de curta duração (30 min). 
-            // O Refresh Token seria o próximo passo ideal, mas o Cookie HttpOnly + Blacklist já mitigam muito.
             Expires = DateTime.UtcNow.AddMinutes(30),
             SigningCredentials = creds,
             Issuer = _configuration["Jwt:Issuer"],

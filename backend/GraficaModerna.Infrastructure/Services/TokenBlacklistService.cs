@@ -1,30 +1,33 @@
 ﻿using GraficaModerna.Application.Interfaces;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace GraficaModerna.Infrastructure.Services;
 
 public class TokenBlacklistService : ITokenBlacklistService
 {
-    private readonly IMemoryCache _cache;
+    private readonly IDistributedCache _cache;
 
-    public TokenBlacklistService(IMemoryCache cache)
+    public TokenBlacklistService(IDistributedCache cache)
     {
         _cache = cache;
     }
 
-    public Task BlacklistTokenAsync(string token, DateTime expiryDate)
+    public async Task BlacklistTokenAsync(string token, DateTime expiryDate)
     {
         var timeToLive = expiryDate - DateTime.UtcNow;
+        if (timeToLive <= TimeSpan.Zero) return;
 
-        // Se já expirou, não precisa guardar
-        if (timeToLive <= TimeSpan.Zero) return Task.CompletedTask;
-
-        _cache.Set(token, true, timeToLive);
-        return Task.CompletedTask;
+        var options = new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = timeToLive
+        };
+        await _cache.SetStringAsync(token, "revoked", options);
     }
 
-    public Task<bool> IsTokenBlacklistedAsync(string token)
+    public async Task<bool> IsTokenBlacklistedAsync(string token)
     {
-        return Task.FromResult(_cache.TryGetValue(token, out _));
+        // Se retornar valor, significa que a chave existe e o token está revogado
+        var value = await _cache.GetStringAsync(token);
+        return value != null;
     }
 }

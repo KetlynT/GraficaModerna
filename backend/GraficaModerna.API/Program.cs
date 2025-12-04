@@ -20,7 +20,7 @@ using Ganss.Xss;
 using Microsoft.AspNetCore.ResponseCompression;
 using System.IO.Compression;
 using System.Threading.RateLimiting;
-using GraficaModerna.API.Data; // Necessário para DbSeeder se usado
+using GraficaModerna.API.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,14 +32,11 @@ if (builder.Environment.IsDevelopment())
 builder.Configuration.AddEnvironmentVariables();
 
 // --- SEGURANÇA: Validação da Chave JWT ---
+// CORREÇÃO: Removemos o fallback inseguro. A chave DEVE vir do ambiente ou configuração segura.
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    if (builder.Environment.IsProduction())
-        throw new Exception("FATAL: JWT_SECRET_KEY insegura ou ausente em produção.");
-
-    // Fallback apenas para DEV
-    jwtKey = "chave_temporaria_super_secreta_para_dev_apenas_999";
+    throw new Exception("FATAL: JWT_SECRET_KEY não configurada ou insegura (mínimo 32 caracteres).");
 }
 
 // Serviços Básicos
@@ -47,7 +44,12 @@ builder.Services.AddHttpClient();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddMemoryCache(); // Essencial para a Blacklist
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+    options.InstanceName = "GraficaModerna_";
+});
 
 // Compressão
 builder.Services.AddResponseCompression(options =>
@@ -68,7 +70,7 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions { AutoReplenishment = true, PermitLimit = 300, QueueLimit = 2, Window = TimeSpan.FromMinutes(1) }));
 
-    // Política Específica para Auth (Login/Register) - CORREÇÃO DO ERRO
+    // Política Específica para Auth (Login/Register)
     options.AddPolicy("AuthPolicy", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -84,16 +86,17 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => {
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
-    options.Password.RequireNonAlphanumeric = true; // Exige caractere especial
-    options.Password.RequiredLength = 8; // Mínimo seguro
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequiredLength = 8;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-    options.Lockout.MaxFailedAccessAttempts = 5; // Bloqueia após 5 tentativas erradas
+    options.Lockout.MaxFailedAccessAttempts = 5;
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
 // --- SEGURANÇA: JWT com Cookie e Blacklist ---
 var key = Encoding.ASCII.GetBytes(jwtKey);
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -151,7 +154,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<ITokenBlacklistService, TokenBlacklistService>(); // NOVO
+builder.Services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<ICouponService, CouponService>();
@@ -172,8 +175,6 @@ builder.Services.AddTransient<JwtValidationMiddleware>();
 // Swagger Config
 builder.Services.AddSwaggerGen(c => {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Grafica API", Version = "v1" });
-    // Nota: Como usamos Cookies, o Swagger precisa de ajustes manuais para testar, 
-    // ou usamos Postman/Insomnia. Mantive Bearer para compatibilidade se necessário.
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
@@ -186,7 +187,7 @@ builder.Services.AddSwaggerGen(c => {
     });
 });
 
-// CORS Config (Ajuste para permitir Cookies/Credentials)
+// CORS Config
 var allowedOrigins = builder.Configuration.GetSection("AllowedHosts").Get<string[]>()
                      ?? new[] { "http://localhost:5173", "http://localhost:3000" };
 
@@ -196,7 +197,7 @@ builder.Services.AddCors(options =>
         .WithOrigins(allowedOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials()); // OBRIGATÓRIO para Cookies funcionarem
+        .AllowCredentials());
 });
 
 var app = builder.Build();
@@ -211,7 +212,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// Middleware de Exceção (Info Disclosure Fix)
+// Middleware de Exceção
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseCors("AllowFrontend");
@@ -251,7 +252,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseStaticFiles();
 
-// Ordem Importante: Auth -> Authorization
 app.UseAuthentication();
 app.UseMiddleware<JwtValidationMiddleware>();
 app.UseAuthorization();

@@ -17,7 +17,7 @@ public class Product : BaseEntity
 
     // CORREÇÃO: Campo para controle de concorrência (Optimistic Concurrency)
     [Timestamp]
-    public byte[] RowVersion { get; set; }
+    public byte[]? RowVersion { get; set; }
 
     public Product(string name, string description, decimal price, string imageUrl, decimal weight, int width, int height, int length, int stockQuantity)
     {

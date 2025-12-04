@@ -46,7 +46,7 @@ public class JwtValidationMiddleware : IMiddleware
         }
 
         // --- 2. Verificar expiração ---
-        var exp = jwt.Payload.Exp;
+        var exp = jwt.Payload.Expiration;
         if (exp == null || DateTimeOffset.FromUnixTimeSeconds(exp.Value) < DateTimeOffset.UtcNow)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;

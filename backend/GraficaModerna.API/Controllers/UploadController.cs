@@ -45,37 +45,34 @@ public class UploadController : ControllerBase
 
         try
         {
-            // CORREÇÃO CRÍTICA: Usar MemoryStream para validação segura sem fechar o stream original
-            using (var memoryStream = new MemoryStream())
+            // CORREÇÃO: Leitura otimizada do Stream sem carregar tudo em memória (RAM)
+            using (var stream = file.OpenReadStream())
             {
-                // Copia o conteúdo para memória primeiro
-                await file.CopyToAsync(memoryStream);
+                // 1. Validação de Magic Numbers (lendo apenas o cabeçalho)
+                var headerBuffer = new byte[12]; // Tamanho suficiente para as assinaturas definidas
+                var bytesRead = await stream.ReadAsync(headerBuffer, 0, headerBuffer.Length);
 
-                // 1. Validação de Magic Numbers (lendo do MemoryStream)
-                memoryStream.Position = 0; // Volta ao início para ler
-                using (var reader = new BinaryReader(memoryStream, System.Text.Encoding.Default, leaveOpen: true))
+                var signatures = _fileSignatures.ContainsKey(ext) ? _fileSignatures[ext] : null;
+
+                if (signatures == null || !signatures.Any(signature =>
+                    headerBuffer.Take(signature.Length).SequenceEqual(signature)))
                 {
-                    var headerBytes = reader.ReadBytes(12);
-                    var signatures = _fileSignatures.ContainsKey(ext) ? _fileSignatures[ext] : null;
-
-                    if (signatures == null || !signatures.Any(signature =>
-                        headerBytes.Take(signature.Length).SequenceEqual(signature)))
-                    {
-                        return BadRequest("O ficheiro está corrompido ou é malicioso (assinatura inválida).");
-                    }
+                    return BadRequest("O ficheiro está corrompido ou é malicioso (assinatura inválida).");
                 }
 
-                // 2. Salvar no Disco (lendo do MemoryStream validado)
-                memoryStream.Position = 0; // Volta ao início para salvar
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                // 2. Salvar no Disco
+                // Resetamos a posição do stream para o início para copiar o conteúdo completo
+                stream.Position = 0;
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
                 {
-                    await memoryStream.CopyToAsync(stream);
+                    await stream.CopyToAsync(fileStream);
                 }
             }
         }
         catch (Exception ex)
         {
-            // Logar erro real em produção
+            // Em produção, logue 'ex' adequadamente e retorne mensagem genérica se necessário
             return BadRequest($"Erro ao processar o ficheiro: {ex.Message}");
         }
 
