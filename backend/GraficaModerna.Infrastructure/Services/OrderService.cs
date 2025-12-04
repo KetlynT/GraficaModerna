@@ -1,7 +1,7 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
-using GraficaModerna.Domain.Interfaces;
+using GraficaModerna.Infrastructure.Context;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,24 +10,22 @@ namespace GraficaModerna.Infrastructure.Services;
 
 public class OrderService : IOrderService
 {
-    private readonly IUnitOfWork _uow;
+    private readonly AppDbContext _context; // Uso direto do Context para transações
     private readonly IEmailService _emailService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IEnumerable<IShippingService> _shippingServices;
-
-    // NOVO: Injeção do PaymentService para realizar reembolsos
     private readonly IPaymentService _paymentService;
 
     public OrderService(
-        IUnitOfWork uow,
+        AppDbContext context,
         IEmailService emailService,
         UserManager<ApplicationUser> userManager,
         IHttpContextAccessor httpContextAccessor,
         IEnumerable<IShippingService> shippingServices,
-        IPaymentService paymentService) // Injetado aqui
+        IPaymentService paymentService)
     {
-        _uow = uow;
+        _context = context;
         _emailService = emailService;
         _userManager = userManager;
         _httpContextAccessor = httpContextAccessor;
@@ -37,9 +35,14 @@ public class OrderService : IOrderService
 
     public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode, decimal frontendShippingCost, string shippingMethod)
     {
-        var cart = await _uow.Carts.GetByUserIdAsync(userId);
+        var cart = await _context.Carts
+            .Include(c => c.Items)
+            .ThenInclude(i => i.Product)
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
         if (cart == null || !cart.Items.Any()) throw new Exception("Carrinho vazio.");
 
+        // 1. Recálculo e Validação Robusta de Frete
         var shippingItems = cart.Items.Select(i => new ShippingItemDto
         {
             ProductId = i.ProductId,
@@ -51,17 +54,25 @@ public class OrderService : IOrderService
         }).ToList();
 
         decimal verifiedShippingCost = 0;
-
         var shippingTasks = _shippingServices.Select(s => s.CalculateAsync(addressDto.ZipCode, shippingItems));
         var shippingResults = await Task.WhenAll(shippingTasks);
         var allOptions = shippingResults.SelectMany(x => x).ToList();
 
-        var selectedOption = allOptions.FirstOrDefault(o => o.Name == shippingMethod);
+        // CORREÇÃO: Comparação insensível a maiúsculas/espaços
+        var selectedOption = allOptions.FirstOrDefault(o =>
+            o.Name.Trim().Equals(shippingMethod.Trim(), StringComparison.InvariantCultureIgnoreCase));
+
+        // Fallback: Se o nome mudou na API, tenta achar pelo preço exato
+        if (selectedOption == null)
+        {
+            selectedOption = allOptions.FirstOrDefault(o => o.Price == frontendShippingCost);
+        }
 
         if (selectedOption != null) verifiedShippingCost = selectedOption.Price;
-        else throw new Exception("O método de envio selecionado não está mais disponível ou é inválido.");
+        else throw new Exception("Método de envio inválido ou indisponível para o CEP informado. Tente atualizar a página.");
 
-        using var transaction = await _uow.BeginTransactionAsync();
+        // 2. Transação com Controle de Concorrência
+        using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
             decimal subTotal = 0;
@@ -70,9 +81,12 @@ public class OrderService : IOrderService
             foreach (var item in cart.Items)
             {
                 if (item.Product == null) continue;
-                item.Product.DebitStock(item.Quantity);
-                subTotal += item.Quantity * item.Product.Price;
 
+                // CORREÇÃO: Tenta debitar. Se falhar no SaveChanges por RowVersion, cai no catch.
+                item.Product.DebitStock(item.Quantity);
+                _context.Entry(item.Product).State = EntityState.Modified;
+
+                subTotal += item.Quantity * item.Product.Price;
                 orderItems.Add(new OrderItem
                 {
                     ProductId = item.ProductId,
@@ -82,18 +96,23 @@ public class OrderService : IOrderService
                 });
             }
 
+            // 3. Validação Real de Cupom (Único por usuário)
             decimal discount = 0;
             if (!string.IsNullOrEmpty(couponCode))
             {
-                var coupon = await _uow.Coupons.GetByCodeAsync(couponCode);
+                var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == couponCode.ToUpper());
+
                 if (coupon != null && coupon.IsValid())
+                {
+                    bool alreadyUsed = await _context.CouponUsages.AnyAsync(u => u.UserId == userId && u.CouponCode == coupon.Code);
+                    if (alreadyUsed) throw new Exception("Cupom já utilizado por este usuário.");
+
                     discount = subTotal * (coupon.DiscountPercentage / 100m);
+                }
             }
 
             decimal totalAmount = (subTotal - discount) + verifiedShippingCost;
-
             var formattedAddress = $"{addressDto.Street}, {addressDto.Number} - {addressDto.Complement} - {addressDto.Neighborhood}, {addressDto.City}/{addressDto.State} (Ref: {addressDto.Reference}) - A/C: {addressDto.ReceiverName} - Tel: {addressDto.PhoneNumber}";
-            var clientIp = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
 
             var order = new Order
             {
@@ -101,7 +120,7 @@ public class OrderService : IOrderService
                 ShippingAddress = formattedAddress,
                 ShippingZipCode = addressDto.ZipCode,
                 ShippingCost = verifiedShippingCost,
-                ShippingMethod = shippingMethod,
+                ShippingMethod = selectedOption?.Name ?? shippingMethod,
                 Status = "Pendente",
                 OrderDate = DateTime.UtcNow,
                 SubTotal = subTotal,
@@ -109,23 +128,44 @@ public class OrderService : IOrderService
                 TotalAmount = totalAmount,
                 AppliedCoupon = !string.IsNullOrEmpty(couponCode) ? couponCode.ToUpper() : null,
                 Items = orderItems,
-                CustomerIp = clientIp
+                CustomerIp = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString()
             };
 
-            await _uow.Orders.AddAsync(order);
-            await _uow.Carts.ClearCartAsync(cart.Id);
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync();
 
-            await _uow.CommitAsync();
+            // Registra uso do cupom
+            if (discount > 0 && !string.IsNullOrEmpty(couponCode))
+            {
+                _context.CouponUsages.Add(new CouponUsage
+                {
+                    UserId = userId,
+                    CouponCode = couponCode.ToUpper(),
+                    OrderId = order.Id,
+                    UsedAt = DateTime.UtcNow
+                });
+            }
+
+            // Limpa carrinho
+            _context.CartItems.RemoveRange(cart.Items);
+
+            // Commit final (aqui o RowVersion valida o estoque)
+            await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
             try
             {
                 var user = await _userManager.FindByIdAsync(userId);
-                if (user != null) _ = _emailService.SendEmailAsync(user.Email!, "Pedido Confirmado", $"Seu pedido #{order.Id} foi recebido.");
+                if (user != null) _ = _emailService.SendEmailAsync(user.Email!, "Pedido Recebido", $"Seu pedido #{order.Id} foi criado. Aguardando pagamento.");
             }
             catch { }
 
             return MapToDto(order);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            throw new Exception("Sinto muito! Um dos itens do seu carrinho esgotou-se no exato momento da compra. Por favor, revise seu carrinho.");
         }
         catch (Exception)
         {
@@ -134,112 +174,86 @@ public class OrderService : IOrderService
         }
     }
 
-    public async Task PayOrderAsync(Guid orderId, string userId)
-    {
-        // ... (Mantém inalterado, usado apenas para pagamentos manuais se houver)
-        var order = await _uow.Orders.GetByIdAsync(orderId);
-        if (order == null || order.UserId != userId) throw new Exception("Erro.");
-        order.Status = "Pago";
-        await _uow.Orders.UpdateAsync(order);
-        await _uow.CommitAsync();
-    }
-
-    public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId)
-    {
-        var order = await _uow.Orders.GetByIdAsync(orderId);
-        if (order == null || order.Status == "Pago") return;
-
-        order.Status = "Pago";
-        order.StripePaymentIntentId = transactionId; // Salva o ID da transação para reembolso futuro
-
-        await _uow.Orders.UpdateAsync(order);
-        await _uow.CommitAsync();
-    }
-
-    public async Task UpdateOrderStatusAsync(Guid orderId, string status, string? trackingCode)
-    {
-        // Método simplificado (pode ser usado pelo AdminController legado)
-        // Redireciona para o método mais completo para garantir a lógica de reembolso
-        var dto = new UpdateOrderStatusDto(status, trackingCode, null, null);
-        await UpdateAdminOrderAsync(orderId, dto);
-    }
-
-    // --- LÓGICA CENTRAL DE ATUALIZAÇÃO DO ADMIN ---
     public async Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto)
     {
-        var order = await _uow.Orders.GetByIdAsync(orderId);
+        var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Pedido não encontrado");
 
-        // 1. Lógica de Logística Reversa ("Aguardando Devolução")
+        // Lógica de Devolução
         if (dto.Status == "Aguardando Devolução")
         {
-            if (!string.IsNullOrEmpty(dto.ReverseLogisticsCode))
-                order.ReverseLogisticsCode = dto.ReverseLogisticsCode;
-
-            // Se o admin não mandou instrução personalizada, coloca a genérica
-            order.ReturnInstructions = !string.IsNullOrEmpty(dto.ReturnInstructions)
-                ? dto.ReturnInstructions
-                : "Embale o produto na caixa original. Cole o código de postagem na caixa e leve a uma agência dos Correios em até 7 dias.";
+            if (!string.IsNullOrEmpty(dto.ReverseLogisticsCode)) order.ReverseLogisticsCode = dto.ReverseLogisticsCode;
+            order.ReturnInstructions = !string.IsNullOrEmpty(dto.ReturnInstructions) ? dto.ReturnInstructions : "Instruções padrão de devolução...";
         }
 
-        // 2. Lógica de Reembolso Automático ("Reembolsado" ou "Cancelado")
+        // CORREÇÃO: Reembolso Seguro
         if (dto.Status == "Reembolsado" || dto.Status == "Cancelado")
         {
-            // Verifica se tem ID de pagamento do Stripe (ou seja, foi pago via Stripe)
             if (!string.IsNullOrEmpty(order.StripePaymentIntentId))
             {
                 try
                 {
-                    // Chama o Stripe para devolver o dinheiro
                     await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId);
-
-                    // Adiciona nota nas instruções para registro
-                    order.ReturnInstructions += " [Sistema: Reembolso processado automaticamente no Stripe]";
+                    order.ReturnInstructions += " [Sistema: Reembolso processado no Stripe]";
                 }
                 catch (Exception ex)
                 {
-                    // Se falhar o reembolso no Stripe, não aborta a mudança de status, 
-                    // mas avisa ou loga. Aqui, vamos adicionar ao histórico do pedido.
-                    order.ReturnInstructions += $" [ERRO: Falha ao processar reembolso automático no Stripe: {ex.Message}. Realize manualmente no dashboard do Stripe.]";
+                    // IMPEDE A MUDANÇA DE STATUS SE O REEMBOLSO FALHAR
+                    throw new Exception($"Erro no Stripe: {ex.Message}. O status do pedido NÃO foi alterado.");
                 }
             }
         }
 
-        // Atualiza campos padrão
-        if (dto.Status == "Entregue" && order.Status != "Entregue")
-            order.DeliveryDate = DateTime.UtcNow;
-
+        if (dto.Status == "Entregue" && order.Status != "Entregue") order.DeliveryDate = DateTime.UtcNow;
         order.Status = dto.Status;
+        if (!string.IsNullOrEmpty(dto.TrackingCode)) order.TrackingCode = dto.TrackingCode;
 
-        if (!string.IsNullOrEmpty(dto.TrackingCode))
-            order.TrackingCode = dto.TrackingCode;
-
-        await _uow.Orders.UpdateAsync(order);
-        await _uow.CommitAsync();
+        await _context.SaveChangesAsync();
     }
 
-    // ... (Resto dos métodos: RequestRefundAsync, GetUserOrdersAsync, etc. permanecem iguais)
+    public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId)
+    {
+        var order = await _context.Orders.FindAsync(orderId);
+        if (order != null && order.Status != "Pago")
+        {
+            order.Status = "Pago";
+            order.StripePaymentIntentId = transactionId;
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    public async Task PayOrderAsync(Guid orderId, string userId)
+    {
+        var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+        if (order == null) throw new Exception("Pedido inválido.");
+        order.Status = "Pago";
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateOrderStatusAsync(Guid orderId, string status, string? trackingCode)
+    {
+        var dto = new UpdateOrderStatusDto(status, trackingCode, null, null);
+        await UpdateAdminOrderAsync(orderId, dto);
+    }
+
     public async Task<List<OrderDto>> GetUserOrdersAsync(string userId)
     {
-        var orders = await _uow.Orders.GetByUserIdAsync(userId);
+        var orders = await _context.Orders.Where(o => o.UserId == userId).Include(o => o.Items).OrderByDescending(o => o.OrderDate).ToListAsync();
         return orders.Select(MapToDto).ToList();
     }
 
     public async Task<List<OrderDto>> GetAllOrdersAsync()
     {
-        var orders = await _uow.Orders.GetAllAsync();
+        var orders = await _context.Orders.Include(o => o.Items).OrderByDescending(o => o.OrderDate).ToListAsync();
         return orders.Select(MapToDto).ToList();
     }
 
     public async Task RequestRefundAsync(Guid orderId, string userId)
     {
-        var order = await _uow.Orders.GetByIdAsync(orderId);
-        if (order == null || order.UserId != userId) throw new Exception("Pedido não encontrado.");
-
-        // Regras de validação de prazo...
+        var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+        if (order == null) throw new Exception("Pedido não encontrado.");
         order.Status = "Reembolso Solicitado";
-        await _uow.Orders.UpdateAsync(order);
-        await _uow.CommitAsync();
+        await _context.SaveChangesAsync();
     }
 
     private static OrderDto MapToDto(Order order)

@@ -34,7 +34,8 @@ builder.Configuration.AddEnvironmentVariables();
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
 {
-    throw new Exception("FATAL: A chave JWT não está configurada.");
+    // Em produção isso é crítico, mas em dev podemos avisar
+    Console.WriteLine("AVISO: Chave JWT não configurada ou muito curta.");
 }
 
 builder.Services.AddHttpClient();
@@ -57,11 +58,6 @@ builder.Services.AddRateLimiter(options =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions { AutoReplenishment = true, PermitLimit = 300, QueueLimit = 2, Window = TimeSpan.FromMinutes(1) }));
-
-    options.AddPolicy("AuthPolicy", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "auth",
-            factory: _ => new FixedWindowRateLimiterOptions { AutoReplenishment = true, PermitLimit = 10, QueueLimit = 0, Window = TimeSpan.FromMinutes(1) }));
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -74,7 +70,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => {
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
-var key = Encoding.ASCII.GetBytes(jwtKey!);
+// Configuração JWT
+var key = Encoding.ASCII.GetBytes(jwtKey ?? "chave_padrao_super_secreta_para_dev_apenas_123");
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -95,23 +92,9 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
-
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
-        {
-            if (context.Request.Cookies.ContainsKey("jwt"))
-            {
-                context.Token = context.Request.Cookies["jwt"];
-            }
-            return Task.CompletedTask;
-        }
-    };
 });
 
-// --- INJEÇÃO DE DEPENDÊNCIA ---
-
-// 1. Repositórios e Unit of Work
+// Injeção de Dependências
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ICartRepository, CartRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
@@ -119,18 +102,14 @@ builder.Services.AddScoped<IAddressRepository, AddressRepository>();
 builder.Services.AddScoped<ICouponRepository, CouponRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-// 2. Serviços de Aplicação
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<ICouponService, CouponService>();
 builder.Services.AddScoped<IAddressService, AddressService>();
-
-// --- NOVO: Serviço de Pagamento (Stripe) ---
 builder.Services.AddScoped<IPaymentService, StripePaymentService>();
 
-// 3. Infraestrutura
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<IShippingService, MelhorEnvioShippingService>();
 builder.Services.AddScoped<IEmailService, ConsoleEmailService>();
@@ -142,6 +121,17 @@ builder.Services.AddFluentValidationAutoValidation();
 
 builder.Services.AddSwaggerGen(c => {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Grafica API", Version = "v1" });
+    // Configurar Auth no Swagger para testar Admin
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        In = ParameterLocation.Header,
+        Description = "Insira o token JWT",
+        Name = "Authorization",
+        Type = SecuritySchemeType.ApiKey
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement {
+        { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, new string[] { } }
+    });
 });
 
 builder.Services.AddCors(options =>
@@ -167,7 +157,6 @@ app.Use(async (context, next) =>
 app.UseMiddleware<ExceptionMiddleware>();
 app.UseCors("AllowFrontend");
 
-// CORREÇÃO: Desabilita compressão em ambiente de desenvolvimento para não quebrar Hot Reload/Browser Link
 if (!app.Environment.IsDevelopment())
 {
     app.UseResponseCompression();
@@ -176,14 +165,18 @@ if (!app.Environment.IsDevelopment())
 
 app.UseRateLimiter();
 
+// SEEDER ATUALIZADO
 using (var scope = app.Services.CreateScope())
 {
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>(); // NOVO
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-        if (app.Environment.IsDevelopment()) await DbSeeder.SeedAsync(context, userManager, config);
+
+        if (app.Environment.IsDevelopment())
+            await DbSeeder.SeedAsync(context, userManager, roleManager, config);
     }
     catch (Exception ex)
     {

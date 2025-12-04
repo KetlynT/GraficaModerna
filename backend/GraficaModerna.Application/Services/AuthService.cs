@@ -39,7 +39,10 @@ public class AuthService : IAuthService
             throw new Exception(errors);
         }
 
-        return GenerateToken(user);
+        // Usuários novos sempre nascem como "User" (Cliente)
+        await _userManager.AddToRoleAsync(user, "User");
+
+        return await GenerateToken(user);
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
@@ -49,27 +52,44 @@ public class AuthService : IAuthService
         if (user == null || !await _userManager.CheckPasswordAsync(user, dto.Password))
             throw new Exception("Credenciais inválidas.");
 
-        return GenerateToken(user);
+        return await GenerateToken(user);
     }
 
-    private AuthResponseDto GenerateToken(ApplicationUser user)
+    public async Task<UserProfileDto> GetProfileAsync(string userId)
     {
-        var adminEmail = _configuration["AdminSettings:Email"] ?? "admin@graficamoderna.com";
-        var role = user.Email!.Equals(adminEmail, StringComparison.OrdinalIgnoreCase) ? "Admin" : "User";
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null) throw new Exception("Usuário não encontrado.");
+        return new UserProfileDto(user.FullName, user.Email!, user.PhoneNumber);
+    }
+
+    public async Task UpdateProfileAsync(string userId, UpdateProfileDto dto)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null) throw new Exception("Usuário não encontrado.");
+        user.FullName = dto.FullName;
+        user.PhoneNumber = dto.PhoneNumber;
+        await _userManager.UpdateAsync(user);
+    }
+
+    // --- MUDANÇA CRÍTICA DE SEGURANÇA ---
+    private async Task<AuthResponseDto> GenerateToken(ApplicationUser user)
+    {
+        // 1. Busca as Roles REAIS no banco de dados (Identity)
+        var roles = await _userManager.GetRolesAsync(user);
+
+        // 2. Define a role principal (se não tiver, assume User)
+        var primaryRole = roles.FirstOrDefault() ?? "User";
 
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
             new Claim(ClaimTypes.Email, user.Email!),
             new Claim(ClaimTypes.Name, user.FullName),
-            new Claim(ClaimTypes.Role, role)
+            new Claim(ClaimTypes.Role, primaryRole) // <--- O Token agora carrega a prova oficial de autoridade
         };
 
-        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
-                ?? _configuration["Jwt:Key"];
-
-        if (string.IsNullOrEmpty(keyString))
-            throw new Exception("Chave JWT não configurada (JWT_SECRET_KEY ou Jwt:Key).");
+        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];
+        if (string.IsNullOrEmpty(keyString)) throw new Exception("Chave JWT não configurada.");
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -86,29 +106,6 @@ public class AuthService : IAuthService
         var tokenHandler = new JwtSecurityTokenHandler();
         var token = tokenHandler.CreateToken(tokenDescriptor);
 
-        return new AuthResponseDto(tokenHandler.WriteToken(token), user.Email!, role);
-    }
-
-    public async Task<UserProfileDto> GetProfileAsync(string userId)
-    {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null) throw new Exception("Usuário não encontrado.");
-
-        return new UserProfileDto(
-            user.FullName,
-            user.Email!,
-            user.PhoneNumber
-        );
-    }
-
-    public async Task UpdateProfileAsync(string userId, UpdateProfileDto dto)
-    {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null) throw new Exception("Usuário não encontrado.");
-
-        user.FullName = dto.FullName;
-        user.PhoneNumber = dto.PhoneNumber;
-
-        await _userManager.UpdateAsync(user);
+        return new AuthResponseDto(tokenHandler.WriteToken(token), user.Email!, primaryRole);
     }
 }

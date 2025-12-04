@@ -1,55 +1,48 @@
 ﻿using GraficaModerna.Application.Interfaces;
-using GraficaModerna.Domain.Interfaces;
+using GraficaModerna.Infrastructure.Context; // Acesso para buscar o pedido
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize] // Apenas usuários logados podem iniciar pagamentos
+[Authorize]
 public class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
-    private readonly IOrderRepository _orderRepository;
+    private readonly AppDbContext _context;
 
-    public PaymentsController(
-        IPaymentService paymentService,
-        IOrderRepository orderRepository)
+    public PaymentsController(IPaymentService paymentService, AppDbContext context)
     {
         _paymentService = paymentService;
-        _orderRepository = orderRepository;
+        _context = context;
     }
 
-    [HttpPost("checkout/{orderId}")]
-    public async Task<IActionResult> CreateCheckoutSession(Guid orderId)
+    [HttpPost("checkout-session/{orderId}")]
+    public async Task<IActionResult> CreateSession(Guid orderId)
     {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Busca o pedido garantindo que pertence ao usuário logado
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+
+        if (order == null) return NotFound("Pedido não encontrado.");
+        if (order.Status == "Pago") return BadRequest("Este pedido já está pago.");
+
         try
         {
-            // 1. Segurança: Garante que o pedido pertence ao usuário logado
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var order = await _orderRepository.GetByIdAsync(orderId);
-
-            if (order == null)
-                return NotFound("Pedido não encontrado.");
-
-            if (order.UserId != userId)
-                return Forbid("Você não tem permissão para pagar este pedido.");
-
-            if (order.Status != "Pendente")
-                return BadRequest($"O status do pedido é {order.Status} e não pode ser pago novamente.");
-
-            // 2. Cria a sessão no Stripe usando a camada de infraestrutura
-            var checkoutUrl = await _paymentService.CreateCheckoutSessionAsync(order);
-
-            return Ok(new { url = checkoutUrl });
+            // Gera a URL do Stripe (com arredondamento corrigido no Serviço)
+            var url = await _paymentService.CreateCheckoutSessionAsync(order);
+            return Ok(new { url });
         }
         catch (Exception ex)
         {
-            // Logar o erro real no servidor e retornar mensagem genérica (opcionalmente logar 'ex')
-            Console.WriteLine($"Erro no pagamento: {ex.Message}");
-            return StatusCode(500, new { error = "Erro ao iniciar pagamento com Stripe. Tente novamente." });
+            return BadRequest(new { message = $"Erro ao iniciar pagamento: {ex.Message}" });
         }
     }
 }

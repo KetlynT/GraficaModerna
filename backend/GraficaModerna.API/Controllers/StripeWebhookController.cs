@@ -27,13 +27,11 @@ public class StripeWebhookController : ControllerBase
     public async Task<IActionResult> HandleStripeEvent()
     {
         var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
-
-        // Tenta pegar o segredo do .env ou User Secrets
         var endpointSecret = _configuration["Stripe:WebhookSecret"];
 
         if (string.IsNullOrEmpty(endpointSecret))
         {
-            _logger.LogError("Webhook Secret não configurado no servidor.");
+            _logger.LogError("Webhook Secret não configurado.");
             return StatusCode(500);
         }
 
@@ -41,58 +39,42 @@ public class StripeWebhookController : ControllerBase
         {
             var signature = Request.Headers["Stripe-Signature"];
 
-            // CORREÇÃO AQUI: throwOnApiVersionMismatch: false
-            // Isso permite que o Stripe envie eventos de uma versão mais nova sem quebrar o backend
+            // CORREÇÃO: throwOnApiVersionMismatch = true (Segurança)
+            // Se o Stripe mudar o formato do JSON, queremos que falhe explicitamente
+            // em vez de processar dados errados silenciosamente.
             var stripeEvent = EventUtility.ConstructEvent(
                 json,
                 signature,
                 endpointSecret,
-                throwOnApiVersionMismatch: false
+                throwOnApiVersionMismatch: true
             );
 
-            // 2. Processa apenas o evento de Checkout Completado
             if (stripeEvent.Type == Events.CheckoutSessionCompleted)
             {
-                // Conversão segura com o 'as'
                 var session = stripeEvent.Data.Object as Session;
 
-                // Verifica se temos os metadados que enviamos na criação da sessão
                 if (session != null && session.Metadata != null && session.Metadata.TryGetValue("order_id", out var orderIdString))
                 {
                     if (Guid.TryParse(orderIdString, out Guid orderId))
                     {
                         var transactionId = session.PaymentIntentId;
-
-                        _logger.LogInformation($"Webhook recebido! Pagamento confirmado para o Pedido {orderId}. Transação: {transactionId}");
+                        _logger.LogInformation($"Pagamento confirmado: Pedido {orderId}");
 
                         await _orderService.ConfirmPaymentViaWebhookAsync(orderId, transactionId);
                     }
-                    else
-                    {
-                        _logger.LogError($"ID de pedido inválido nos metadados do Webhook: {orderIdString}");
-                    }
                 }
-                else
-                {
-                    _logger.LogWarning("Webhook recebido sem Metadata 'order_id'.");
-                }
-            }
-            else
-            {
-                // Outros eventos
-                // _logger.LogInformation($"Evento ignorado: {stripeEvent.Type}");
             }
 
             return Ok();
         }
         catch (StripeException e)
         {
-            _logger.LogError(e, "Erro de validação no Webhook Stripe.");
+            _logger.LogError(e, "Erro no Webhook Stripe.");
             return BadRequest();
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Erro interno ao processar Webhook.");
+            _logger.LogError(e, "Erro interno Webhook.");
             return StatusCode(500);
         }
     }

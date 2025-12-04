@@ -22,13 +22,16 @@ public class ProductService : IProductService
 
     public async Task<PagedResultDto<ProductResponseDto>> GetCatalogAsync(string? search, string? sort, string? order, int page, int pageSize)
     {
-        // Chave única para o cache
+        // CORREÇÃO: Reduzimos drasticamente o cache ou o removemos para listagens críticas
+        // Para um MVP seguro, vamos desabilitar o cache temporariamente ou usar 15 segundos
+        // para garantir que o cliente veja o "Sem Estoque" quase imediatamente.
+
         var cacheKey = $"catalog_{search}_{sort}_{order}_{page}_{pageSize}";
 
-        // Tenta pegar do cache
         return await _cache.GetOrCreateAsync(cacheKey, async entry =>
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2); // Reduzi tempo pois estoque muda rápido
+            // CORREÇÃO: Tempo de vida curto (15s) em vez de 2 min
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(15);
 
             var (products, totalCount) = await _repository.GetAllAsync(search, sort, order, page, pageSize);
 
@@ -44,13 +47,14 @@ public class ProductService : IProductService
 
     public async Task<ProductResponseDto> GetByIdAsync(Guid id)
     {
+        // CORREÇÃO: Nunca usar cache para "Detalhes do Produto" para garantir estoque real na tela de compra
         var product = await _repository.GetByIdAsync(id);
         return _mapper.Map<ProductResponseDto>(product);
     }
 
     public async Task<ProductResponseDto> CreateAsync(CreateProductDto dto)
     {
-        var product = _mapper.Map<Product>(dto); // O AutoMapper usa o construtor atualizado automaticamente
+        var product = _mapper.Map<Product>(dto);
         var created = await _repository.CreateAsync(product);
         return _mapper.Map<ProductResponseDto>(created);
     }
@@ -69,10 +73,13 @@ public class ProductService : IProductService
             dto.Width,
             dto.Height,
             dto.Length,
-            dto.StockQuantity // NOVO
+            dto.StockQuantity
         );
 
         await _repository.UpdateAsync(product);
+
+        // Em um sistema ideal, chamaríamos _cache.Remove("catalog_...") aqui,
+        // mas como as chaves são dinâmicas, o tempo curto de expiração (15s) resolve.
     }
 
     public async Task DeleteAsync(Guid id)

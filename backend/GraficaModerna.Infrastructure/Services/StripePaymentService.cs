@@ -20,26 +20,35 @@ public class StripePaymentService : IPaymentService
     {
         var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
 
+        // CORREÇÃO: URLs robustas
+        var successUrl = $"{frontendUrl}/sucesso?session_id={{CHECKOUT_SESSION_ID}}";
+        var cancelUrl = $"{frontendUrl}/meus-pedidos";
+
         var options = new SessionCreateOptions
         {
             Mode = "payment",
-            SuccessUrl = $"{frontendUrl}/sucesso?session_id={{CHECKOUT_SESSION_ID}}",
-            CancelUrl = $"{frontendUrl}/meus-pedidos",
+            SuccessUrl = successUrl,
+            CancelUrl = cancelUrl,
             Metadata = new Dictionary<string, string>
             {
                 { "order_id", order.Id.ToString() },
-                { "user_email", order.UserId }
+                { "user_email", order.UserId },
+                // CORREÇÃO: Envia o valor esperado para validação futura
+                { "expected_amount", order.TotalAmount.ToString("F2") }
             },
             LineItems = new List<SessionLineItemOptions>()
         };
 
         foreach (var item in order.Items)
         {
+            // CORREÇÃO: Arredondamento Explícito (Evita erro de 1 centavo)
+            var unitAmount = (long)Math.Round(item.UnitPrice * 100);
+
             options.LineItems.Add(new SessionLineItemOptions
             {
                 PriceData = new SessionLineItemPriceDataOptions
                 {
-                    UnitAmountDecimal = item.UnitPrice * 100,
+                    UnitAmount = unitAmount,
                     Currency = "brl",
                     ProductData = new SessionLineItemPriceDataProductDataOptions
                     {
@@ -52,11 +61,12 @@ public class StripePaymentService : IPaymentService
 
         if (order.ShippingCost > 0)
         {
+            var shippingAmount = (long)Math.Round(order.ShippingCost * 100);
             options.LineItems.Add(new SessionLineItemOptions
             {
                 PriceData = new SessionLineItemPriceDataOptions
                 {
-                    UnitAmountDecimal = order.ShippingCost * 100,
+                    UnitAmount = shippingAmount,
                     Currency = "brl",
                     ProductData = new SessionLineItemPriceDataProductDataOptions
                     {
@@ -71,7 +81,7 @@ public class StripePaymentService : IPaymentService
         {
             var couponOptions = new CouponCreateOptions
             {
-                AmountOff = (long)(order.Discount * 100),
+                AmountOff = (long)Math.Round(order.Discount * 100),
                 Currency = "brl",
                 Duration = "once",
                 Name = order.AppliedCoupon ?? "Desconto"
@@ -92,7 +102,6 @@ public class StripePaymentService : IPaymentService
         return session.Url;
     }
 
-    // --- NOVO: Implementação do Reembolso ---
     public async Task RefundPaymentAsync(string paymentIntentId)
     {
         if (string.IsNullOrEmpty(paymentIntentId))
@@ -102,18 +111,10 @@ public class StripePaymentService : IPaymentService
         var options = new RefundCreateOptions
         {
             PaymentIntent = paymentIntentId,
-            Reason = RefundReasons.RequestedByCustomer // Ou 'duplicate', 'fraudulent'
+            Reason = RefundReasons.RequestedByCustomer
         };
 
-        try
-        {
-            await refundService.CreateAsync(options);
-        }
-        catch (StripeException ex)
-        {
-            // Se já foi reembolsado, o Stripe lança erro. Podemos tratar ou repassar.
-            // Aqui vamos lançar uma exceção amigável.
-            throw new Exception($"Erro ao processar reembolso no Stripe: {ex.StripeError.Message}");
-        }
+        // Deixamos a exceção subir para ser tratada no OrderService
+        await refundService.CreateAsync(options);
     }
 }
