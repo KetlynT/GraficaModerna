@@ -20,7 +20,6 @@ using Ganss.Xss;
 using Microsoft.AspNetCore.ResponseCompression;
 using System.IO.Compression;
 using System.Threading.RateLimiting;
-using GraficaModerna.API.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.HttpOverrides;
