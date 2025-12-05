@@ -1,13 +1,14 @@
 import axios from 'axios';
 
+// CORREÇÃO: Porta alterada de 5000 para 7255 (HTTPS) conforme seu launchSettings.json
+// Se tiver problemas de certificado, tente usar 'http://localhost:5150/api'
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', // Ajuste se a porta for diferente
+  baseURL: 'https://localhost:7255/api', 
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor: adiciona Authorization header com Bearer token se disponível
 api.interceptors.request.use((config) => {
   try {
     const token = localStorage.getItem('access_token');
@@ -21,13 +22,10 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor de Resposta para lidar com erros globais
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Se receber 401 (Não autorizado), significa que o token expirou ou é inválido
     if (error.response && error.response.status === 401) {
-      // Opcional: Redirecionar para login ou limpar estado (será tratado no AuthContext)
       console.warn('Sessão expirada ou não autenticada.');
     }
     return Promise.reject(error);

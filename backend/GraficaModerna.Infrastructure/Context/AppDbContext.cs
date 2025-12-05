@@ -23,7 +23,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-
+        builder.Entity<SiteSetting>().HasKey(s => s.Key);
         // CORREÇÃO: Precisão decimal para evitar erros financeiros no Postgres
         builder.Entity<Product>().Property(p => p.Price).HasPrecision(18, 2);
         builder.Entity<Order>().Property(p => p.TotalAmount).HasPrecision(18, 2);

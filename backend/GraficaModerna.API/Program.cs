@@ -56,6 +56,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
 
+builder.Services.AddMemoryCache();
+
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
@@ -90,7 +92,8 @@ builder.Services.AddRateLimiter(options =>
 
 // Banco de Dados
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        b => b.MigrationsAssembly("GraficaModerna.Infrastructure")));
 
 // --- SEGURANÇA: Identity (Senhas Fortes) ---
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => {
@@ -209,6 +212,16 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Grafica API v1");
+        c.RoutePrefix = "swagger"; // Garante que a rota seja /swagger
+    });
+}
 
 // Ensure forwarded headers are applied early in the pipeline so RemoteIpAddress is correct
 app.UseForwardedHeaders();

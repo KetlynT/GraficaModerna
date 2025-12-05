@@ -1,13 +1,13 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { CartService } from '../services/cartService';
-import { AuthService } from '../services/authService';
+import { CartService } from '../services/cartService'; // Mantém com chaves (Named Export)
+import AuthService from '../services/authService';     // CORREÇÃO: Remove chaves (Default Export)
 import toast from 'react-hot-toast';
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const [cartCount, setCartCount] = useState(0);
-  const [cartItems, setCartItems] = useState([]); // Armazena itens locais ou remotos
+  const [cartItems, setCartItems] = useState([]); 
   const [loading, setLoading] = useState(false);
 
   // Inicialização
@@ -16,8 +16,8 @@ export const CartProvider = ({ children }) => {
   }, []);
 
   const refreshCart = async () => {
+    // CORREÇÃO: Agora AuthService.isAuthenticated() existirá com a alteração no service abaixo
     if (AuthService.isAuthenticated()) {
-      // MODO LOGADO: Busca da API
       try {
         const data = await CartService.getCart();
         setCartItems(data.items);
@@ -26,7 +26,6 @@ export const CartProvider = ({ children }) => {
         console.error("Erro ao carregar carrinho remoto", error);
       }
     } else {
-      // MODO VISITANTE: Busca do LocalStorage
       const localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
       setCartItems(localCart);
       updateCount(localCart);
@@ -41,14 +40,12 @@ export const CartProvider = ({ children }) => {
   const addToCart = async (product, quantity = 1) => {
     setLoading(true);
     
-    // Preparar objeto do item (normalizando dados para UI)
     const newItem = {
       productId: product.id,
       productName: product.name,
       productImage: product.imageUrl,
       unitPrice: product.price,
       quantity: quantity,
-      // Dados de frete necessários para cálculo offline
       weight: product.weight,
       width: product.width,
       height: product.height,
@@ -58,10 +55,8 @@ export const CartProvider = ({ children }) => {
 
     try {
       if (AuthService.isAuthenticated()) {
-        // API
         await CartService.addItem(newItem.productId, newItem.quantity);
       } else {
-        // LOCAL
         const localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
         const existingIndex = localCart.findIndex(i => i.productId === newItem.productId);
 
@@ -88,8 +83,6 @@ export const CartProvider = ({ children }) => {
 
   const updateQuantity = async (productId, newQuantity) => {
     if (AuthService.isAuthenticated()) {
-        // Busca o ID do item no carrinho (a API usa ID do item, não do produto)
-        // Precisamos encontrar o ID do CartItem correspondente ao ProductId
         const item = cartItems.find(i => i.productId === productId);
         if(item) await CartService.updateQuantity(item.id, newQuantity);
     } else {
@@ -118,7 +111,6 @@ export const CartProvider = ({ children }) => {
     await refreshCart();
   };
 
-  // MÁGICA: Sincroniza o carrinho local com a API após login
   const syncGuestCart = async () => {
     const localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
     if (localCart.length === 0) {
@@ -128,11 +120,9 @@ export const CartProvider = ({ children }) => {
 
     const toastId = toast.loading("Sincronizando carrinho...");
     try {
-        // Envia item por item (poderia ser otimizado no backend com um endpoint 'BulkAdd')
         for (const item of localCart) {
             await CartService.addItem(item.productId, item.quantity);
         }
-        // Limpa local
         localStorage.removeItem('guest_cart');
         await refreshCart();
         toast.success("Carrinho sincronizado!", { id: toastId });

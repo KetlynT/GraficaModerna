@@ -28,7 +28,7 @@ const authService = {
     try {
       await api.post('/auth/logout');
     } catch (e) {
-      // ignore backend error, still clear client state
+      // ignore backend error
     }
     try { localStorage.removeItem(TOKEN_KEY); } catch {}
   },
@@ -39,23 +39,30 @@ const authService = {
     return response.data;
   },
 
-  // Update Profile
   updateProfile: async (data) => {
     const response = await api.put('/auth/profile', data);
     return response.data;
   },
 
-  // Verifica se o token é válido ao carregar a página
   checkAuth: async () => {
     const token = (() => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } })();
     if (!token) return { isAuthenticated: false, role: null };
 
     try {
       const response = await api.get('/auth/check-auth');
-      return response.data; // { isAuthenticated: true, role: '...' }
+      return response.data; 
     } catch (error) {
       try { localStorage.removeItem(TOKEN_KEY); } catch {}
       return { isAuthenticated: false, role: null };
+    }
+  },
+
+  // CORREÇÃO: Método adicionado para o CartContext usar
+  isAuthenticated: () => {
+    try {
+      return !!localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return false;
     }
   }
 };

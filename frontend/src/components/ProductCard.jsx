@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { ShoppingCart, Search } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useCart } from '../context/CartContext';
-import { AuthService } from '../services/authService';
+import AuthService from '../services/authService'; // CORREÇÃO: Removidas as chaves { }
 
 export const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
@@ -17,6 +17,7 @@ export const ProductCard = ({ product }) => {
 
   // Verifica se é admin
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  // Usamos o método estático que adicionamos anteriormente
   const isAdmin = AuthService.isAuthenticated() && user.role === 'Admin';
 
   const formattedPrice = new Intl.NumberFormat('pt-BR', {
@@ -25,8 +26,6 @@ export const ProductCard = ({ product }) => {
 
   const handleQuickAdd = (e) => {
     e.preventDefault();
-    // CORREÇÃO: Passamos o objeto 'product' inteiro, não apenas o ID.
-    // O CartContext precisa do objeto para pegar nome, preço e imagem.
     addToCart(product, 1); 
   };
 
@@ -45,7 +44,6 @@ export const ProductCard = ({ product }) => {
       transition={{ duration: 0.4 }}
       className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col h-full overflow-hidden"
     >
-      {/* Imagem com Overlay */}
       <div className="relative h-64 overflow-hidden bg-gray-50">
         <img 
           src={imgSrc} 
@@ -79,7 +77,6 @@ export const ProductCard = ({ product }) => {
             <span className="text-xl font-bold text-blue-600">{formattedPrice}</span>
           </div>
           
-          {/* Botão de Adicionar Rápido */}
           {!isAdmin && (
             <Button 
                 size="sm"
