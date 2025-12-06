@@ -5,7 +5,7 @@ namespace GraficaModerna.Application.DTOs;
 public class CalculateShippingRequest
 {
     public string DestinationCep { get; set; } = string.Empty;
-    public List<ShippingItemDto> Items { get; set; } = new();
+    public List<ShippingItemDto> Items { get; set; } = [];
 }
 
 public class ShippingItemDto

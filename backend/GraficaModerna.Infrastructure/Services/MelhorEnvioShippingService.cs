@@ -13,27 +13,18 @@ using System.Text.Json.Serialization;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class MelhorEnvioShippingService : IShippingService
+public class MelhorEnvioShippingService(
+    AppDbContext context,
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration,
+    IWebHostEnvironment env,
+    ILogger<MelhorEnvioShippingService> logger) : IShippingService
 {
-    private readonly AppDbContext _context;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IConfiguration _configuration;
-    private readonly IWebHostEnvironment _env;
-    private readonly ILogger<MelhorEnvioShippingService> _logger;
-
-    public MelhorEnvioShippingService(
-        AppDbContext context,
-        IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
-        IWebHostEnvironment env,
-        ILogger<MelhorEnvioShippingService> logger)
-    {
-        _context = context;
-        _httpClientFactory = httpClientFactory;
-        _configuration = configuration;
-        _env = env;
-        _logger = logger;
-    }
+    private readonly AppDbContext _context = context;
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly IWebHostEnvironment _env = env;
+    private readonly ILogger<MelhorEnvioShippingService> _logger = logger;
 
     public async Task<List<ShippingOptionDto>> CalculateAsync(string destinationCep, List<ShippingItemDto> items)
     {
@@ -47,10 +38,10 @@ public class MelhorEnvioShippingService : IShippingService
         if (string.IsNullOrEmpty(token))
         {
             _logger.LogWarning("Melhor Envio: Token não configurado. Cálculo ignorado.");
-            return new List<ShippingOptionDto>();
+            return [];
         }
 
-        if (items == null || !items.Any()) return new List<ShippingOptionDto>();
+        if (items == null || items.Count == 0) return [];
 
         string originCep = "01001000";
         try
@@ -105,17 +96,18 @@ public class MelhorEnvioShippingService : IShippingService
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Erro API Melhor Envio ({StatusCode}): {Body}", response.StatusCode, errorBody);
-                return new List<ShippingOptionDto>();
+                return [];
             }
 
             var responseBody = await response.Content.ReadAsStringAsync();
             var meOptions = JsonSerializer.Deserialize<List<MelhorEnvioResponse>>(responseBody, jsonOptions);
 
-            if (meOptions == null) return new List<ShippingOptionDto>();
+            if (meOptions == null) return [];
 
             var validOptions = meOptions
                 .Where(x => string.IsNullOrEmpty(x.Error))
-                .Select(x => {
+                .Select(x =>
+                {
                     decimal price = 0;
                     if (decimal.TryParse(x.Price, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal parsedPrice))
                     {
@@ -144,12 +136,12 @@ public class MelhorEnvioShippingService : IShippingService
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
             _logger.LogError("Timeout na comunicação com Melhor Envio.");
-            return new List<ShippingOptionDto>();
+            return [];
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro crítico ao calcular frete Melhor Envio.");
-            return new List<ShippingOptionDto>();
+            return [];
         }
     }
 

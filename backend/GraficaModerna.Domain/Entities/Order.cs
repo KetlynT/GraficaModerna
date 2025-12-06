@@ -37,8 +37,8 @@ public class Order
     public string? CustomerIp { get; set; }
     public string? UserAgent { get; set; } // NOVO: Identificação do dispositivo
 
-    public List<OrderItem> Items { get; set; } = new();
+    public List<OrderItem> Items { get; set; } = [];
 
     // NOVO: Histórico de mudanças
-    public List<OrderHistory> History { get; set; } = new();
+    public List<OrderHistory> History { get; set; } = [];
 }

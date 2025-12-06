@@ -5,10 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
-public class OrderRepository : IOrderRepository
+public class OrderRepository(AppDbContext context) : IOrderRepository
 {
-    private readonly AppDbContext _context;
-    public OrderRepository(AppDbContext context) { _context = context; }
+    private readonly AppDbContext _context = context;
 
     public async Task AddAsync(Order order) => await _context.Orders.AddAsync(order);
 

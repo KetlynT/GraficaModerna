@@ -4,14 +4,9 @@ using Microsoft.Extensions.Logging;
 namespace GraficaModerna.Infrastructure.Services;
 
 // Implementação que apenas loga no console (útil para dev)
-public class ConsoleEmailService : IEmailService
+public class ConsoleEmailService(ILogger<ConsoleEmailService> logger) : IEmailService
 {
-    private readonly ILogger<ConsoleEmailService> _logger;
-
-    public ConsoleEmailService(ILogger<ConsoleEmailService> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<ConsoleEmailService> _logger = logger;
 
     public Task SendEmailAsync(string to, string subject, string body)
     {

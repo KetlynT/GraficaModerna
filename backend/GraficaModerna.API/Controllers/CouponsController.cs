@@ -7,11 +7,9 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class CouponsController : ControllerBase
+public class CouponsController(ICouponService service) : ControllerBase
 {
-    private readonly ICouponService _service;
-
-    public CouponsController(ICouponService service) { _service = service; }
+    private readonly ICouponService _service = service;
 
     [HttpGet("validate/{code}")]
     public async Task<IActionResult> Validate(string code)

@@ -11,14 +11,9 @@ namespace GraficaModerna.API.Controllers;
 [ApiController]
 [Authorize]
 [EnableRateLimiting("UserActionPolicy")]
-public class AddressesController : ControllerBase
+public class AddressesController(IAddressService service) : ControllerBase
 {
-    private readonly IAddressService _service;
-
-    public AddressesController(IAddressService service)
-    {
-        _service = service;
-    }
+    private readonly IAddressService _service = service;
 
     private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 

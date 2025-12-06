@@ -183,7 +183,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         b => b.MigrationsAssembly("GraficaModerna.Infrastructure")));
 
 // 8. Identity (Senhas Fortes)
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => {
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+{
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
@@ -269,8 +270,10 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddTransient<JwtValidationMiddleware>();
 
 // 11. Swagger Config
-builder.Services.AddSwaggerGen(c => {
+builder.Services.AddSwaggerGen(c =>
+{
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Grafica API", Version = "v1" });
+
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
@@ -278,14 +281,27 @@ builder.Services.AddSwaggerGen(c => {
         Name = "Authorization",
         Type = SecuritySchemeType.ApiKey
     });
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement {
-        { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, new string[] { } }
+
+    // CORREÇÃO: Note as chaves duplas {{ ... , ... }} obrigatórias para Dicionários
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
     });
 });
 
 // 12. CORS Config
 var allowedOrigins = builder.Configuration.GetSection("AllowedHosts").Get<string[]>()
-                     ?? new[] { "http://localhost:5173", "http://localhost:3000" };
+                     ?? ["http://localhost:5173", "http://localhost:3000"];
 
 builder.Services.AddCors(options =>
 {
@@ -319,6 +335,14 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
     context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    context.Response.Headers.Append("Content-Security-Policy",
+        "default-src 'self'; " +                    // Padrão: permitir apenas origem local
+        "img-src 'self' data: https:; " +           // Imagens: local, dados (base64) e HTTPS seguro
+        "script-src 'self' 'unsafe-inline'; " +     // Scripts: local e inline (necessário para Swagger UI em dev)
+        "style-src 'self' 'unsafe-inline'; " +      // Estilos: local e inline
+        "font-src 'self'; " +                       // Fontes: apenas local
+        "object-src 'none'; " +                     // Bloquear plugins (Flash, etc.)
+        "frame-ancestors 'none';");                 // Bloquear ser incorporado em iframes (proteção Clickjacking redundante mas recomendada)
     await next();
 });
 
@@ -376,7 +400,7 @@ using (var scope = app.Services.CreateScope())
         {
             if (app.Environment.IsDevelopment())
             {
-                var guidPart = Guid.NewGuid().ToString("N").Substring(0, 12);
+                var guidPart = Guid.NewGuid().ToString("N")[..12];
                 var tempPassword = $"Adm!{guidPart}A1";
                 adminEmail ??= "admin.local@local.local";
                 adminPassword ??= tempPassword;
@@ -404,9 +428,9 @@ using (var scope = app.Services.CreateScope())
         {
             var defaultPages = new List<GraficaModerna.Domain.Entities.ContentPage>
             {
-                new GraficaModerna.Domain.Entities.ContentPage { Title = "Sobre Nós", Slug = "about-us", Content = "<h1>Sobre</h1><p>...</p>", LastUpdated = DateTime.UtcNow },
-                new GraficaModerna.Domain.Entities.ContentPage { Title = "Política de Privacidade", Slug = "privacy-policy", Content = "<h1>Privacidade</h1><p>...</p>", LastUpdated = DateTime.UtcNow },
-                new GraficaModerna.Domain.Entities.ContentPage { Title = "Termos de Uso", Slug = "terms-of-use", Content = "<h1>Termos</h1><p>...</p>", LastUpdated = DateTime.UtcNow }
+                new() { Title = "Sobre Nós", Slug = "about-us", Content = "<h1>Sobre</h1><p>...</p>", LastUpdated = DateTime.UtcNow },
+                new() { Title = "Política de Privacidade", Slug = "privacy-policy", Content = "<h1>Privacidade</h1><p>...</p>", LastUpdated = DateTime.UtcNow },
+                new() { Title = "Termos de Uso", Slug = "terms-of-use", Content = "<h1>Termos</h1><p>...</p>", LastUpdated = DateTime.UtcNow }
             };
             await db.ContentPages.AddRangeAsync(defaultPages);
             await db.SaveChangesAsync();

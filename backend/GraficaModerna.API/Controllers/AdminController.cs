@@ -11,16 +11,10 @@ namespace GraficaModerna.API.Controllers;
 // SEGURANÇA MÁXIMA: Apenas Tokens com a Claim "Role: Admin" entram aqui.
 [Authorize(Roles = "Admin")]
 [EnableRateLimiting("AdminPolicy")]
-public class AdminController : ControllerBase
+public class AdminController(IOrderService orderService, IProductService productService) : ControllerBase
 {
-    private readonly IOrderService _orderService;
-    private readonly IProductService _productService;
-
-    public AdminController(IOrderService orderService, IProductService productService)
-    {
-        _orderService = orderService;
-        _productService = productService;
-    }
+    private readonly IOrderService _orderService = orderService;
+    private readonly IProductService _productService = productService;
 
     // Endpoint para Listar Todos os Pedidos
     [HttpGet("orders")]

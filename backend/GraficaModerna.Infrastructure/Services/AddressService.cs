@@ -5,25 +5,19 @@ using GraficaModerna.Domain.Interfaces; // Uso da Interface de Repositório
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class AddressService : IAddressService
+public class AddressService(IUnitOfWork uow) : IAddressService
 {
-    private readonly IUnitOfWork _uow;
-
-    public AddressService(IUnitOfWork uow)
-    {
-        _uow = uow;
-    }
+    private readonly IUnitOfWork _uow = uow;
 
     public async Task<List<AddressDto>> GetUserAddressesAsync(string userId)
     {
         var addresses = await _uow.Addresses.GetByUserIdAsync(userId);
-        return addresses.Select(MapToDto).ToList();
+        return [.. addresses.Select(MapToDto)];
     }
 
     public async Task<AddressDto> GetByIdAsync(Guid id, string userId)
     {
-        var address = await _uow.Addresses.GetByIdAsync(id, userId);
-        if (address == null) throw new KeyNotFoundException("Endereço não encontrado.");
+        var address = await _uow.Addresses.GetByIdAsync(id, userId) ?? throw new KeyNotFoundException("Endereço não encontrado.");
         return MapToDto(address);
     }
 
@@ -61,9 +55,7 @@ public class AddressService : IAddressService
 
     public async Task UpdateAsync(Guid id, string userId, CreateAddressDto dto)
     {
-        var address = await _uow.Addresses.GetByIdAsync(id, userId);
-        if (address == null) throw new KeyNotFoundException("Endereço não encontrado.");
-
+        var address = await _uow.Addresses.GetByIdAsync(id, userId) ?? throw new KeyNotFoundException("Endereço não encontrado.");
         if (dto.IsDefault)
         {
             await UnsetDefaultAddress(userId);

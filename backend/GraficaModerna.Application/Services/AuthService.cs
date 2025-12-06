@@ -12,21 +12,14 @@ using System.Text;
 
 namespace GraficaModerna.Application.Services;
 
-public class AuthService : IAuthService
+public class AuthService(
+    UserManager<ApplicationUser> userManager,
+    IConfiguration configuration,
+    IPasswordHasher<ApplicationUser> passwordHasher) : IAuthService
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IConfiguration _configuration;
-    private readonly IPasswordHasher<ApplicationUser> _passwordHasher; //
-
-    public AuthService(
-        UserManager<ApplicationUser> userManager,
-        IConfiguration configuration,
-        IPasswordHasher<ApplicationUser> passwordHasher) // Injeção do Hasher
-    {
-        _userManager = userManager;
-        _configuration = configuration;
-        _passwordHasher = passwordHasher;
-    }
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly IPasswordHasher<ApplicationUser> _passwordHasher = passwordHasher; //
 
     public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
     {
@@ -85,9 +78,7 @@ public class AuthService : IAuthService
             throw new Exception("Refresh token inválido");
         }
 
-        var principal = GetPrincipalFromExpiredToken(accessToken);
-        if (principal == null) throw new Exception("Token de acesso ou refresh token inválido");
-
+        var principal = GetPrincipalFromExpiredToken(accessToken) ?? throw new Exception("Token de acesso ou refresh token inválido");
         string username = principal.Identity!.Name!;
 
         var user = await _userManager.FindByNameAsync(username);
@@ -113,16 +104,13 @@ public class AuthService : IAuthService
 
     public async Task<UserProfileDto> GetProfileAsync(string userId)
     {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null) throw new Exception("Usuário não encontrado.");
+        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuário não encontrado.");
         return new UserProfileDto(user.FullName, user.Email!, user.PhoneNumber ?? "");
     }
 
     public async Task UpdateProfileAsync(string userId, UpdateProfileDto dto)
     {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null) throw new Exception("Usuário não encontrado.");
-
+        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuário não encontrado.");
         user.FullName = dto.FullName;
         user.PhoneNumber = dto.PhoneNumber;
 
@@ -160,11 +148,11 @@ public class AuthService : IAuthService
 
         var authClaims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, user.UserName!),
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Email, user.Email!),
-            new Claim(ClaimTypes.Role, primaryRole),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(ClaimTypes.Name, user.UserName!),
+            new(ClaimTypes.NameIdentifier, user.Id),
+            new(ClaimTypes.Email, user.Email!),
+            new(ClaimTypes.Role, primaryRole),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
         var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];

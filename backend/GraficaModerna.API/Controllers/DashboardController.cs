@@ -8,11 +8,9 @@ namespace GraficaModerna.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize(Roles = "Admin")]
-public class DashboardController : ControllerBase
+public class DashboardController(AppDbContext context) : ControllerBase
 {
-    private readonly AppDbContext _context;
-
-    public DashboardController(AppDbContext context) { _context = context; }
+    private readonly AppDbContext _context = context;
 
     [HttpGet("stats")]
     public async Task<IActionResult> GetStats()

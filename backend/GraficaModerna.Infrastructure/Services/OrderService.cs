@@ -8,34 +8,24 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class OrderService : IOrderService
+public class OrderService(
+    AppDbContext context,
+    IEmailService emailService,
+    UserManager<ApplicationUser> userManager,
+    IHttpContextAccessor httpContextAccessor,
+    IEnumerable<IShippingService> shippingServices,
+    IPaymentService paymentService) : IOrderService
 {
-    private readonly AppDbContext _context;
-    private readonly IEmailService _emailService;
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly IEnumerable<IShippingService> _shippingServices;
-    private readonly IPaymentService _paymentService;
+    private readonly AppDbContext _context = context;
+    private readonly IEmailService _emailService = emailService;
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+    private readonly IEnumerable<IShippingService> _shippingServices = shippingServices;
+    private readonly IPaymentService _paymentService = paymentService;
 
     // Constantes de Validação
     private const decimal MinOrderAmount = 1.00m;      // Mínimo R$ 1,00
     private const decimal MaxOrderAmount = 100000.00m; // Máximo R$ 100.000,00
-
-    public OrderService(
-        AppDbContext context,
-        IEmailService emailService,
-        UserManager<ApplicationUser> userManager,
-        IHttpContextAccessor httpContextAccessor,
-        IEnumerable<IShippingService> shippingServices,
-        IPaymentService paymentService)
-    {
-        _context = context;
-        _emailService = emailService;
-        _userManager = userManager;
-        _httpContextAccessor = httpContextAccessor;
-        _shippingServices = shippingServices;
-        _paymentService = paymentService;
-    }
 
     // =================================================================================
     // MÉTODOS AUXILIARES DE AUDITORIA E SEGURANÇA
@@ -45,7 +35,7 @@ public class OrderService : IOrderService
         _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "0.0.0.0";
 
     private string GetUserAgent() =>
-        _httpContextAccessor.HttpContext?.Request.Headers["User-Agent"].ToString() ?? "Unknown";
+        _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString() ?? "Unknown";
 
     /// <summary>
     /// Centraliza a alteração de status para garantir que o histórico seja sempre gerado.
@@ -73,11 +63,7 @@ public class OrderService : IOrderService
         var order = await _context.Orders
             .Include(o => o.Items)
             .Include(o => o.History) // Importante carregar o histórico
-            .FirstOrDefaultAsync(o => o.Id == orderId);
-
-        if (order == null)
-            throw new Exception("Pedido não encontrado.");
-
+            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado.");
         if (order.UserId != userId)
             throw new UnauthorizedAccessException("Você não tem permissão para acessar este pedido.");
 
@@ -95,7 +81,7 @@ public class OrderService : IOrderService
             .ThenInclude(i => i.Product)
             .FirstOrDefaultAsync(c => c.UserId == userId);
 
-        if (cart == null || !cart.Items.Any())
+        if (cart == null || cart.Items.Count == 0)
             throw new Exception("Carrinho vazio.");
 
         // Validação de itens inválidos
@@ -118,11 +104,7 @@ public class OrderService : IOrderService
         var allOptions = shippingResults.SelectMany(x => x).ToList();
 
         var selectedOption = allOptions.FirstOrDefault(o =>
-            o.Name.Trim().Equals(shippingMethod.Trim(), StringComparison.InvariantCultureIgnoreCase));
-
-        if (selectedOption == null)
-            throw new Exception("Método de envio inválido ou indisponível.");
-
+            o.Name.Trim().Equals(shippingMethod.Trim(), StringComparison.InvariantCultureIgnoreCase)) ?? throw new Exception("Método de envio inválido ou indisponível.");
         decimal verifiedShippingCost = selectedOption.Price;
 
         using var transaction = await _context.Database.BeginTransactionAsync();
@@ -156,7 +138,7 @@ public class OrderService : IOrderService
             decimal discount = 0;
             if (!string.IsNullOrWhiteSpace(couponCode))
             {
-                var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == couponCode.ToUpper());
+                var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code.Equals(couponCode, StringComparison.CurrentCultureIgnoreCase));
                 if (coupon != null && coupon.IsValid())
                 {
                     bool alreadyUsed = await _context.CouponUsages.AnyAsync(u => u.UserId == userId && u.CouponCode == coupon.Code);
@@ -251,7 +233,7 @@ public class OrderService : IOrderService
             .OrderByDescending(o => o.OrderDate)
             .ToListAsync();
 
-        return orders.Select(MapToDto).ToList();
+        return [.. orders.Select(MapToDto)];
     }
 
     public async Task<List<OrderDto>> GetAllOrdersAsync()
@@ -261,7 +243,7 @@ public class OrderService : IOrderService
             .OrderByDescending(o => o.OrderDate)
             .ToListAsync();
 
-        return orders.Select(MapToDto).ToList();
+        return [.. orders.Select(MapToDto)];
     }
 
     public async Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto)
@@ -274,10 +256,7 @@ public class OrderService : IOrderService
 
         var order = await _context.Orders
             .Include(o => o.History)
-            .FirstOrDefaultAsync(o => o.Id == orderId);
-
-        if (order == null) throw new Exception("Pedido não encontrado");
-
+            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado");
         string auditMessage = $"Status alterado manualmente para {dto.Status}";
 
         // Lógica específica por status
@@ -415,9 +394,9 @@ public class OrderService : IOrderService
             order.ReverseLogisticsCode,
             order.ReturnInstructions,
             order.ShippingAddress,
-            order.Items.Select(i =>
+            [.. order.Items.Select(i =>
                 new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
-            ).ToList()
+            )]
         );
     }
 }

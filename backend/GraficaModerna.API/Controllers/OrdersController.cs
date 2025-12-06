@@ -9,14 +9,9 @@ namespace GraficaModerna.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class OrdersController : ControllerBase
+public class OrdersController(IOrderService orderService) : ControllerBase
 {
-    private readonly IOrderService _orderService;
-
-    public OrdersController(IOrderService orderService)
-    {
-        _orderService = orderService;
-    }
+    private readonly IOrderService _orderService = orderService;
 
     [HttpPost]
     public async Task<IActionResult> Checkout([FromBody] CheckoutDto dto)

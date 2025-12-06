@@ -4,10 +4,10 @@ using Microsoft.AspNetCore.Http;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class LocalFileStorageService : IFileStorageService
+public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccessor httpContextAccessor) : IFileStorageService
 {
-    private readonly IWebHostEnvironment _env;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IWebHostEnvironment _env = env;
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
 
     // DEFINIÇÃO CENTRALIZADA DE SEGURANÇA (Magic Numbers)
     private static readonly Dictionary<string, List<byte[]>> _fileSignatures = new()
@@ -15,14 +15,8 @@ public class LocalFileStorageService : IFileStorageService
         { ".jpeg", new List<byte[]> { new byte[] { 0xFF, 0xD8, 0xFF } } },
         { ".jpg", new List<byte[]> { new byte[] { 0xFF, 0xD8, 0xFF } } },
         { ".png", new List<byte[]> { new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A } } },
-        { ".webp", new List<byte[]> { new byte[] { 0x52, 0x49, 0x46, 0x46 }, new byte[] { 0x57, 0x45, 0x42, 0x50 } } }
+        { ".webp", new List<byte[]> { "RIFF"u8.ToArray(), "WEBP"u8.ToArray() } }
     };
-
-    public LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccessor httpContextAccessor)
-    {
-        _env = env;
-        _httpContextAccessor = httpContextAccessor;
-    }
 
     public async Task<string> SaveFileAsync(IFormFile file, string folderName)
     {
@@ -32,7 +26,7 @@ public class LocalFileStorageService : IFileStorageService
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
 
         // 1. Validação de Extensão
-        if (!_fileSignatures.ContainsKey(ext))
+        if (!_fileSignatures.TryGetValue(ext, out List<byte[]>? signatures))
             throw new Exception("Formato de arquivo não suportado.");
 
         var fileName = $"{Guid.NewGuid()}{ext}";
@@ -46,31 +40,25 @@ public class LocalFileStorageService : IFileStorageService
         try
         {
             // 2. Validação de Conteúdo (Magic Numbers) e Cópia Segura
-            using (var memoryStream = new MemoryStream())
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+
+            // Verifica Assinatura
+            memoryStream.Position = 0;
+            using (var reader = new BinaryReader(memoryStream, System.Text.Encoding.Default, leaveOpen: true))
             {
-                await file.CopyToAsync(memoryStream);
-
-                // Verifica Assinatura
-                memoryStream.Position = 0;
-                using (var reader = new BinaryReader(memoryStream, System.Text.Encoding.Default, leaveOpen: true))
+                var headerBytes = reader.ReadBytes(12);
+                if (!signatures.Any(signature =>
+                    headerBytes.Take(signature.Length).SequenceEqual(signature)))
                 {
-                    var headerBytes = reader.ReadBytes(12);
-                    var signatures = _fileSignatures[ext];
-
-                    if (!signatures.Any(signature =>
-                        headerBytes.Take(signature.Length).SequenceEqual(signature)))
-                    {
-                        throw new Exception("O arquivo está corrompido ou a extensão não corresponde ao conteúdo real.");
-                    }
-                }
-
-                // Salva no disco
-                memoryStream.Position = 0;
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await memoryStream.CopyToAsync(stream);
+                    throw new Exception("O arquivo está corrompido ou a extensão não corresponde ao conteúdo real.");
                 }
             }
+
+            // Salva no disco
+            memoryStream.Position = 0;
+            using var stream = new FileStream(filePath, FileMode.Create);
+            await memoryStream.CopyToAsync(stream);
         }
         catch (Exception ex)
         {
@@ -107,17 +95,15 @@ public class LocalFileStorageService : IFileStorageService
                 // Overwrite the file with zeroes first to reduce data leakage risk (best-effort)
                 try
                 {
-                    using (var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Write, FileShare.None))
+                    using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Write, FileShare.None);
+                    var zero = new byte[8192];
+                    long remaining = fs.Length;
+                    fs.Position = 0;
+                    while (remaining > 0)
                     {
-                        var zero = new byte[8192];
-                        long remaining = fs.Length;
-                        fs.Position = 0;
-                        while (remaining > 0)
-                        {
-                            var write = (int)Math.Min(zero.Length, remaining);
-                            await fs.WriteAsync(zero, 0, write);
-                            remaining -= write;
-                        }
+                        var write = (int)Math.Min(zero.Length, remaining);
+                        await fs.WriteAsync(zero.AsMemory(0, write));
+                        remaining -= write;
                     }
                 }
                 catch

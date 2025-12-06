@@ -6,6 +6,6 @@ public class Cart
     public string UserId { get; set; } = string.Empty; // Vincula ao usuário logado
 
     // Navegação
-    public List<CartItem> Items { get; set; } = new();
+    public List<CartItem> Items { get; set; } = [];
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
 }

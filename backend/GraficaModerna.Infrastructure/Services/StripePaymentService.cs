@@ -53,7 +53,7 @@ public class StripePaymentService : IPaymentService
                     { "user_email", order.UserId },
                     { "expected_amount", order.TotalAmount.ToString("F2") }
                 },
-                LineItems = new List<SessionLineItemOptions>()
+                LineItems = []
             };
 
             foreach (var item in order.Items)
@@ -106,10 +106,10 @@ public class StripePaymentService : IPaymentService
                 var stripeCouponService = new Stripe.CouponService();
                 var stripeCoupon = await stripeCouponService.CreateAsync(couponOptions);
 
-                options.Discounts = new List<SessionDiscountOptions>
-                {
+                options.Discounts =
+                [
                     new SessionDiscountOptions { Coupon = stripeCoupon.Id }
-                };
+                ];
             }
 
             var service = new SessionService();

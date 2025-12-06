@@ -5,20 +5,14 @@ using System.Text;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class TokenBlacklistService : ITokenBlacklistService
+public class TokenBlacklistService(IDistributedCache cache) : ITokenBlacklistService
 {
-    private readonly IDistributedCache _cache;
-
-    public TokenBlacklistService(IDistributedCache cache)
-    {
-        _cache = cache;
-    }
+    private readonly IDistributedCache _cache = cache;
 
     private static string HashToken(string token)
     {
-        using var sha = SHA256.Create();
         var bytes = Encoding.UTF8.GetBytes(token);
-        var hash = sha.ComputeHash(bytes);
+        var hash = SHA256.HashData(bytes);
         // Use hex representation to keep key safe for cache
         var sb = new StringBuilder(hash.Length * 2);
         foreach (var b in hash) sb.Append(b.ToString("x2"));

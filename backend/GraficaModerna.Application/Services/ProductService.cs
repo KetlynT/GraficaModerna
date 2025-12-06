@@ -6,16 +6,10 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace GraficaModerna.Application.Services;
 
-public class ProductService : IProductService
+public class ProductService(IProductRepository repository, IMemoryCache cache) : IProductService
 {
-    private readonly IProductRepository _repository;
-    private readonly IMemoryCache _cache;
-
-    public ProductService(IProductRepository repository, IMemoryCache cache)
-    {
-        _repository = repository;
-        _cache = cache;
-    }
+    private readonly IProductRepository _repository = repository;
+    private readonly IMemoryCache _cache = cache;
 
     public async Task<PagedResultDto<ProductResponseDto>> GetCatalogAsync(string? search, string? sort, string? order, int page, int pageSize)
     {
@@ -29,7 +23,7 @@ public class ProductService : IProductService
 
             return new PagedResultDto<ProductResponseDto>
             {
-                Items = products.Select(MapToDto).ToList(),
+                Items = [.. products.Select(MapToDto)],
                 TotalItems = totalCount,
                 Page = page,
                 PageSize = pageSize
@@ -39,8 +33,7 @@ public class ProductService : IProductService
 
     public async Task<ProductResponseDto> GetByIdAsync(Guid id)
     {
-        var product = await _repository.GetByIdAsync(id);
-        if (product == null) throw new KeyNotFoundException("Produto não encontrado.");
+        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto não encontrado.");
         return MapToDto(product);
     }
 
@@ -64,9 +57,7 @@ public class ProductService : IProductService
 
     public async Task UpdateAsync(Guid id, CreateProductDto dto)
     {
-        var product = await _repository.GetByIdAsync(id);
-        if (product == null) throw new KeyNotFoundException("Produto não encontrado.");
-
+        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto não encontrado.");
         product.Update(
             dto.Name,
             dto.Description,
@@ -84,9 +75,7 @@ public class ProductService : IProductService
 
     public async Task DeleteAsync(Guid id)
     {
-        var product = await _repository.GetByIdAsync(id);
-        if (product == null) throw new KeyNotFoundException("Produto não encontrado.");
-
+        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto não encontrado.");
         product.Deactivate();
         await _repository.UpdateAsync(product);
     }

@@ -10,21 +10,14 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController : ControllerBase
+public class AuthController(
+    IAuthService authService,
+    ITokenBlacklistService blacklistService,
+    ILogger<AuthController> logger) : ControllerBase
 {
-    private readonly IAuthService _authService;
-    private readonly ITokenBlacklistService _blacklistService;
-    private readonly ILogger<AuthController> _logger;
-
-    public AuthController(
-        IAuthService authService,
-        ITokenBlacklistService blacklistService,
-        ILogger<AuthController> logger)
-    {
-        _authService = authService;
-        _blacklistService = blacklistService;
-        _logger = logger;
-    }
+    private readonly IAuthService _authService = authService;
+    private readonly ITokenBlacklistService _blacklistService = blacklistService;
+    private readonly ILogger<AuthController> _logger = logger;
 
     [EnableRateLimiting("AuthPolicy")]
     [HttpPost("register")]
@@ -58,7 +51,7 @@ public class AuthController : ControllerBase
             var header = authHeader.ToString();
             if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
-                token = header.Substring("Bearer ".Length).Trim();
+                token = header["Bearer ".Length..].Trim();
             }
         }
 

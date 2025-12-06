@@ -4,31 +4,21 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
-public class UnitOfWork : IUnitOfWork
+public class UnitOfWork(
+    AppDbContext context,
+    IProductRepository products,
+    ICartRepository carts,
+    IOrderRepository orders,
+    IAddressRepository addresses,
+    ICouponRepository coupons) : IUnitOfWork
 {
-    private readonly AppDbContext _context;
+    private readonly AppDbContext _context = context;
 
-    public IProductRepository Products { get; }
-    public ICartRepository Carts { get; }
-    public IOrderRepository Orders { get; }
-    public IAddressRepository Addresses { get; }
-    public ICouponRepository Coupons { get; }
-
-    public UnitOfWork(
-        AppDbContext context,
-        IProductRepository products,
-        ICartRepository carts,
-        IOrderRepository orders,
-        IAddressRepository addresses,
-        ICouponRepository coupons)
-    {
-        _context = context;
-        Products = products;
-        Carts = carts;
-        Orders = orders;
-        Addresses = addresses;
-        Coupons = coupons;
-    }
+    public IProductRepository Products { get; } = products;
+    public ICartRepository Carts { get; } = carts;
+    public IOrderRepository Orders { get; } = orders;
+    public IAddressRepository Addresses { get; } = addresses;
+    public ICouponRepository Coupons { get; } = coupons;
 
     public async Task CommitAsync()
     {
@@ -43,5 +33,6 @@ public class UnitOfWork : IUnitOfWork
     public void Dispose()
     {
         _context.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

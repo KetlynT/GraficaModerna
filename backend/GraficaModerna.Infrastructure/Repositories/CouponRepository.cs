@@ -5,12 +5,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
-public class CouponRepository : ICouponRepository
+public class CouponRepository(AppDbContext context) : ICouponRepository
 {
-    private readonly AppDbContext _context;
-    public CouponRepository(AppDbContext context) { _context = context; }
+    private readonly AppDbContext _context = context;
 
-    public async Task<Coupon?> GetByCodeAsync(string code) => await _context.Coupons.FirstOrDefaultAsync(c => c.Code == code.ToUpper());
+    public async Task<Coupon?> GetByCodeAsync(string code) => await _context.Coupons.FirstOrDefaultAsync(c => c.Code.Equals(code, StringComparison.CurrentCultureIgnoreCase));
 
     public async Task<List<Coupon>> GetAllAsync() => await _context.Coupons.OrderByDescending(c => c.ExpiryDate).ToListAsync();
 

@@ -9,17 +9,10 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class ContentController : ControllerBase
+public class ContentController(IContentService service, IHtmlSanitizer sanitizer) : ControllerBase
 {
-    private readonly IContentService _service; // Ou IContentRepository
-    private readonly IHtmlSanitizer _sanitizer;
-
-    // Injeção de dependência do Sanitizer (configurado no Program.cs)
-    public ContentController(IContentService service, IHtmlSanitizer sanitizer)
-    {
-        _service = service;
-        _sanitizer = sanitizer;
-    }
+    private readonly IContentService _service = service; // Ou IContentRepository
+    private readonly IHtmlSanitizer _sanitizer = sanitizer;
 
     [HttpGet("{slug}")]
     public async Task<IActionResult> GetPage(string slug)

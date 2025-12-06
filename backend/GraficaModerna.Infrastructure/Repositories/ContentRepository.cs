@@ -5,14 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
-public class ContentRepository : IContentRepository
+public class ContentRepository(AppDbContext context) : IContentRepository
 {
-    private readonly AppDbContext _context;
-
-    public ContentRepository(AppDbContext context)
-    {
-        _context = context;
-    }
+    private readonly AppDbContext _context = context;
 
     public async Task<ContentPage?> GetBySlugAsync(string slug)
     {

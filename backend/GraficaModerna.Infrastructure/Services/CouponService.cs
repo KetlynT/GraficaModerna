@@ -7,18 +7,13 @@ using System;
 
 namespace GraficaModerna.Infrastructure.Services; // Namespace Corrigido
 
-public class CouponService : ICouponService
+public class CouponService(AppDbContext context) : ICouponService
 {
-    private readonly AppDbContext _context;
-
-    public CouponService(AppDbContext context)
-    {
-        _context = context;
-    }
+    private readonly AppDbContext _context = context;
 
     public async Task<CouponResponseDto> CreateAsync(CreateCouponDto dto)
     {
-        if (await _context.Coupons.AnyAsync(c => c.Code == dto.Code.ToUpper()))
+        if (await _context.Coupons.AnyAsync(c => c.Code.Equals(dto.Code, StringComparison.CurrentCultureIgnoreCase)))
             throw new Exception("Cupom já existe.");
 
         var coupon = new Coupon(dto.Code, dto.DiscountPercentage, dto.ValidityDays);
@@ -48,7 +43,7 @@ public class CouponService : ICouponService
 
     public async Task<Coupon?> GetValidCouponAsync(string code)
     {
-        var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code == code.ToUpper());
+        var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code.Equals(code, StringComparison.CurrentCultureIgnoreCase));
         if (coupon == null || !coupon.IsValid()) return null;
         return coupon;
     }

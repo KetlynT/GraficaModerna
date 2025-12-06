@@ -5,14 +5,9 @@ using System.IdentityModel.Tokens.Jwt;
 
 namespace GraficaModerna.API.Middlewares;
 
-public class JwtValidationMiddleware : IMiddleware
+public class JwtValidationMiddleware(ITokenBlacklistService blacklistService) : IMiddleware
 {
-    private readonly ITokenBlacklistService _blacklistService;
-
-    public JwtValidationMiddleware(ITokenBlacklistService blacklistService)
-    {
-        _blacklistService = blacklistService;
-    }
+    private readonly ITokenBlacklistService _blacklistService = blacklistService;
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
@@ -77,16 +72,16 @@ public class JwtValidationMiddleware : IMiddleware
         await next(context);
     }
 
-    private string? ExtractToken(HttpContext context)
+    private static string? ExtractToken(HttpContext context)
     {
         // 1. Cookie HttpOnly
         if (context.Request.Cookies.TryGetValue("jwt", out var cookieToken))
             return cookieToken;
 
         // 2. Authorization: Bearer xxxx
-        var header = context.Request.Headers["Authorization"].ToString();
+        var header = context.Request.Headers.Authorization.ToString();
         if (!string.IsNullOrEmpty(header) && header.StartsWith("Bearer "))
-            return header.Substring("Bearer ".Length).Trim();
+            return header["Bearer ".Length..].Trim();
 
         return null;
     }

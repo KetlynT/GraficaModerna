@@ -7,14 +7,9 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class ProductsController : ControllerBase
+public class ProductsController(IProductService service) : ControllerBase
 {
-    private readonly IProductService _service;
-
-    public ProductsController(IProductService service)
-    {
-        _service = service;
-    }
+    private readonly IProductService _service = service;
 
     // GET: api/Products?page=1&pageSize=8&search=cartao&sort=price&order=asc
     [HttpGet]

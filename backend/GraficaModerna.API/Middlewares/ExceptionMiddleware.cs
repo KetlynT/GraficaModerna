@@ -3,46 +3,46 @@ using System.Text.Json;
 
 namespace GraficaModerna.API.Middlewares;
 
-public class ExceptionMiddleware
+public class ExceptionMiddleware(
+    RequestDelegate next,
+    ILogger<ExceptionMiddleware> logger,
+    IHostEnvironment env)
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<ExceptionMiddleware> _logger;
-    private readonly IHostEnvironment _env;
-
-    public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger, IHostEnvironment env)
+    // Instância estática para performance (evita recriar a cada erro)
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        _next = next;
-        _logger = logger;
-        _env = env;
-    }
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public async Task InvokeAsync(HttpContext context)
     {
         try
         {
-            await _next(context);
+            await next(context);
         }
         catch (Exception ex)
         {
-            // SEGURANÇA: O TraceId permite correlacionar o erro no log sem expor dados ao usuário
             var traceId = context.TraceIdentifier;
 
-            _logger.LogError(ex, "Um erro não tratado ocorreu. TraceId: {TraceId}", traceId);
+            logger.LogError(ex, "Um erro não tratado ocorreu. TraceId: {TraceId}", traceId);
 
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
             var response = new
             {
-                StatusCode = context.Response.StatusCode,
-                // Em Produção, ocultamos a mensagem original que pode conter dados sensíveis (connection strings, paths, etc)
-                Message = _env.IsDevelopment() ? ex.Message : "Erro interno no servidor. Contate o suporte informando o código de rastreio.",
-                StackTrace = _env.IsDevelopment() ? ex.StackTrace : string.Empty,
-                TraceId = traceId
+                // CORREÇÃO IDE0037: O nome 'StatusCode' é inferido automaticamente desta propriedade.
+                // Não é necessário escrever "StatusCode = ..."
+                context.Response.StatusCode,
+
+                Message = env.IsDevelopment() ? ex.Message : "Erro interno no servidor. Contate o suporte informando o código de rastreio.",
+                StackTrace = env.IsDevelopment() ? ex.StackTrace : string.Empty,
+
+                // CORREÇÃO IDE0037: O nome 'traceId' é inferido automaticamente da variável local.
+                traceId
             };
 
-            var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-            var json = JsonSerializer.Serialize(response, options);
+            var json = JsonSerializer.Serialize(response, _jsonOptions);
 
             await context.Response.WriteAsync(json);
         }

@@ -5,14 +5,9 @@ using GraficaModerna.Domain.Interfaces; // Agora usa a Interface do Domain
 
 namespace GraficaModerna.Application.Services;
 
-public class ContentService : IContentService
+public class ContentService(IContentRepository repository) : IContentService
 {
-    private readonly IContentRepository _repository;
-
-    public ContentService(IContentRepository repository)
-    {
-        _repository = repository;
-    }
+    private readonly IContentRepository _repository = repository;
 
     public async Task<ContentPage?> GetBySlugAsync(string slug)
     {
@@ -35,9 +30,7 @@ public class ContentService : IContentService
 
     public async Task UpdateAsync(string slug, UpdateContentDto dto)
     {
-        var page = await _repository.GetBySlugAsync(slug);
-        if (page == null) throw new Exception("Página não encontrada.");
-
+        var page = await _repository.GetBySlugAsync(slug) ?? throw new Exception("Página não encontrada.");
         page.Title = dto.Title;
         page.Content = dto.Content;
         page.LastUpdated = DateTime.UtcNow;

@@ -5,10 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
-public class AddressRepository : IAddressRepository
+public class AddressRepository(AppDbContext context) : IAddressRepository
 {
-    private readonly AppDbContext _context;
-    public AddressRepository(AppDbContext context) { _context = context; }
+    private readonly AppDbContext _context = context;
 
     public async Task<List<UserAddress>> GetByUserIdAsync(string userId)
     {

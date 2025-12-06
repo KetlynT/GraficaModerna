@@ -6,16 +6,10 @@ using Microsoft.Extensions.Logging; // Adicionado para logging
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
-public class ProductRepository : IProductRepository
+public class ProductRepository(AppDbContext context, ILogger<ProductRepository> logger) : IProductRepository
 {
-    private readonly AppDbContext _context;
-    private readonly ILogger<ProductRepository> _logger; // Logger injetado
-
-    public ProductRepository(AppDbContext context, ILogger<ProductRepository> logger)
-    {
-        _context = context;
-        _logger = logger;
-    }
+    private readonly AppDbContext _context = context;
+    private readonly ILogger<ProductRepository> _logger = logger; // Logger injetado
 
     public async Task<(IEnumerable<Product> Items, int TotalCount)> GetAllAsync(
         string? searchTerm,
@@ -34,7 +28,7 @@ public class ProductRepository : IProductRepository
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.ToLower();
-                query = query.Where(p => p.Name.ToLower().Contains(term) || p.Description.ToLower().Contains(term));
+                query = query.Where(p => p.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase) || p.Description.ToLower().Contains(term));
             }
 
             // 2. Contagem Total
