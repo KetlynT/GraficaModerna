@@ -6,7 +6,7 @@ import { CouponInput } from '../components/CouponInput';
 import { ShippingCalculator } from '../components/ShippingCalculator';
 import { Trash2, ShoppingBag, ArrowRight, Plus, Minus } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { AuthService } from '../services/authService';
+import AuthService from '../services/authService';
 
 export const Cart = () => {
   const { cartItems, updateQuantity, removeFromCart } = useCart();

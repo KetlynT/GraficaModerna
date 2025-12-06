@@ -322,8 +322,9 @@ app.UseCors("AllowFrontend");
 if (!app.Environment.IsDevelopment())
 {
     app.UseResponseCompression();
-    app.UseHttpsRedirection();
 }
+
+app.UseHttpsRedirection();
 
 app.UseRateLimiter();
 
