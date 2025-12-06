@@ -5,30 +5,19 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-[EnableRateLimiting("PaymentPolicy")]
-public class PaymentsController : ControllerBase
+[EnableRateLimiting("StrictPaymentPolicy")] // Ajustado para a política segura criada anteriormente
+// CORREÇÃO IDE0290: Uso de Construtor Primário
+public class PaymentsController(
+    IPaymentService paymentService,
+    AppDbContext context,
+    ILogger<PaymentsController> logger) : ControllerBase
 {
-    private readonly IPaymentService _paymentService;
-    private readonly AppDbContext _context;
-    private readonly ILogger<PaymentsController> _logger;
-
-    public PaymentsController(
-        IPaymentService paymentService,
-        AppDbContext context,
-        ILogger<PaymentsController> logger)
-    {
-        _paymentService = paymentService;
-        _context = context;
-        _logger = logger;
-    }
-
     [HttpPost("checkout-session/{orderId}")]
     public async Task<IActionResult> CreateSession(Guid orderId)
     {
@@ -36,18 +25,17 @@ public class PaymentsController : ControllerBase
 
         if (string.IsNullOrEmpty(userId))
         {
-            _logger.LogWarning("Tentativa de criar sessão sem userId válido");
+            logger.LogWarning("Tentativa de criar sessão sem userId válido");
             return Unauthorized("Usuário não identificado.");
         }
 
-        var order = await _context.Orders
+        var order = await context.Orders
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
 
         if (order == null)
         {
-            // SEGURANÇA: Logamos o evento de segurança, mas evitamos logar detalhes sensíveis do objeto order se ele existisse mas fosse de outro user
-            _logger.LogWarning(
+            logger.LogWarning(
                 "Tentativa de acesso não autorizado ou pedido inexistente. OrderId: {OrderId}, UserId: {UserId}",
                 orderId, userId);
             return NotFound("Pedido não encontrado ou você não tem permissão para acessá-lo.");
@@ -63,23 +51,24 @@ public class PaymentsController : ControllerBase
             return BadRequest(new { message = "Este pedido foi cancelado e não pode ser pago." });
         }
 
-        if (!order.Items.Any())
+        // CORREÇÃO CA1860: Usar 'Count' em vez de 'Any()' para melhor performance
+        if (order.Items.Count == 0)
         {
-            _logger.LogError("Pedido {OrderId} sem itens tentando criar sessão de pagamento", orderId);
+            logger.LogError("Pedido {OrderId} sem itens tentando criar sessão de pagamento", orderId);
             return BadRequest(new { message = "Pedido inválido: sem itens." });
         }
 
         if (order.TotalAmount <= 0)
         {
-            _logger.LogError("Pedido {OrderId} com valor inválido", orderId);
+            logger.LogError("Pedido {OrderId} com valor inválido", orderId);
             return BadRequest(new { message = "Pedido com valor inválido." });
         }
 
         try
         {
-            var url = await _paymentService.CreateCheckoutSessionAsync(order);
+            var url = await paymentService.CreateCheckoutSessionAsync(order);
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Sessão de pagamento criada com sucesso. OrderId: {OrderId}",
                 orderId);
 
@@ -87,8 +76,7 @@ public class PaymentsController : ControllerBase
         }
         catch (Exception ex)
         {
-            // SEGURANÇA: Logamos a exceção completa no servidor, mas retornamos apenas mensagem genérica
-            _logger.LogError(
+            logger.LogError(
                 ex,
                 "Erro ao processar pagamento. OrderId: {OrderId}",
                 orderId);
@@ -105,15 +93,13 @@ public class PaymentsController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        // SEGURANÇA: Projeção (Select) explícita para evitar Over-Posting ou vazamento de dados internos
-        var order = await _context.Orders
+        var order = await context.Orders
             .Where(o => o.Id == orderId && o.UserId == userId)
             .Select(o => new
             {
                 o.Id,
                 o.Status,
                 o.TotalAmount
-                // REMOVIDO: StripeSessionId e StripePaymentIntentId para evitar exposição de detalhes de infraestrutura
             })
             .FirstOrDefaultAsync();
 
