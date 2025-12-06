@@ -6,10 +6,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace GraficaModerna.Infrastructure.Migrations
 {
-    /// <inheritdoc />
+
     public partial class InitialCreate : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -460,7 +460,6 @@ namespace GraficaModerna.Infrastructure.Migrations
                 column: "UserId");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
@@ -519,3 +518,4 @@ namespace GraficaModerna.Infrastructure.Migrations
         }
     }
 }
+

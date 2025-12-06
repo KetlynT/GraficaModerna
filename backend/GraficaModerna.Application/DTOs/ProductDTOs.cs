@@ -1,21 +1,26 @@
-using System.ComponentModel.DataAnnotations;
+ï»¿using System.ComponentModel.DataAnnotations;
 
 namespace GraficaModerna.Application.DTOs;
 
-// Input (Request)
 public record CreateProductDto(
-    [Required(ErrorMessage = "Nome é obrigatório")] string Name,
+    [Required(ErrorMessage = "Nome ï¿½ obrigatï¿½rio")]
+    string Name,
     string Description,
-    [Range(0.01, double.MaxValue, ErrorMessage = "Preço deve ser maior que zero")] decimal Price,
+    [Range(0.01, double.MaxValue, ErrorMessage = "Preï¿½o deve ser maior que zero")]
+    decimal Price,
     string ImageUrl,
-    [Range(0.001, double.MaxValue, ErrorMessage = "Peso inválido (kg)")] decimal Weight,
-    [Range(1, int.MaxValue, ErrorMessage = "Largura inválida (cm)")] int Width,
-    [Range(1, int.MaxValue, ErrorMessage = "Altura inválida (cm)")] int Height,
-    [Range(1, int.MaxValue, ErrorMessage = "Comprimento inválido (cm)")] int Length,
-    [Range(0, int.MaxValue, ErrorMessage = "Estoque inválido")] int StockQuantity
+    [Range(0.001, double.MaxValue, ErrorMessage = "Peso invï¿½lido (kg)")]
+    decimal Weight,
+    [Range(1, int.MaxValue, ErrorMessage = "Largura invï¿½lida (cm)")]
+    int Width,
+    [Range(1, int.MaxValue, ErrorMessage = "Altura invï¿½lida (cm)")]
+    int Height,
+    [Range(1, int.MaxValue, ErrorMessage = "Comprimento invï¿½lido (cm)")]
+    int Length,
+    [Range(0, int.MaxValue, ErrorMessage = "Estoque invï¿½lido")]
+    int StockQuantity
 );
 
-// Output (Response)
 public record ProductResponseDto(
     Guid Id,
     string Name,
@@ -26,5 +31,5 @@ public record ProductResponseDto(
     int Width,
     int Height,
     int Length,
-    int StockQuantity // NOVO
+    int StockQuantity 
 );

@@ -1,7 +1,8 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
-using GraficaModerna.Domain.Interfaces; // Agora usa a Interface do Domain
+using GraficaModerna.Domain.Interfaces;
+
 
 namespace GraficaModerna.Application.Services;
 
@@ -30,7 +31,7 @@ public class ContentService(IContentRepository repository) : IContentService
 
     public async Task UpdateAsync(string slug, UpdateContentDto dto)
     {
-        var page = await _repository.GetBySlugAsync(slug) ?? throw new Exception("Página não encontrada.");
+        var page = await _repository.GetBySlugAsync(slug) ?? throw new Exception("P�gina n�o encontrada.");
         page.Title = dto.Title;
         page.Content = dto.Content;
         page.LastUpdated = DateTime.UtcNow;

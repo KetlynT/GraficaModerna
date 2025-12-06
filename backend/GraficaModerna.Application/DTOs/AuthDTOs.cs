@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace GraficaModerna.Application.DTOs;
 
@@ -9,12 +9,11 @@ public record LoginDto(
 
 public record RegisterDto(
     [Required] string FullName,
-    [Required, EmailAddress] string Email,
+    [Required] [EmailAddress] string Email,
     [Required] string Password,
     string PhoneNumber
 );
 
-// Atualizado para incluir RefreshToken
 public record AuthResponseDto(
     string AccessToken,
     string RefreshToken,
@@ -22,7 +21,6 @@ public record AuthResponseDto(
     string Role
 );
 
-// Novo DTO para o endpoint de Refresh
 public class TokenModel
 {
     public string? AccessToken { get; set; }

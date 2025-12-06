@@ -1,8 +1,17 @@
-using System.ComponentModel.DataAnnotations;
+ï»¿using System.ComponentModel.DataAnnotations;
 
 namespace GraficaModerna.Domain.Entities;
 
-public class Product(string name, string description, decimal price, string imageUrl, decimal weight, int width, int height, int length, int stockQuantity) : BaseEntity
+public class Product(
+    string name,
+    string description,
+    decimal price,
+    string imageUrl,
+    decimal weight,
+    int width,
+    int height,
+    int length,
+    int stockQuantity) : BaseEntity
 {
     public string Name { get; private set; } = name;
     public string Description { get; private set; } = description;
@@ -15,11 +24,10 @@ public class Product(string name, string description, decimal price, string imag
     public int StockQuantity { get; private set; } = stockQuantity;
     public bool IsActive { get; private set; } = true;
 
-    // CORREÇÃO: Campo para controle de concorrência (Optimistic Concurrency)
-    [Timestamp]
-    public byte[]? RowVersion { get; set; }
+    [Timestamp] public byte[]? RowVersion { get; set; }
 
-    public void Update(string name, string description, decimal price, string imageUrl, decimal weight, int width, int height, int length, int stockQuantity)
+    public void Update(string name, string description, decimal price, string imageUrl, decimal weight, int width,
+        int height, int length, int stockQuantity)
     {
         Name = name;
         Description = description;
@@ -34,9 +42,8 @@ public class Product(string name, string description, decimal price, string imag
 
     public void DebitStock(int quantity)
     {
-        if (quantity < 0) throw new ArgumentException("Quantidade inválida.");
+        if (quantity < 0) throw new ArgumentException("Quantidade invï¿½lida.");
 
-        // A validação final ocorre no banco via RowVersion, mas essa checagem previne erros óbvios
         if (StockQuantity < quantity)
             throw new InvalidOperationException($"Estoque insuficiente para o produto '{Name}'.");
 

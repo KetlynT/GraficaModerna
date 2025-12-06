@@ -11,8 +11,8 @@ namespace GraficaModerna.API.Controllers;
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-[EnableRateLimiting("StrictPaymentPolicy")] // Ajustado para a política segura criada anteriormente
-// CORREÇÃO IDE0290: Uso de Construtor Primário
+[EnableRateLimiting("StrictPaymentPolicy")] 
+
 public class PaymentsController(
     IPaymentService paymentService,
     AppDbContext context,
@@ -25,8 +25,8 @@ public class PaymentsController(
 
         if (string.IsNullOrEmpty(userId))
         {
-            logger.LogWarning("Tentativa de criar sessão sem userId válido");
-            return Unauthorized("Usuário não identificado.");
+            logger.LogWarning("Tentativa de criar sess�o sem userId v�lido");
+            return Unauthorized("Usu�rio n�o identificado.");
         }
 
         var order = await context.Orders
@@ -36,32 +36,26 @@ public class PaymentsController(
         if (order == null)
         {
             logger.LogWarning(
-                "Tentativa de acesso não autorizado ou pedido inexistente. OrderId: {OrderId}, UserId: {UserId}",
+                "Tentativa de acesso n�o autorizado ou pedido inexistente. OrderId: {OrderId}, UserId: {UserId}",
                 orderId, userId);
-            return NotFound("Pedido não encontrado ou você não tem permissão para acessá-lo.");
+            return NotFound("Pedido n�o encontrado ou voc� n�o tem permiss�o para acess�-lo.");
         }
 
-        if (order.Status == "Pago")
-        {
-            return BadRequest(new { message = "Este pedido já está pago." });
-        }
+        if (order.Status == "Pago") return BadRequest(new { message = "Este pedido j� est� pago." });
 
         if (order.Status == "Cancelado" || order.Status == "Reembolsado")
-        {
-            return BadRequest(new { message = "Este pedido foi cancelado e não pode ser pago." });
-        }
+            return BadRequest(new { message = "Este pedido foi cancelado e n�o pode ser pago." });
 
-        // CORREÇÃO CA1860: Usar 'Count' em vez de 'Any()' para melhor performance
         if (order.Items.Count == 0)
         {
-            logger.LogError("Pedido {OrderId} sem itens tentando criar sessão de pagamento", orderId);
-            return BadRequest(new { message = "Pedido inválido: sem itens." });
+            logger.LogError("Pedido {OrderId} sem itens tentando criar sess�o de pagamento", orderId);
+            return BadRequest(new { message = "Pedido inv�lido: sem itens." });
         }
 
         if (order.TotalAmount <= 0)
         {
-            logger.LogError("Pedido {OrderId} com valor inválido", orderId);
-            return BadRequest(new { message = "Pedido com valor inválido." });
+            logger.LogError("Pedido {OrderId} com valor inv�lido", orderId);
+            return BadRequest(new { message = "Pedido com valor inv�lido." });
         }
 
         try
@@ -69,7 +63,7 @@ public class PaymentsController(
             var url = await paymentService.CreateCheckoutSessionAsync(order);
 
             logger.LogInformation(
-                "Sessão de pagamento criada com sucesso. OrderId: {OrderId}",
+                "Sess�o de pagamento criada com sucesso. OrderId: {OrderId}",
                 orderId);
 
             return Ok(new { url });
@@ -103,10 +97,7 @@ public class PaymentsController(
             })
             .FirstOrDefaultAsync();
 
-        if (order == null)
-        {
-            return NotFound("Pedido não encontrado.");
-        }
+        if (order == null) return NotFound("Pedido n�o encontrado.");
 
         return Ok(order);
     }

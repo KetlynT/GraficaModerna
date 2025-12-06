@@ -9,11 +9,21 @@ public class CouponRepository(AppDbContext context) : ICouponRepository
 {
     private readonly AppDbContext _context = context;
 
-    public async Task<Coupon?> GetByCodeAsync(string code) => await _context.Coupons.FirstOrDefaultAsync(c => c.Code.Equals(code, StringComparison.CurrentCultureIgnoreCase));
+    public async Task<Coupon?> GetByCodeAsync(string code)
+    {
+        return await _context.Coupons.FirstOrDefaultAsync(c =>
+            c.Code.Equals(code, StringComparison.CurrentCultureIgnoreCase));
+    }
 
-    public async Task<List<Coupon>> GetAllAsync() => await _context.Coupons.OrderByDescending(c => c.ExpiryDate).ToListAsync();
+    public async Task<List<Coupon>> GetAllAsync()
+    {
+        return await _context.Coupons.OrderByDescending(c => c.ExpiryDate).ToListAsync();
+    }
 
-    public async Task AddAsync(Coupon coupon) => await _context.Coupons.AddAsync(coupon);
+    public async Task AddAsync(Coupon coupon)
+    {
+        await _context.Coupons.AddAsync(coupon);
+    }
 
     public async Task DeleteAsync(Guid id)
     {

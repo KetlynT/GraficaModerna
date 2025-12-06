@@ -22,7 +22,10 @@ public class AddressRepository(AppDbContext context) : IAddressRepository
         return await _context.UserAddresses.FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
     }
 
-    public async Task AddAsync(UserAddress address) => await _context.UserAddresses.AddAsync(address);
+    public async Task AddAsync(UserAddress address)
+    {
+        await _context.UserAddresses.AddAsync(address);
+    }
 
     public Task DeleteAsync(UserAddress address)
     {
@@ -30,5 +33,8 @@ public class AddressRepository(AppDbContext context) : IAddressRepository
         return Task.CompletedTask;
     }
 
-    public async Task<bool> HasAnyAsync(string userId) => await _context.UserAddresses.AnyAsync(a => a.UserId == userId);
+    public async Task<bool> HasAnyAsync(string userId)
+    {
+        return await _context.UserAddresses.AnyAsync(a => a.UserId == userId);
+    }
 }

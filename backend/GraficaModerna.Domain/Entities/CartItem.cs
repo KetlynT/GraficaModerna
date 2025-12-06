@@ -7,7 +7,6 @@ public class CartItem
     public Guid ProductId { get; set; }
     public int Quantity { get; set; }
 
-    // Propriedades de navegação
     public Cart? Cart { get; set; }
     public Product? Product { get; set; }
 }

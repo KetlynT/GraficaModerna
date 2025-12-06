@@ -1,10 +1,10 @@
+ï»¿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 
 namespace GraficaModerna.API.Controllers;
 
@@ -25,8 +25,8 @@ public class AuthController(
     {
         var result = await _authService.RegisterAsync(dto);
 
-        // Return token in body so SPA can store it (Authorization: Bearer)
-        return Ok(new { token = result.AccessToken, result.Email, result.Role, message = "Cadastro realizado com sucesso." });
+        return Ok(new
+            { token = result.AccessToken, result.Email, result.Role, message = "Cadastro realizado com sucesso." });
     }
 
     [EnableRateLimiting("AuthPolicy")]
@@ -35,40 +35,36 @@ public class AuthController(
     {
         var result = await _authService.LoginAsync(dto);
 
-        // Return token in body so SPA can store it (Authorization: Bearer)
-        return Ok(new { token = result.AccessToken, result.Email, result.Role, message = "Login realizado com sucesso." });
+        return Ok(new
+            { token = result.AccessToken, result.Email, result.Role, message = "Login realizado com sucesso." });
     }
 
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-        // Apenas Header é aceito
+
         string? token = null;
 
         if (Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
             var header = authHeader.ToString();
             if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
                 token = header["Bearer ".Length..].Trim();
-            }
         }
 
         if (!string.IsNullOrEmpty(token))
-        {
             try
             {
                 var handler = new JwtSecurityTokenHandler();
                 var jwtToken = handler.ReadJwtToken(token);
-                // Blacklist é a forma correta de invalidar JWT antes da expiração
+
                 await _blacklistService.BlacklistTokenAsync(token, jwtToken.ValidTo);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning("Erro ao processar blacklist no logout: {Message}", ex.Message);
             }
-        }
 
         return Ok(new { message = "Deslogado com sucesso" });
     }
@@ -104,13 +100,10 @@ public class AuthController(
     }
 
     [HttpPost("refresh-token")]
-    [AllowAnonymous] // Importante: O usuário não tem token válido quando chama isso
+    [AllowAnonymous] 
     public async Task<IActionResult> RefreshToken([FromBody] TokenModel tokenModel)
     {
-        if (tokenModel is null)
-        {
-            return BadRequest("Requisição inválida");
-        }
+        if (tokenModel is null) return BadRequest("Requisiï¿½ï¿½o invï¿½lida");
 
         try
         {

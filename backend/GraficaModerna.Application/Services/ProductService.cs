@@ -1,4 +1,4 @@
-using GraficaModerna.Application.DTOs;
+ï»¿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
@@ -8,10 +8,11 @@ namespace GraficaModerna.Application.Services;
 
 public class ProductService(IProductRepository repository, IMemoryCache cache) : IProductService
 {
-    private readonly IProductRepository _repository = repository;
     private readonly IMemoryCache _cache = cache;
+    private readonly IProductRepository _repository = repository;
 
-    public async Task<PagedResultDto<ProductResponseDto>> GetCatalogAsync(string? search, string? sort, string? order, int page, int pageSize)
+    public async Task<PagedResultDto<ProductResponseDto>> GetCatalogAsync(string? search, string? sort, string? order,
+        int page, int pageSize)
     {
         var cacheKey = $"catalog_{search}_{sort}_{order}_{page}_{pageSize}";
 
@@ -33,7 +34,7 @@ public class ProductService(IProductRepository repository, IMemoryCache cache) :
 
     public async Task<ProductResponseDto> GetByIdAsync(Guid id)
     {
-        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto não encontrado.");
+        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto nï¿½o encontrado.");
         return MapToDto(product);
     }
 
@@ -57,7 +58,7 @@ public class ProductService(IProductRepository repository, IMemoryCache cache) :
 
     public async Task UpdateAsync(Guid id, CreateProductDto dto)
     {
-        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto não encontrado.");
+        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto nï¿½o encontrado.");
         product.Update(
             dto.Name,
             dto.Description,
@@ -75,12 +76,15 @@ public class ProductService(IProductRepository repository, IMemoryCache cache) :
 
     public async Task DeleteAsync(Guid id)
     {
-        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto não encontrado.");
+        var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto nï¿½o encontrado.");
         product.Deactivate();
         await _repository.UpdateAsync(product);
     }
 
-    private static ProductResponseDto MapToDto(Product p) => new(
-        p.Id, p.Name, p.Description, p.Price, p.ImageUrl, p.Weight, p.Width, p.Height, p.Length, p.StockQuantity
-    );
+    private static ProductResponseDto MapToDto(Product p)
+    {
+        return new ProductResponseDto(
+            p.Id, p.Name, p.Description, p.Price, p.ImageUrl, p.Weight, p.Width, p.Height, p.Length, p.StockQuantity
+        );
+    }
 }

@@ -1,15 +1,16 @@
-using GraficaModerna.Domain.Entities;
+ï»¿using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging; // Adicionado para logging
+using Microsoft.Extensions.Logging;
+
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
 public class ProductRepository(AppDbContext context, ILogger<ProductRepository> logger) : IProductRepository
 {
     private readonly AppDbContext _context = context;
-    private readonly ILogger<ProductRepository> _logger = logger; // Logger injetado
+    private readonly ILogger<ProductRepository> _logger = logger; 
 
     public async Task<(IEnumerable<Product> Items, int TotalCount)> GetAllAsync(
         string? searchTerm,
@@ -24,26 +25,30 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
                 .AsNoTracking()
                 .Where(p => p.IsActive);
 
-            // 1. Filtro de Busca
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.ToLower();
-                query = query.Where(p => p.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase) || p.Description.ToLower().Contains(term));
+                query = query.Where(p =>
+                    p.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase) ||
+                    p.Description.ToLower().Contains(term));
             }
 
-            // 2. Contagem Total
             var totalCount = await query.CountAsync();
 
-            // 3. Ordenação Dinâmica
             query = sortColumn?.ToLower() switch
             {
-                "price" => sortOrder?.ToLower() == "desc" ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
-                "name" => sortOrder?.ToLower() == "desc" ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
-                "stockquantity" => sortOrder?.ToLower() == "desc" ? query.OrderByDescending(p => p.StockQuantity) : query.OrderBy(p => p.StockQuantity),
+                "price" => sortOrder?.ToLower() == "desc"
+                    ? query.OrderByDescending(p => p.Price)
+                    : query.OrderBy(p => p.Price),
+                "name" => sortOrder?.ToLower() == "desc"
+                    ? query.OrderByDescending(p => p.Name)
+                    : query.OrderBy(p => p.Name),
+                "stockquantity" => sortOrder?.ToLower() == "desc"
+                    ? query.OrderByDescending(p => p.StockQuantity)
+                    : query.OrderBy(p => p.StockQuantity),
                 _ => query.OrderByDescending(p => p.CreatedAt)
             };
 
-            // 4. Paginação
             var items = await query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -53,11 +58,10 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
         }
         catch (Exception ex)
         {
-            // SEGURANÇA: Logamos o erro técnico (SQL query, timeout, etc)
+
             _logger.LogError(ex, "Erro ao recuperar produtos. Termo: {SearchTerm}, Page: {Page}", searchTerm, page);
 
-            // SEGURANÇA: Lançamos uma exceção genérica para não expor a estrutura do DB
-            throw new Exception("Não foi possível recuperar a lista de produtos no momento.");
+            throw new Exception("Nï¿½o foi possï¿½vel recuperar a lista de produtos no momento.");
         }
     }
 
@@ -85,7 +89,7 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao criar produto: {ProductName}", product.Name);
-            // Evita expor constraints de banco de dados (ex: Unique Key violation)
+
             throw new Exception("Erro interno ao salvar o produto.");
         }
     }

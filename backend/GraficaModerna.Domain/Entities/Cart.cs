@@ -3,9 +3,8 @@
 public class Cart
 {
     public Guid Id { get; set; }
-    public string UserId { get; set; } = string.Empty; // Vincula ao usuário logado
+    public string UserId { get; set; } = string.Empty; 
 
-    // Navegação
     public List<CartItem> Items { get; set; } = [];
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
 }

@@ -3,9 +3,9 @@ using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
-using System;
 
-namespace GraficaModerna.Infrastructure.Services; // Namespace Corrigido
+namespace GraficaModerna.Infrastructure.Services;
+
 
 public class CouponService(AppDbContext context) : ICouponService
 {
@@ -14,13 +14,14 @@ public class CouponService(AppDbContext context) : ICouponService
     public async Task<CouponResponseDto> CreateAsync(CreateCouponDto dto)
     {
         if (await _context.Coupons.AnyAsync(c => c.Code.Equals(dto.Code, StringComparison.CurrentCultureIgnoreCase)))
-            throw new Exception("Cupom já existe.");
+            throw new Exception("Cupom j� existe.");
 
         var coupon = new Coupon(dto.Code, dto.DiscountPercentage, dto.ValidityDays);
         _context.Coupons.Add(coupon);
         await _context.SaveChangesAsync();
 
-        return new CouponResponseDto(coupon.Id, coupon.Code, coupon.DiscountPercentage, coupon.ExpiryDate, coupon.IsActive);
+        return new CouponResponseDto(coupon.Id, coupon.Code, coupon.DiscountPercentage, coupon.ExpiryDate,
+            coupon.IsActive);
     }
 
     public async Task<List<CouponResponseDto>> GetAllAsync()
@@ -43,7 +44,9 @@ public class CouponService(AppDbContext context) : ICouponService
 
     public async Task<Coupon?> GetValidCouponAsync(string code)
     {
-        var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code.Equals(code, StringComparison.CurrentCultureIgnoreCase));
+        var coupon =
+            await _context.Coupons.FirstOrDefaultAsync(c =>
+                c.Code.Equals(code, StringComparison.CurrentCultureIgnoreCase));
         if (coupon == null || !coupon.IsValid()) return null;
         return coupon;
     }

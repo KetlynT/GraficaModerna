@@ -1,3 +1,7 @@
+ï»¿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Constants;
@@ -5,10 +9,7 @@ using GraficaModerna.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Security.Cryptography; // Necessário para RNG
-using System.Text;
+
 
 namespace GraficaModerna.Application.Services;
 
@@ -17,9 +18,9 @@ public class AuthService(
     IConfiguration configuration,
     IPasswordHasher<ApplicationUser> passwordHasher) : IAuthService
 {
-    private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IConfiguration _configuration = configuration;
-    private readonly IPasswordHasher<ApplicationUser> _passwordHasher = passwordHasher; //
+    private readonly IPasswordHasher<ApplicationUser> _passwordHasher = passwordHasher; 
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
 
     public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
     {
@@ -36,18 +37,17 @@ public class AuthService(
         if (!result.Succeeded)
         {
             var safeErrors = result.Errors
-               .Where(e => e.Code.StartsWith("Password"))
-               .Select(e => e.Description);
+                .Where(e => e.Code.StartsWith("Password"))
+                .Select(e => e.Description);
 
             if (safeErrors.Any())
                 throw new Exception($"Senha fraca: {string.Join("; ", safeErrors)}");
 
-            throw new Exception("Erro ao criar usuário.");
+            throw new Exception("Erro ao criar usuï¿½rio.");
         }
 
         await _userManager.AddToRoleAsync(user, Roles.User);
 
-        // Gera Access + Refresh Token
         return await CreateTokenPairAsync(user);
     }
 
@@ -56,61 +56,50 @@ public class AuthService(
         var user = await _userManager.FindByEmailAsync(dto.Email);
 
         if (user == null || !await _userManager.CheckPasswordAsync(user, dto.Password))
-            throw new Exception("Credenciais inválidas.");
+            throw new Exception("Credenciais invï¿½lidas.");
 
         return await CreateTokenPairAsync(user);
     }
 
-    // =================================================================
-    //  LÓGICA DE REFRESH TOKEN (ROTAÇÃO)
-    // =================================================================
+
+
     public async Task<AuthResponseDto> RefreshTokenAsync(TokenModel tokenModel)
     {
-        if (tokenModel is null) throw new Exception("Requisição inválida");
+        if (tokenModel is null) throw new Exception("Requisiï¿½ï¿½o invï¿½lida");
 
-        string? accessToken = tokenModel.AccessToken;
-        string? refreshToken = tokenModel.RefreshToken;
+        var accessToken = tokenModel.AccessToken;
+        var refreshToken = tokenModel.RefreshToken;
 
-        // CORREÇÃO: Validar se o token recebido é nulo ou vazio logo no início.
-        // Isso satisfaz o compilador e evita passar null para o VerifyHashedPassword.
-        if (string.IsNullOrEmpty(refreshToken))
-        {
-            throw new Exception("Refresh token inválido");
-        }
 
-        var principal = GetPrincipalFromExpiredToken(accessToken) ?? throw new Exception("Token de acesso ou refresh token inválido");
-        string username = principal.Identity!.Name!;
+        if (string.IsNullOrEmpty(refreshToken)) throw new Exception("Refresh token invï¿½lido");
+
+        var principal = GetPrincipalFromExpiredToken(accessToken) ??
+                        throw new Exception("Token de acesso ou refresh token invï¿½lido");
+        var username = principal.Identity!.Name!;
 
         var user = await _userManager.FindByNameAsync(username);
 
-        // Verifica se o usuário existe, se o hash no banco (user.RefreshToken) existe e se não expirou.
         if (user == null || user.RefreshToken == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
-        {
-            throw new Exception("Refresh token inválido ou expirado.");
-        }
+            throw new Exception("Refresh token invï¿½lido ou expirado.");
 
-        // Agora o 'refreshToken' (3º parâmetro) é seguro porque validamos string.IsNullOrEmpty acima.
         var verificationResult = _passwordHasher.VerifyHashedPassword(user, user.RefreshToken, refreshToken);
 
         if (verificationResult != PasswordVerificationResult.Success)
-        {
-            throw new Exception("Refresh token inválido ou expirado.");
-        }
+            throw new Exception("Refresh token invï¿½lido ou expirado.");
 
-        // ROTAÇÃO: Geramos novos tokens e invalidamos o anterior
         return await CreateTokenPairAsync(user);
     }
-    // =================================================================
+
 
     public async Task<UserProfileDto> GetProfileAsync(string userId)
     {
-        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuário não encontrado.");
+        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuï¿½rio nï¿½o encontrado.");
         return new UserProfileDto(user.FullName, user.Email!, user.PhoneNumber ?? "");
     }
 
     public async Task UpdateProfileAsync(string userId, UpdateProfileDto dto)
     {
-        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuário não encontrado.");
+        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuï¿½rio nï¿½o encontrado.");
         user.FullName = dto.FullName;
         user.PhoneNumber = dto.PhoneNumber;
 
@@ -118,33 +107,29 @@ public class AuthService(
         if (!result.Succeeded) throw new Exception("Erro ao atualizar perfil.");
     }
 
-    // --- MÉTODOS AUXILIARES ---
 
     private async Task<AuthResponseDto> CreateTokenPairAsync(ApplicationUser user)
     {
-        // 1. Gera Access Token (Curta Duração: 15 min)
+
         var accessToken = GenerateAccessToken(user);
 
-        // 2. Gera Refresh Token (Longa Duração: 7 dias)
         var refreshToken = GenerateRefreshToken();
 
-        // 3. Salva Refresh Token no Banco (CORREÇÃO: Salva o HASH, não o texto plano)
-        user.RefreshToken = _passwordHasher.HashPassword(user, refreshToken); //
+        user.RefreshToken = _passwordHasher.HashPassword(user, refreshToken); 
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
         await _userManager.UpdateAsync(user);
 
-        // Recupera Role para o retorno
         var roles = await _userManager.GetRolesAsync(user);
-        var primaryRole = roles.Contains(Roles.Admin) ? Roles.Admin : (roles.FirstOrDefault() ?? Roles.User);
+        var primaryRole = roles.Contains(Roles.Admin) ? Roles.Admin : roles.FirstOrDefault() ?? Roles.User;
 
-        // Retorna o refreshToken original para o usuário (ele precisa do valor para enviar depois)
-        return new AuthResponseDto(new JwtSecurityTokenHandler().WriteToken(accessToken), refreshToken, user.Email!, primaryRole);
+        return new AuthResponseDto(new JwtSecurityTokenHandler().WriteToken(accessToken), refreshToken, user.Email!,
+            primaryRole);
     }
 
     private JwtSecurityToken GenerateAccessToken(ApplicationUser user)
     {
         var userRoles = _userManager.GetRolesAsync(user).Result;
-        var primaryRole = userRoles.Contains(Roles.Admin) ? Roles.Admin : (userRoles.FirstOrDefault() ?? Roles.User);
+        var primaryRole = userRoles.Contains(Roles.Admin) ? Roles.Admin : userRoles.FirstOrDefault() ?? Roles.User;
 
         var authClaims = new List<Claim>
         {
@@ -160,9 +145,9 @@ public class AuthService(
         var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
 
         return new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
-            expires: DateTime.UtcNow.AddMinutes(15), // Vida Curta
+            _configuration["Jwt:Issuer"],
+            _configuration["Jwt:Audience"],
+            expires: DateTime.UtcNow.AddMinutes(15), 
             claims: authClaims,
             signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
         );
@@ -181,23 +166,22 @@ public class AuthService(
         var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];
         var tokenValidationParameters = new TokenValidationParameters
         {
-            ValidateAudience = false, // Pode ser true se configurado estritamente
+            ValidateAudience = false, 
             ValidateIssuer = false,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString!)),
-            ValidateLifetime = false // Importante: aqui ignoramos a expiração para ler o token antigo
+            ValidateLifetime = false 
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();
         try
         {
-            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
 
             if (securityToken is not JwtSecurityToken jwtSecurityToken ||
-                !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-            {
-                throw new SecurityTokenException("Token inválido");
-            }
+                !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
+                    StringComparison.InvariantCultureIgnoreCase))
+                throw new SecurityTokenException("Token invï¿½lido");
 
             return principal;
         }

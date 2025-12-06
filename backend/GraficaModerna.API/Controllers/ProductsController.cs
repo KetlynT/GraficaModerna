@@ -1,4 +1,4 @@
-using GraficaModerna.Application.DTOs;
+ï»¿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +11,6 @@ public class ProductsController(IProductService service) : ControllerBase
 {
     private readonly IProductService _service = service;
 
-    // GET: api/Products?page=1&pageSize=8&search=cartao&sort=price&order=asc
     [HttpGet]
     public async Task<ActionResult<PagedResultDto<ProductResponseDto>>> GetAll(
         [FromQuery] string? search,
@@ -20,7 +19,7 @@ public class ProductsController(IProductService service) : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 8)
     {
-        // Proteção contra valores absurdos
+
         if (page < 1) page = 1;
         if (pageSize > 50) pageSize = 50;
 

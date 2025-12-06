@@ -1,7 +1,8 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
-using GraficaModerna.Domain.Interfaces; // Uso da Interface de Repositório
+using GraficaModerna.Domain.Interfaces;
+
 
 namespace GraficaModerna.Infrastructure.Services;
 
@@ -17,18 +18,16 @@ public class AddressService(IUnitOfWork uow) : IAddressService
 
     public async Task<AddressDto> GetByIdAsync(Guid id, string userId)
     {
-        var address = await _uow.Addresses.GetByIdAsync(id, userId) ?? throw new KeyNotFoundException("Endereço não encontrado.");
+        var address = await _uow.Addresses.GetByIdAsync(id, userId) ??
+                      throw new KeyNotFoundException("Endere�o n�o encontrado.");
         return MapToDto(address);
     }
 
     public async Task<AddressDto> CreateAsync(string userId, CreateAddressDto dto)
     {
-        // Lógica de negócio: Se for o primeiro, vira padrão
-        bool isFirst = !await _uow.Addresses.HasAnyAsync(userId);
-        if (dto.IsDefault || isFirst)
-        {
-            await UnsetDefaultAddress(userId);
-        }
+
+        var isFirst = !await _uow.Addresses.HasAnyAsync(userId);
+        if (dto.IsDefault || isFirst) await UnsetDefaultAddress(userId);
 
         var address = new UserAddress
         {
@@ -55,11 +54,9 @@ public class AddressService(IUnitOfWork uow) : IAddressService
 
     public async Task UpdateAsync(Guid id, string userId, CreateAddressDto dto)
     {
-        var address = await _uow.Addresses.GetByIdAsync(id, userId) ?? throw new KeyNotFoundException("Endereço não encontrado.");
-        if (dto.IsDefault)
-        {
-            await UnsetDefaultAddress(userId);
-        }
+        var address = await _uow.Addresses.GetByIdAsync(id, userId) ??
+                      throw new KeyNotFoundException("Endere�o n�o encontrado.");
+        if (dto.IsDefault) await UnsetDefaultAddress(userId);
 
         address.Name = dto.Name;
         address.ReceiverName = dto.ReceiverName;
@@ -91,11 +88,14 @@ public class AddressService(IUnitOfWork uow) : IAddressService
     {
         var addresses = await _uow.Addresses.GetByUserIdAsync(userId);
         foreach (var a in addresses) a.IsDefault = false;
-        // O Commit será chamado pelo método principal
+
     }
 
-    private static AddressDto MapToDto(UserAddress a) => new(
-        a.Id, a.Name, a.ReceiverName, a.ZipCode, a.Street, a.Number, a.Complement,
-        a.Neighborhood, a.City, a.State, a.Reference, a.PhoneNumber, a.IsDefault
-    );
+    private static AddressDto MapToDto(UserAddress a)
+    {
+        return new AddressDto(
+            a.Id, a.Name, a.ReceiverName, a.ZipCode, a.Street, a.Number, a.Complement,
+            a.Neighborhood, a.City, a.State, a.Reference, a.PhoneNumber, a.IsDefault
+        );
+    }
 }

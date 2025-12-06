@@ -1,8 +1,8 @@
+ï»¿using System.Security.Claims;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace GraficaModerna.API.Controllers;
 
@@ -19,9 +19,8 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
+            if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuï¿½rio nï¿½o autenticado." });
 
-            // SEGURAN?A: N?o passamos mais o ShippingCost vindo do cliente
             var order = await _orderService.CreateOrderFromCartAsync(
                 userId,
                 dto.Address,
@@ -41,7 +40,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     public async Task<IActionResult> GetMyOrders()
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
+        if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuï¿½rio nï¿½o autenticado." });
 
         var orders = await _orderService.GetUserOrdersAsync(userId);
         return Ok(orders);
@@ -61,7 +60,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
+            if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuï¿½rio nï¿½o autenticado." });
 
             await _orderService.RequestRefundAsync(id, userId);
             return Ok();

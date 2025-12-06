@@ -9,9 +9,15 @@ public class OrderRepository(AppDbContext context) : IOrderRepository
 {
     private readonly AppDbContext _context = context;
 
-    public async Task AddAsync(Order order) => await _context.Orders.AddAsync(order);
+    public async Task AddAsync(Order order)
+    {
+        await _context.Orders.AddAsync(order);
+    }
 
-    public async Task<Order?> GetByIdAsync(Guid id) => await _context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id);
+    public async Task<Order?> GetByIdAsync(Guid id)
+    {
+        return await _context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id);
+    }
 
     public async Task<List<Order>> GetByUserIdAsync(string userId)
     {

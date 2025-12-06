@@ -1,15 +1,14 @@
-﻿using GraficaModerna.Application.Interfaces;
+﻿using System.Text;
+using GraficaModerna.Application.Interfaces;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccessor httpContextAccessor) : IFileStorageService
+public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccessor httpContextAccessor)
+    : IFileStorageService
 {
-    private readonly IWebHostEnvironment _env = env;
-    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
 
-    // DEFINIÇÃO CENTRALIZADA DE SEGURANÇA (Magic Numbers)
     private static readonly Dictionary<string, List<byte[]>> _fileSignatures = new()
     {
         { ".jpeg", new List<byte[]> { new byte[] { 0xFF, 0xD8, 0xFF } } },
@@ -18,6 +17,9 @@ public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccess
         { ".webp", new List<byte[]> { "RIFF"u8.ToArray(), "WEBP"u8.ToArray() } }
     };
 
+    private readonly IWebHostEnvironment _env = env;
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+
     public async Task<string> SaveFileAsync(IFormFile file, string folderName)
     {
         if (file == null || file.Length == 0)
@@ -25,9 +27,8 @@ public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccess
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
 
-        // 1. Validação de Extensão
-        if (!_fileSignatures.TryGetValue(ext, out List<byte[]>? signatures))
-            throw new Exception("Formato de arquivo não suportado.");
+        if (!_fileSignatures.TryGetValue(ext, out var signatures))
+            throw new Exception("Formato de arquivo n�o suportado.");
 
         var fileName = $"{Guid.NewGuid()}{ext}";
         var folderPath = Path.Combine(_env.WebRootPath, folderName);
@@ -39,30 +40,26 @@ public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccess
 
         try
         {
-            // 2. Validação de Conteúdo (Magic Numbers) e Cópia Segura
+
             using var memoryStream = new MemoryStream();
             await file.CopyToAsync(memoryStream);
 
-            // Verifica Assinatura
             memoryStream.Position = 0;
-            using (var reader = new BinaryReader(memoryStream, System.Text.Encoding.Default, leaveOpen: true))
+            using (var reader = new BinaryReader(memoryStream, Encoding.Default, true))
             {
                 var headerBytes = reader.ReadBytes(12);
                 if (!signatures.Any(signature =>
-                    headerBytes.Take(signature.Length).SequenceEqual(signature)))
-                {
-                    throw new Exception("O arquivo está corrompido ou a extensão não corresponde ao conteúdo real.");
-                }
+                        headerBytes.Take(signature.Length).SequenceEqual(signature)))
+                    throw new Exception("O arquivo est� corrompido ou a extens�o n�o corresponde ao conte�do real.");
             }
 
-            // Salva no disco
             memoryStream.Position = 0;
             using var stream = new FileStream(filePath, FileMode.Create);
             await memoryStream.CopyToAsync(stream);
         }
         catch (Exception ex)
         {
-            throw new Exception($"Erro de segurança ou E/S ao salvar arquivo: {ex.Message}");
+            throw new Exception($"Erro de seguran�a ou E/S ao salvar arquivo: {ex.Message}");
         }
 
         var request = _httpContextAccessor.HttpContext!.Request;
@@ -75,29 +72,26 @@ public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccess
 
         try
         {
-            // Convert URL to local path
+
             var uri = new Uri(fileUrl);
             var relativePath = uri.AbsolutePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
 
             var webRoot = _env.WebRootPath;
             var fullPath = Path.GetFullPath(Path.Combine(webRoot, relativePath));
 
-            // Ensure the file is within the web root
             var webRootFull = Path.GetFullPath(webRoot);
             if (!fullPath.StartsWith(webRootFull, StringComparison.OrdinalIgnoreCase))
-            {
-                // Log attempt or ignore
+
                 return;
-            }
 
             if (File.Exists(fullPath))
             {
-                // Overwrite the file with zeroes first to reduce data leakage risk (best-effort)
+
                 try
                 {
                     using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Write, FileShare.None);
                     var zero = new byte[8192];
-                    long remaining = fs.Length;
+                    var remaining = fs.Length;
                     fs.Position = 0;
                     while (remaining > 0)
                     {
@@ -108,7 +102,7 @@ public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccess
                 }
                 catch
                 {
-                    // If we cannot overwrite (locked), proceed to delete as fallback
+
                 }
 
                 File.Delete(fullPath);
@@ -116,7 +110,7 @@ public class LocalFileStorageService(IWebHostEnvironment env, IHttpContextAccess
         }
         catch
         {
-            // Swallow exceptions to avoid exposing filesystem errors to callers
+
         }
     }
 }

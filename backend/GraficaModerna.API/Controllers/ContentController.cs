@@ -1,9 +1,11 @@
-﻿using Ganss.Xss; // Certifique-se de que este using está presente
+﻿using Ganss.Xss;
 using GraficaModerna.Application.DTOs;
-using GraficaModerna.Application.Interfaces; // Supondo que exista um IContentService ou Repository
+using GraficaModerna.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.Authorization;
+
+
 
 namespace GraficaModerna.API.Controllers;
 
@@ -11,8 +13,8 @@ namespace GraficaModerna.API.Controllers;
 [ApiController]
 public class ContentController(IContentService service, IHtmlSanitizer sanitizer) : ControllerBase
 {
-    private readonly IContentService _service = service; // Ou IContentRepository
     private readonly IHtmlSanitizer _sanitizer = sanitizer;
+    private readonly IContentService _service = service; 
 
     [HttpGet("{slug}")]
     public async Task<IActionResult> GetPage(string slug)
@@ -22,27 +24,22 @@ public class ContentController(IContentService service, IHtmlSanitizer sanitizer
         if (page == null)
             return NotFound();
 
-        // ==============================================================================
-        // CORREÇÃO DE SEGURANÇA (Output Sanitization)
-        // Mesmo que o dado tenha sido limpo na entrada, limpamos novamente na saída.
-        // Isso protege contra "Stored XSS" caso o banco tenha sido comprometido.
-        // ==============================================================================
-        if (!string.IsNullOrEmpty(page.Content))
-        {
-            page.Content = _sanitizer.Sanitize(page.Content);
-        }
+
+
+
+
+        if (!string.IsNullOrEmpty(page.Content)) page.Content = _sanitizer.Sanitize(page.Content);
 
         return Ok(page);
     }
 
-    // O método de criação/edição (POST/PUT) deve continuar sanitizando a entrada
-    // para evitar "lixo" no banco, mas a segurança real vem do GET acima.
+
     [HttpPost]
     [Authorize(Roles = "Admin")]
     [EnableRateLimiting("AdminPolicy")]
     public async Task<IActionResult> Create([FromBody] CreateContentDto dto)
     {
-        // Sanitização de Entrada (Input Sanitization) - Mantém o banco limpo
+
         dto.Content = _sanitizer.Sanitize(dto.Content);
 
         var result = await _service.CreateAsync(dto);

@@ -2,14 +2,10 @@
 
 public class Coupon
 {
-    public Guid Id { get; set; }
-    public string Code { get; set; } = string.Empty;
-    public decimal DiscountPercentage { get; set; } // 0 a 100
-    public DateTime ExpiryDate { get; set; }
-    public bool IsActive { get; set; } = true;
 
-    // Construtor vazio para EF
-    public Coupon() { }
+    public Coupon()
+    {
+    }
 
     public Coupon(string code, decimal percentage, int daysValid)
     {
@@ -19,6 +15,12 @@ public class Coupon
         ExpiryDate = DateTime.UtcNow.AddDays(daysValid);
         IsActive = true;
     }
+
+    public Guid Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public decimal DiscountPercentage { get; set; } 
+    public DateTime ExpiryDate { get; set; }
+    public bool IsActive { get; set; } = true;
 
     public bool IsValid()
     {

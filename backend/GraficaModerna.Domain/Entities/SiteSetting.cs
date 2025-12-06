@@ -2,10 +2,9 @@
 
 public class SiteSetting
 {
-    public string Key { get; private set; } = string.Empty;
-    public string Value { get; private set; } = string.Empty;
-
-    protected SiteSetting() { }
+    protected SiteSetting()
+    {
+    }
 
     public SiteSetting(string key, string value)
     {
@@ -13,7 +12,9 @@ public class SiteSetting
         Value = value;
     }
 
-    // Método para atualizar o valor
+    public string Key { get; private set; } = string.Empty;
+    public string Value { get; private set; } = string.Empty;
+
     public void UpdateValue(string value)
     {
         Value = value;

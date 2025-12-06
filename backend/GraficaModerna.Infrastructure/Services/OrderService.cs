@@ -16,65 +16,21 @@ public class OrderService(
     IEnumerable<IShippingService> shippingServices,
     IPaymentService paymentService) : IOrderService
 {
+
+    private const decimal MinOrderAmount = 1.00m; 
+    private const decimal MaxOrderAmount = 100000.00m; 
     private readonly AppDbContext _context = context;
     private readonly IEmailService _emailService = emailService;
-    private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
-    private readonly IEnumerable<IShippingService> _shippingServices = shippingServices;
     private readonly IPaymentService _paymentService = paymentService;
+    private readonly IEnumerable<IShippingService> _shippingServices = shippingServices;
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
 
-    // Constantes de Validação
-    private const decimal MinOrderAmount = 1.00m;      // Mínimo R$ 1,00
-    private const decimal MaxOrderAmount = 100000.00m; // Máximo R$ 100.000,00
 
-    // =================================================================================
-    // MÉTODOS AUXILIARES DE AUDITORIA E SEGURANÇA
-    // =================================================================================
 
-    private string GetIpAddress() =>
-        _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "0.0.0.0";
 
-    private string GetUserAgent() =>
-        _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString() ?? "Unknown";
-
-    /// <summary>
-    /// Centraliza a alteração de status para garantir que o histórico seja sempre gerado.
-    /// </summary>
-    private void AddAuditLog(Order order, string newStatus, string message, string changedBy)
-    {
-        // Atualiza o status principal do pedido
-        order.Status = newStatus;
-
-        // Adiciona o registro no histórico
-        order.History.Add(new OrderHistory
-        {
-            OrderId = order.Id,
-            Status = newStatus,
-            Message = message,
-            ChangedBy = changedBy,
-            Timestamp = DateTime.UtcNow,
-            IpAddress = GetIpAddress(),
-            UserAgent = GetUserAgent()
-        });
-    }
-
-    private async Task<Order> GetUserOrderOrFail(Guid orderId, string userId)
-    {
-        var order = await _context.Orders
-            .Include(o => o.Items)
-            .Include(o => o.History) // Importante carregar o histórico
-            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado.");
-        if (order.UserId != userId)
-            throw new UnauthorizedAccessException("Você não tem permissão para acessar este pedido.");
-
-        return order;
-    }
-
-    // =================================================================================
-    // FUNCIONALIDADES PRINCIPAIS
-    // =================================================================================
-
-    public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode, string shippingMethod)
+    public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode,
+        string shippingMethod)
     {
         var cart = await _context.Carts
             .Include(c => c.Items)
@@ -84,11 +40,9 @@ public class OrderService(
         if (cart == null || cart.Items.Count == 0)
             throw new Exception("Carrinho vazio.");
 
-        // Validação de itens inválidos
         if (cart.Items.Any(i => i.Quantity <= 0))
-            throw new Exception("O carrinho contém itens com quantidades inválidas.");
+            throw new Exception("O carrinho cont�m itens com quantidades inv�lidas.");
 
-        // 1. Recalcular frete no backend (Segurança contra manipulação no front)
         var shippingItems = cart.Items.Select(i => new ShippingItemDto
         {
             ProductId = i.ProductId,
@@ -104,8 +58,10 @@ public class OrderService(
         var allOptions = shippingResults.SelectMany(x => x).ToList();
 
         var selectedOption = allOptions.FirstOrDefault(o =>
-            o.Name.Trim().Equals(shippingMethod.Trim(), StringComparison.InvariantCultureIgnoreCase)) ?? throw new Exception("Método de envio inválido ou indisponível.");
-        decimal verifiedShippingCost = selectedOption.Price;
+                                 o.Name.Trim().Equals(shippingMethod.Trim(),
+                                     StringComparison.InvariantCultureIgnoreCase)) ??
+                             throw new Exception("M�todo de envio inv�lido ou indispon�vel.");
+        var verifiedShippingCost = selectedOption.Price;
 
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
@@ -120,7 +76,6 @@ public class OrderService(
                 if (item.Product.StockQuantity < item.Quantity)
                     throw new Exception($"Estoque insuficiente para o produto {item.Product.Name}");
 
-                // Baixa no estoque
                 item.Product.DebitStock(item.Quantity);
                 _context.Entry(item.Product).State = EntityState.Modified;
 
@@ -138,24 +93,25 @@ public class OrderService(
             decimal discount = 0;
             if (!string.IsNullOrWhiteSpace(couponCode))
             {
-                var coupon = await _context.Coupons.FirstOrDefaultAsync(c => c.Code.Equals(couponCode, StringComparison.CurrentCultureIgnoreCase));
+                var coupon = await _context.Coupons.FirstOrDefaultAsync(c =>
+                    c.Code.Equals(couponCode, StringComparison.CurrentCultureIgnoreCase));
                 if (coupon != null && coupon.IsValid())
                 {
-                    bool alreadyUsed = await _context.CouponUsages.AnyAsync(u => u.UserId == userId && u.CouponCode == coupon.Code);
-                    if (alreadyUsed) throw new Exception("Cupom já utilizado.");
+                    var alreadyUsed =
+                        await _context.CouponUsages.AnyAsync(u => u.UserId == userId && u.CouponCode == coupon.Code);
+                    if (alreadyUsed) throw new Exception("Cupom j� utilizado.");
 
                     discount = subTotal * (coupon.DiscountPercentage / 100m);
                 }
             }
 
-            decimal totalAmount = (subTotal - discount) + verifiedShippingCost;
+            var totalAmount = subTotal - discount + verifiedShippingCost;
 
-            // Validação de Limites Financeiros
             if (totalAmount < MinOrderAmount)
-                throw new Exception($"O valor total do pedido deve ser no mínimo {MinOrderAmount:C}.");
+                throw new Exception($"O valor total do pedido deve ser no m�nimo {MinOrderAmount:C}.");
 
             if (totalAmount > MaxOrderAmount)
-                throw new Exception($"O valor do pedido excede o limite de segurança de {MaxOrderAmount:C}.");
+                throw new Exception($"O valor do pedido excede o limite de seguran�a de {MaxOrderAmount:C}.");
 
             var formattedAddress =
                 $"{addressDto.Street}, {addressDto.Number} - {addressDto.Complement} - {addressDto.Neighborhood}, " +
@@ -176,12 +132,10 @@ public class OrderService(
                 AppliedCoupon = couponCode?.ToUpper(),
                 Items = orderItems,
 
-                // Auditoria Inicial
                 CustomerIp = GetIpAddress(),
                 UserAgent = GetUserAgent()
             };
 
-            // Adiciona o primeiro log no histórico
             order.History.Add(new OrderHistory
             {
                 Status = "Pendente",
@@ -195,9 +149,7 @@ public class OrderService(
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            // Registra uso do cupom se houver
             if (discount > 0 && couponCode != null)
-            {
                 _context.CouponUsages.Add(new CouponUsage
                 {
                     UserId = userId,
@@ -205,15 +157,12 @@ public class OrderService(
                     OrderId = order.Id,
                     UsedAt = DateTime.UtcNow
                 });
-            }
 
-            // Limpa o carrinho
             _context.CartItems.RemoveRange(cart.Items);
             await _context.SaveChangesAsync();
 
             await transaction.CommitAsync();
 
-            // Dispara email em background
             _ = SendOrderReceivedEmailAsync(userId, order.Id);
 
             return MapToDto(order);
@@ -256,26 +205,23 @@ public class OrderService(
 
         var order = await _context.Orders
             .Include(o => o.History)
-            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado");
-        string auditMessage = $"Status alterado manualmente para {dto.Status}";
+            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido n�o encontrado");
+        var auditMessage = $"Status alterado manualmente para {dto.Status}";
 
-        // Lógica específica por status
-        if (dto.Status == "Aguardando Devolução")
+        if (dto.Status == "Aguardando Devolu��o")
         {
             if (!string.IsNullOrEmpty(dto.ReverseLogisticsCode))
                 order.ReverseLogisticsCode = dto.ReverseLogisticsCode;
 
             order.ReturnInstructions = !string.IsNullOrEmpty(dto.ReturnInstructions)
                 ? dto.ReturnInstructions
-                : "Instruções padrão de devolução...";
+                : "Instru��es padr�o de devolu��o...";
 
-            auditMessage += ". Instruções geradas.";
+            auditMessage += ". Instru��es geradas.";
         }
 
         if (dto.Status == "Reembolsado" || dto.Status == "Cancelado")
-        {
             if (!string.IsNullOrEmpty(order.StripePaymentIntentId))
-            {
                 try
                 {
                     await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId);
@@ -285,8 +231,6 @@ public class OrderService(
                 {
                     throw new Exception($"Erro no reembolso Stripe: {ex.Message}");
                 }
-            }
-        }
 
         if (dto.Status == "Entregue" && order.Status != "Entregue")
             order.DeliveryDate = DateTime.UtcNow;
@@ -297,27 +241,23 @@ public class OrderService(
             auditMessage += $" (Rastreio: {dto.TrackingCode})";
         }
 
-        // Aplica a auditoria e mudança de status
         AddAuditLog(order, dto.Status, auditMessage, $"Admin:{adminUserId}");
 
         await _context.SaveChangesAsync();
     }
 
-    // =================================================================
-    //  CORREÇÃO SEGURANÇA: Validação de Valor e Idempotência
-    // =================================================================
+
+
     public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents)
     {
-        // 1. Idempotência (Proteção contra Replay Attack)
-        // Verifica se o ID da transação já foi usado em algum pedido no banco
-        bool isAlreadyProcessed = await _context.Orders
+
+
+        var isAlreadyProcessed = await _context.Orders
             .AnyAsync(o => o.StripePaymentIntentId == transactionId);
 
         if (isAlreadyProcessed)
-        {
-            // Se já foi processado, retornamos sucesso sem fazer nada para evitar duplicação
+
             return;
-        }
 
         var order = await _context.Orders
             .Include(o => o.History)
@@ -325,25 +265,22 @@ public class OrderService(
 
         if (order == null) return;
 
-        // 2. SEGURANÇA: Validação de Integridade de Valor (Parameter Tampering)
-        // Convertemos o TotalAmount do pedido (Decimal) para centavos (Long) para comparar com o Stripe
-        long expectedAmountInCents = (long)(order.TotalAmount * 100);
 
-        // Tolerância zero para diferença de valores (protege contra quem altera o valor no front)
+        var expectedAmountInCents = (long)(order.TotalAmount * 100);
+
         if (amountPaidInCents != expectedAmountInCents)
         {
-            // Registra a tentativa de fraude no histórico do pedido para auditoria
+
             AddAuditLog(order, "Fraude Suspeita",
-                $"Divergência de valor. Esperado: {expectedAmountInCents}, Recebido: {amountPaidInCents}. Transação: {transactionId}",
+                $"Diverg�ncia de valor. Esperado: {expectedAmountInCents}, Recebido: {amountPaidInCents}. Transa��o: {transactionId}",
                 "SYSTEM-SECURITY");
 
             await _context.SaveChangesAsync();
 
-            // Lança exceção (Critical) que será logada pelo Controller/Middleware
-            throw new Exception($"FATAL: Tentativa de manipulação de pagamento. Pedido {orderId}. Esperado {expectedAmountInCents}, Recebido {amountPaidInCents}");
+            throw new Exception(
+                $"FATAL: Tentativa de manipula��o de pagamento. Pedido {orderId}. Esperado {expectedAmountInCents}, Recebido {amountPaidInCents}");
         }
 
-        // Se passou nas validações e o pedido ainda não está pago
         if (order.Status != "Pago")
         {
             order.StripePaymentIntentId = transactionId;
@@ -360,9 +297,53 @@ public class OrderService(
     {
         var order = await GetUserOrderOrFail(orderId, userId);
 
-        AddAuditLog(order, "Reembolso Solicitado", "Usuário solicitou cancelamento pelo painel.", userId);
+        AddAuditLog(order, "Reembolso Solicitado", "Usu�rio solicitou cancelamento pelo painel.", userId);
 
         await _context.SaveChangesAsync();
+    }
+
+
+
+
+    private string GetIpAddress()
+    {
+        return _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+    }
+
+    private string GetUserAgent()
+    {
+        return _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString() ?? "Unknown";
+    }
+
+
+
+    private void AddAuditLog(Order order, string newStatus, string message, string changedBy)
+    {
+
+        order.Status = newStatus;
+
+        order.History.Add(new OrderHistory
+        {
+            OrderId = order.Id,
+            Status = newStatus,
+            Message = message,
+            ChangedBy = changedBy,
+            Timestamp = DateTime.UtcNow,
+            IpAddress = GetIpAddress(),
+            UserAgent = GetUserAgent()
+        });
+    }
+
+    private async Task<Order> GetUserOrderOrFail(Guid orderId, string userId)
+    {
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.History) 
+            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido n�o encontrado.");
+        if (order.UserId != userId)
+            throw new UnauthorizedAccessException("Voc� n�o tem permiss�o para acessar este pedido.");
+
+        return order;
     }
 
     private async Task SendOrderReceivedEmailAsync(string userId, Guid orderId)
@@ -371,11 +352,12 @@ public class OrderService(
         {
             var user = await _userManager.FindByIdAsync(userId);
             if (user != null)
-                await _emailService.SendEmailAsync(user.Email!, "Pedido Recebido", $"Seu pedido #{orderId} foi recebido e está sendo processado.");
+                await _emailService.SendEmailAsync(user.Email!, "Pedido Recebido",
+                    $"Seu pedido #{orderId} foi recebido e est� sendo processado.");
         }
         catch
         {
-            // Log de erro de envio de email (serilog, etc)
+
         }
     }
 
@@ -394,9 +376,11 @@ public class OrderService(
             order.ReverseLogisticsCode,
             order.ReturnInstructions,
             order.ShippingAddress,
-            [.. order.Items.Select(i =>
-                new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
-            )]
+            [
+                .. order.Items.Select(i =>
+                    new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
+                )
+            ]
         );
     }
 }

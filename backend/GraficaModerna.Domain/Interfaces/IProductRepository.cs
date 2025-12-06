@@ -1,4 +1,4 @@
-using GraficaModerna.Domain.Entities;
+﻿using GraficaModerna.Domain.Entities;
 
 namespace GraficaModerna.Domain.Interfaces;
 

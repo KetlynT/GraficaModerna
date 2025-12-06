@@ -8,7 +8,7 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-// SEGURANÇA MÁXIMA: Apenas Tokens com a Claim "Role: Admin" entram aqui.
+
 [Authorize(Roles = "Admin")]
 [EnableRateLimiting("AdminPolicy")]
 public class AdminController(IOrderService orderService, IProductService productService) : ControllerBase
@@ -16,7 +16,6 @@ public class AdminController(IOrderService orderService, IProductService product
     private readonly IOrderService _orderService = orderService;
     private readonly IProductService _productService = productService;
 
-    // Endpoint para Listar Todos os Pedidos
     [HttpGet("orders")]
     public async Task<IActionResult> GetAllOrders()
     {
@@ -24,14 +23,13 @@ public class AdminController(IOrderService orderService, IProductService product
         return Ok(orders);
     }
 
-    // Endpoint CRÍTICO: Atualizar Status e Processar Estorno
-    // Como está protegido por [Authorize(Roles = "Admin")], hackers não conseguem acessá-lo.
+
     [HttpPut("orders/{id}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)
     {
         try
         {
-            // Chama a lógica segura que faz o reembolso no Stripe se necessário
+
             await _orderService.UpdateAdminOrderAsync(id, dto);
             return Ok(new { message = "Status atualizado com sucesso." });
         }

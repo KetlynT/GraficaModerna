@@ -1,4 +1,9 @@
-﻿using GraficaModerna.Application.DTOs;
+﻿using System.Globalization;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.AspNetCore.Hosting;
@@ -6,10 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace GraficaModerna.Infrastructure.Services;
 
@@ -20,30 +21,27 @@ public class MelhorEnvioShippingService(
     IWebHostEnvironment env,
     ILogger<MelhorEnvioShippingService> logger) : IShippingService
 {
-    private readonly AppDbContext _context = context;
-    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly IConfiguration _configuration = configuration;
+    private readonly AppDbContext _context = context;
     private readonly IWebHostEnvironment _env = env;
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly ILogger<MelhorEnvioShippingService> _logger = logger;
 
     public async Task<List<ShippingOptionDto>> CalculateAsync(string destinationCep, List<ShippingItemDto> items)
     {
-        string? token = Environment.GetEnvironmentVariable("MELHOR_ENVIO_TOKEN");
+        var token = Environment.GetEnvironmentVariable("MELHOR_ENVIO_TOKEN");
 
-        if (string.IsNullOrEmpty(token) && _env.IsDevelopment())
-        {
-            token = _configuration["MelhorEnvio:Token"];
-        }
+        if (string.IsNullOrEmpty(token) && _env.IsDevelopment()) token = _configuration["MelhorEnvio:Token"];
 
         if (string.IsNullOrEmpty(token))
         {
-            _logger.LogWarning("Melhor Envio: Token não configurado. Cálculo ignorado.");
+            _logger.LogWarning("Melhor Envio: Token n�o configurado. C�lculo ignorado.");
             return [];
         }
 
         if (items == null || items.Count == 0) return [];
 
-        string originCep = "01001000";
+        var originCep = "01001000";
         try
         {
             var originCepSetting = await _context.SiteSettings
@@ -51,9 +49,7 @@ public class MelhorEnvioShippingService(
                 .FirstOrDefaultAsync(s => s.Key == "sender_cep");
 
             if (!string.IsNullOrEmpty(originCepSetting?.Value))
-            {
                 originCep = originCepSetting.Value.Replace("-", "").Trim();
-            }
         }
         catch (Exception ex)
         {
@@ -109,20 +105,16 @@ public class MelhorEnvioShippingService(
                 .Select(x =>
                 {
                     decimal price = 0;
-                    if (decimal.TryParse(x.Price, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal parsedPrice))
-                    {
+                    if (decimal.TryParse(x.Price, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedPrice))
                         price = parsedPrice;
-                    }
-                    else if (decimal.TryParse(x.CustomPrice, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal parsedCustomPrice))
-                    {
-                        price = parsedCustomPrice;
-                    }
+                    else if (decimal.TryParse(x.CustomPrice, NumberStyles.Any, CultureInfo.InvariantCulture,
+                                 out var parsedCustomPrice)) price = parsedCustomPrice;
 
                     return new ShippingOptionDto
                     {
                         Name = $"{x.Company?.Name} - {x.Name}",
                         Price = price,
-                        // CORREÇÃO AQUI: Usando DeliveryDays conforme seu DTO
+
                         DeliveryDays = x.DeliveryRange?.Max ?? x.DeliveryTime,
                         Provider = "Melhor Envio"
                     };
@@ -135,12 +127,12 @@ public class MelhorEnvioShippingService(
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
-            _logger.LogError("Timeout na comunicação com Melhor Envio.");
+            _logger.LogError("Timeout na comunica��o com Melhor Envio.");
             return [];
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro crítico ao calcular frete Melhor Envio.");
+            _logger.LogError(ex, "Erro cr�tico ao calcular frete Melhor Envio.");
             return [];
         }
     }

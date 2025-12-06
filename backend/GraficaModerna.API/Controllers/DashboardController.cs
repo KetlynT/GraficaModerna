@@ -1,4 +1,4 @@
-using GraficaModerna.Infrastructure.Context;
+ï»¿using GraficaModerna.Infrastructure.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,12 +17,10 @@ public class DashboardController(AppDbContext context) : ControllerBase
     {
         var totalOrders = await _context.Orders.CountAsync();
 
-        // Receita líquida (exclui cancelados e reembolsados)
         var totalRevenue = await _context.Orders
             .Where(o => o.Status != "Cancelado" && o.Status != "Reembolsado")
             .SumAsync(o => o.TotalAmount);
 
-        // Total estornado/reembolsado
         var totalRefunded = await _context.Orders
             .Where(o => o.Status == "Reembolsado")
             .SumAsync(o => o.TotalAmount);

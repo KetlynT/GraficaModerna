@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +15,10 @@ public class AddressesController(IAddressService service) : ControllerBase
 {
     private readonly IAddressService _service = service;
 
-    private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    private string GetUserId()
+    {
+        return User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    }
 
     [HttpGet]
     public async Task<ActionResult<List<AddressDto>>> GetAll()
@@ -26,8 +29,14 @@ public class AddressesController(IAddressService service) : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<AddressDto>> GetById(Guid id)
     {
-        try { return Ok(await _service.GetByIdAsync(id, GetUserId())); }
-        catch (KeyNotFoundException) { return NotFound(); }
+        try
+        {
+            return Ok(await _service.GetByIdAsync(id, GetUserId()));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpPost]
@@ -47,7 +56,10 @@ public class AddressesController(IAddressService service) : ControllerBase
             await _service.UpdateAsync(id, GetUserId(), dto);
             return NoContent();
         }
-        catch (KeyNotFoundException) { return NotFound(); }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpDelete("{id}")]

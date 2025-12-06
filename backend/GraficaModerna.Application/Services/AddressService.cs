@@ -19,7 +19,7 @@ public class AddressService : IAddressService
     {
         var addresses = await _context.UserAddresses
             .Where(a => a.UserId == userId)
-            .OrderByDescending(a => a.IsDefault) // Padrão primeiro
+            .OrderByDescending(a => a.IsDefault) 
             .ToListAsync();
 
         return addresses.Select(MapToDto).ToList();
@@ -30,14 +30,14 @@ public class AddressService : IAddressService
         var address = await _context.UserAddresses
             .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
 
-        if (address == null) throw new KeyNotFoundException("Endereço não encontrado.");
+        if (address == null) throw new KeyNotFoundException("Endere�o n�o encontrado.");
 
         return MapToDto(address);
     }
 
     public async Task<AddressDto> CreateAsync(string userId, CreateAddressDto dto)
     {
-        // Se for o primeiro endereço ou marcado como padrão, remove o padrão dos outros
+
         if (dto.IsDefault || !await _context.UserAddresses.AnyAsync(a => a.UserId == userId))
         {
             await UnsetDefaultAddress(userId);
@@ -69,7 +69,7 @@ public class AddressService : IAddressService
     public async Task UpdateAsync(Guid id, string userId, CreateAddressDto dto)
     {
         var address = await _context.UserAddresses.FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
-        if (address == null) throw new KeyNotFoundException("Endereço não encontrado.");
+        if (address == null) throw new KeyNotFoundException("Endere�o n�o encontrado.");
 
         if (dto.IsDefault)
         {
