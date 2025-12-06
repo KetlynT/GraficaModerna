@@ -123,19 +123,22 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-bold text-gray-700 flex items-center gap-2"><MapPin size={18}/> Endereços Cadastrados</h3>
-        <Button size="sm" onClick={() => handleOpenForm()} variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+        {/* Botão Novo: usa cores primárias dinâmicas */}
+        <Button size="sm" onClick={() => handleOpenForm()} variant="outline" className="text-primary border-primary/30 hover:bg-primary/5">
           <Plus size={16} /> Novo
         </Button>
       </div>
 
       <div className="grid gap-3 max-h-[60vh] overflow-y-auto pr-1">
         {addresses.map(addr => (
-          <div key={addr.id} className={`bg-white p-4 rounded-lg border transition-all ${addr.isDefault ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200'}`}>
+          // Borda dinâmica para item selecionado/padrão
+          <div key={addr.id} className={`bg-white p-4 rounded-lg border transition-all ${addr.isDefault ? 'border-primary/50 bg-primary/5' : 'border-gray-200'}`}>
             <div className="flex justify-between items-start">
               <div className="cursor-pointer flex-grow" onClick={() => allowSelection && onSelect && onSelect(addr)}>
                 <div className="flex items-center gap-2 mb-1">
                     <span className="font-bold text-gray-800">{addr.name}</span>
-                    {addr.isDefault && <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><Star size={10} fill="currentColor"/> Padrão</span>}
+                    {/* Badge Padrão dinâmico */}
+                    {addr.isDefault && <span className="bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><Star size={10} fill="currentColor"/> Padrão</span>}
                 </div>
                 <p className="text-gray-600 text-xs">
                   {addr.street}, {addr.number} {addr.complement}
@@ -147,7 +150,8 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
               </div>
               
               <div className="flex gap-1 ml-2">
-                <button onClick={() => handleOpenForm(addr)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"><Edit size={16}/></button>
+                {/* Ícones de ação dinâmicos */}
+                <button onClick={() => handleOpenForm(addr)} className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded"><Edit size={16}/></button>
                 <button onClick={() => handleDeleteAddress(addr.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
               </div>
             </div>
@@ -213,7 +217,8 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
         </div>
       )}
       
-      <style>{`.input-base { width: 100%; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.5rem; font-size: 0.875rem; outline: none; transition: border-color 0.2s; } .input-base:focus { border-color: #2563eb; ring: 2px solid #bfdbfe; }`}</style>
+      {/* CSS Dinâmico para Inputs */}
+      <style>{`.input-base { width: 100%; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.5rem; font-size: 0.875rem; outline: none; transition: border-color 0.2s; } .input-base:focus { border-color: var(--color-primary); ring: 2px solid var(--color-primary); }`}</style>
     </div>
   );
 };

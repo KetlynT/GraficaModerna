@@ -8,37 +8,24 @@ export const AdminLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
   const navigate = useNavigate();
-  const { login, logout } = useAuth(); // Hooks do Contexto
+  const { login, logout } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      // 1. Tenta autenticar
       const data = await login({ email, password });
-
-      // 2. Verificação de Segurança de Role
       if (data.role !== 'Admin') {
-        // Se entrou mas não é admin, chuta para fora imediatamente
         await logout();
-        toast.error("Acesso restrito a administradores.", { 
-            icon: <AlertTriangle className="text-red-500"/>,
-            duration: 4000
-        });
+        toast.error("Acesso restrito a administradores.", { icon: <AlertTriangle className="text-red-500"/> });
         setLoading(false);
         return;
       }
-
-      // 3. Sucesso
-      toast.success("Bem-vindo ao Painel, Chefe!");
+      toast.success("Bem-vindo ao Painel!");
       navigate('/putiroski/dashboard');
-
     } catch (err) {
-      console.error(err);
-      toast.error('Credenciais inválidas ou acesso negado.');
+      toast.error('Credenciais inválidas.');
     } finally {
       setLoading(false);
     }
@@ -47,9 +34,9 @@ export const AdminLogin = () => {
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700">
-        
         <div className="bg-gray-800 p-8 text-center border-b border-gray-700">
-          <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-900/50">
+          {/* Logo/Icon com cor primária */}
+          <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/50">
             <Shield size={32} className="text-white" />
           </div>
           <h2 className="text-2xl font-bold text-white tracking-wide">Acesso Restrito</h2>
@@ -63,9 +50,10 @@ export const AdminLogin = () => {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Shield size={18} className="text-gray-500" />
                 </div>
+                {/* Focus ring com cor primária */}
                 <input 
                   type="email" 
-                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all placeholder-gray-500"
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-gray-500"
                   placeholder="admin@graficamoderna.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -82,7 +70,7 @@ export const AdminLogin = () => {
                 </div>
                 <input 
                   type="password" 
-                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all placeholder-gray-500"
+                  className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder-gray-500"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -91,12 +79,13 @@ export const AdminLogin = () => {
             </div>
           </div>
 
+          {/* Botão com cor primária */}
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-bold py-3 rounded-lg shadow-lg transform transition hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-primary hover:brightness-110 text-white font-bold py-3 rounded-lg shadow-lg transform transition hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Validando Credenciais...' : 'Acessar Painel'}
+            {loading ? 'Validando...' : 'Acessar Painel'}
           </button>
         </form>
 

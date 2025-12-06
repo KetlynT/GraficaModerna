@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { Button } from '../components/ui/Button';
 import { CouponInput } from '../components/CouponInput';
-import { ShippingCalculator } from '../components/ShippingCalculator'; // NOVO COMPONENTE
+import { ShippingCalculator } from '../components/ShippingCalculator';
 import { Trash2, ShoppingBag, ArrowRight, Plus, Minus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AuthService } from '../services/authService';
@@ -13,7 +13,6 @@ export const Cart = () => {
   const navigate = useNavigate();
 
   const [appliedCoupon, setAppliedCoupon] = useState(null);
-  // Estado para armazenar o frete selecionado pela calculadora
   const [selectedShipping, setSelectedShipping] = useState(null);
 
   const handleUpdateQuantity = async (productId, currentQty, delta) => {
@@ -21,7 +20,6 @@ export const Cart = () => {
     if (newQty < 1) return;
     await updateQuantity(productId, newQty);
     
-    // Se a quantidade mudar, o frete deve ser recalculado ou limpo para evitar valores incorretos
     if (selectedShipping) {
         setSelectedShipping(null);
         toast('Quantidade alterada. Por favor, calcule o frete novamente.', { icon: '🚚' });
@@ -34,16 +32,12 @@ export const Cart = () => {
         navigate('/login', { state: { from: '/carrinho' } });
         return;
     }
-    // Passa o cupom para o checkout (o frete será recalculado lá obrigatoriamente por segurança)
     navigate('/checkout', { state: { coupon: appliedCoupon } });
   };
 
-  // Cálculos Totais
   const subTotal = cartItems.reduce((acc, i) => acc + (i.totalPrice || 0), 0);
   const discountAmount = appliedCoupon ? subTotal * (appliedCoupon.discountPercentage / 100) : 0;
   const shippingCost = selectedShipping ? selectedShipping.price : 0;
-  
-  // Total FINAL (Incluindo Frete)
   const total = subTotal - discountAmount + shippingCost;
 
   if (cartItems.length === 0) {
@@ -66,7 +60,6 @@ export const Cart = () => {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-            {/* Tabela de Produtos */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-fit">
             <table className="w-full text-left">
                 <thead className="bg-gray-50 text-gray-600 text-sm uppercase">
@@ -100,7 +93,8 @@ export const Cart = () => {
                             <button onClick={() => handleUpdateQuantity(item.productId, item.quantity, 1)} className="px-3 py-1 text-gray-600 hover:bg-gray-100"><Plus size={14} /></button>
                         </div>
                     </td>
-                    <td className="p-4 text-right font-bold text-blue-600">R$ {(item.totalPrice || 0).toFixed(2)}</td>
+                    {/* Preço Unitário: text-primary */}
+                    <td className="p-4 text-right font-bold text-primary">R$ {(item.totalPrice || 0).toFixed(2)}</td>
                     <td className="p-4 text-right">
                         <button onClick={() => removeFromCart(item.productId)} className="text-red-500 hover:bg-red-50 p-2 rounded-full"><Trash2 size={18} /></button>
                     </td>
@@ -110,7 +104,6 @@ export const Cart = () => {
             </table>
             </div>
 
-            {/* Calculadora de Frete Reutilizável */}
             <ShippingCalculator 
                 items={cartItems} 
                 onSelectOption={setSelectedShipping} 
@@ -139,7 +132,7 @@ export const Cart = () => {
                     </div>
                 )}
 
-                <div className="flex justify-between text-blue-600">
+                <div className="flex justify-between text-primary">
                     <span>Frete</span>
                     <span>{selectedShipping ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(shippingCost) : 'Não calculado'}</span>
                 </div>
@@ -147,7 +140,8 @@ export const Cart = () => {
 
             <div className="flex justify-between items-center text-lg font-bold text-gray-900 mt-4 pt-4 border-t border-gray-100 mb-6">
               <span>Total</span>
-              <span className="text-2xl text-blue-600">
+              {/* Total Final: text-primary */}
+              <span className="text-2xl text-primary">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
               </span>
             </div>

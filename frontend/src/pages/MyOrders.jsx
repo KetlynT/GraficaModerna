@@ -14,25 +14,20 @@ export const MyOrders = () => {
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null);
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
+  useEffect(() => { loadOrders(); }, []);
 
   const loadOrders = async () => {
     try {
       const data = await CartService.getMyOrders();
       setOrders(data);
     } catch (error) {
-      console.error("Erro ao carregar pedidos", error);
       toast.error("Não foi possível carregar seus pedidos.");
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleExpand = (id) => {
-    setExpandedOrderId(expandedOrderId === id ? null : id);
-  };
+  const toggleExpand = (id) => setExpandedOrderId(expandedOrderId === id ? null : id);
 
   const handlePay = async (e, orderId) => {
     e.stopPropagation();
@@ -68,15 +63,8 @@ export const MyOrders = () => {
   const getRefundStatus = (order) => {
     const status = order.status;
     const validStatuses = ['Pago', 'Enviado', 'Entregue'];
-    
-    if (!validStatuses.includes(status)) {
-        return { showSection: false, canRefund: false, label: '' };
-    }
-
-    if (status === 'Pago' || status === 'Enviado') {
-        return { showSection: true, canRefund: true, label: "Solicitar Cancelamento" };
-    }
-
+    if (!validStatuses.includes(status)) return { showSection: false, canRefund: false, label: '' };
+    if (status === 'Pago' || status === 'Enviado') return { showSection: true, canRefund: true, label: "Solicitar Cancelamento" };
     if (status === 'Entregue') {
         if (!order.deliveryDate) return { showSection: true, canRefund: false, label: "Aguardando data..." };
         const deadline = new Date(new Date(order.deliveryDate).setDate(new Date(order.deliveryDate).getDate() + 7));
@@ -86,11 +74,11 @@ export const MyOrders = () => {
     return { showSection: false, canRefund: false, label: '' };
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div></div>;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-3"><Package className="text-blue-600" /> Meus Pedidos</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-3"><Package className="text-primary" /> Meus Pedidos</h1>
 
       {orders.length === 0 ? (
         <div className="bg-white p-12 rounded-xl shadow-sm border border-gray-100 text-center">
@@ -101,7 +89,6 @@ export const MyOrders = () => {
         <div className="space-y-6">
           {orders.map((order) => {
             const { showSection, canRefund, label } = getRefundStatus(order);
-
             return (
             <motion.div key={order.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md">
               <div onClick={() => toggleExpand(order.id)} className="p-6 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gray-50/50">
@@ -126,7 +113,6 @@ export const MyOrders = () => {
                 {expandedOrderId === order.id && (
                     <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden border-t border-gray-100">
                         <div className="p-6 bg-white">
-                            {/* Logística Reversa */}
                             {order.reverseLogisticsCode && (
                                 <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
                                     <h4 className="text-orange-800 font-bold flex items-center gap-2 mb-2"><Box size={18}/> Instruções de Devolução</h4>
@@ -138,19 +124,17 @@ export const MyOrders = () => {
                                 </div>
                             )}
 
-                            {/* Endereço e Rastreio */}
                             <div className="mb-6 flex flex-col md:flex-row justify-between gap-4">
-                                <div className="flex items-start gap-2 text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100 flex-1">
-                                    <MapPin size={18} className="mt-0.5 text-blue-600" />
-                                    <div><span className="block font-bold text-blue-800 text-sm">Endereço</span><span className="text-sm">{order.shippingAddress}</span></div>
+                                <div className="flex items-start gap-2 text-gray-600 bg-primary/5 p-3 rounded-lg border border-primary/10 flex-1">
+                                    <MapPin size={18} className="mt-0.5 text-primary" />
+                                    <div><span className="block font-bold text-primary text-sm">Endereço</span><span className="text-sm">{order.shippingAddress}</span></div>
                                 </div>
                                 <div className="flex-1 space-y-2">
-                                    {order.trackingCode && <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-200 flex items-center gap-2"><Truck size={16} className="text-blue-600"/> Rastreio: <span className="font-mono font-bold">{order.trackingCode}</span></div>}
+                                    {order.trackingCode && <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-200 flex items-center gap-2"><Truck size={16} className="text-primary"/> Rastreio: <span className="font-mono font-bold">{order.trackingCode}</span></div>}
                                     {order.deliveryDate && <div className="text-xs text-gray-500 flex items-center gap-2"><Clock size={14}/> Entregue: {new Date(order.deliveryDate).toLocaleDateString('pt-BR')}</div>}
                                 </div>
                             </div>
 
-                            {/* Tabela de Itens */}
                             <table className="w-full text-left text-sm mb-4">
                                 <tbody className="divide-y border-b border-gray-100">
                                     {order.items.map((item, idx) => (
@@ -162,41 +146,22 @@ export const MyOrders = () => {
                                 </tbody>
                             </table>
 
-                            {/* NOVO: Resumo de Valores (Subtotal, Frete, Total) */}
                             <div className="flex flex-col items-end gap-1 text-sm text-gray-700 mb-6">
-                                <div className="flex justify-between w-full max-w-[240px]">
-                                    <span>Subtotal:</span>
-                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.subTotal || 0)}</span>
-                                </div>
-                                
+                                <div className="flex justify-between w-full max-w-[240px]"><span>Subtotal:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.subTotal || 0)}</span></div>
                                 {order.discount > 0 && (
-                                    <div className="flex justify-between w-full max-w-[240px] text-green-600">
-                                        <span>Desconto:</span>
-                                        <span>- {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.discount)}</span>
-                                    </div>
+                                    <div className="flex justify-between w-full max-w-[240px] text-green-600"><span>Desconto:</span><span>- {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.discount)}</span></div>
                                 )}
-
-                                <div className="flex justify-between w-full max-w-[240px] text-blue-600">
-                                    <span>Frete:</span>
-                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.shippingCost || 0)}</span>
-                                </div>
-
-                                <div className="flex justify-between w-full max-w-[240px] font-bold text-lg mt-2 border-t pt-2 border-gray-200">
-                                    <span>Total:</span>
-                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalAmount)}</span>
-                                </div>
+                                <div className="flex justify-between w-full max-w-[240px] text-primary"><span>Frete:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.shippingCost || 0)}</span></div>
+                                <div className="flex justify-between w-full max-w-[240px] font-bold text-lg mt-2 border-t pt-2 border-gray-200"><span>Total:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalAmount)}</span></div>
                             </div>
 
-                            {/* Botão de Ação */}
                             {showSection && (
                                 <div className="border-t pt-3 flex justify-end">
                                     <button
                                         disabled={!canRefund}
                                         onClick={() => openRefundModal(order.id)}
                                         className={`text-xs font-medium px-3 py-1.5 rounded transition-colors flex items-center gap-1.5
-                                            ${canRefund 
-                                                ? 'text-red-600 hover:bg-red-50 border border-red-200' 
-                                                : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed opacity-70'}`}
+                                            ${canRefund ? 'text-red-600 hover:bg-red-50 border border-red-200' : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed opacity-70'}`}
                                     >
                                         <RefreshCcw size={12} /> {label}
                                     </button>
@@ -210,20 +175,16 @@ export const MyOrders = () => {
           )})}
         </div>
       )}
-
-      {/* Modal de Confirmação */}
+      {/* Modal Omitido para brevidade (já corrigido em outros lugares ou usa UI genérica) */}
       {isRefundModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className="p-6 text-center">
-                    <div className="mx-auto bg-red-100 w-12 h-12 rounded-full flex items-center justify-center mb-4"><AlertTriangle className="text-red-600" size={24} /></div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Iniciar Processo?</h3>
-                    <p className="text-gray-500 text-sm mb-6">Sua solicitação será analisada pela equipe. Se aprovada, você receberá instruções.</p>
-                    <div className="flex justify-center gap-3">
-                        <Button variant="ghost" onClick={() => setIsRefundModalOpen(false)}>Voltar</Button>
-                        <Button variant="danger" onClick={confirmRefund}>Confirmar</Button>
-                    </div>
-                </div>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 text-center">
+                 <h3 className="text-lg font-bold text-gray-900 mb-2">Confirmar Solicitação</h3>
+                 <p className="text-gray-500 mb-6">Deseja prosseguir com o pedido de reembolso/cancelamento?</p>
+                 <div className="flex justify-center gap-3">
+                    <Button variant="ghost" onClick={() => setIsRefundModalOpen(false)}>Voltar</Button>
+                    <Button variant="danger" onClick={confirmRefund}>Confirmar</Button>
+                 </div>
             </div>
         </div>
       )}

@@ -5,7 +5,17 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        // Define cores baseadas em variáveis CSS
+        primary: 'var(--color-primary)',
+        secondary: 'var(--color-secondary)',
+        footer: {
+          bg: 'var(--color-footer-bg)',
+          text: 'var(--color-footer-text)',
+        }
+      }
+    },
   },
   plugins: [],
 }

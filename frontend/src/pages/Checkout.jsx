@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CartService } from '../services/cartService';
 import { AddressService } from '../services/addressService';
 import { ShippingService } from '../services/shippingService';
-import { PaymentService } from '../services/paymentService'; // NOVO
+import { PaymentService } from '../services/paymentService';
 import { useCart } from '../context/CartContext';
 import { Button } from '../components/ui/Button';
 import { AddressManager } from '../components/AddressManager';
@@ -16,36 +16,22 @@ export const Checkout = () => {
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [shippingOptions, setShippingOptions] = useState([]);
   const [selectedShipping, setSelectedShipping] = useState(null);
-  
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [loadingShipping, setLoadingShipping] = useState(false);
-  
-  // Estado para indicar "Redirecionando para o Stripe..."
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const { cartItems, refreshCart } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
-  
   const [coupon, setCoupon] = useState(location.state?.coupon || null);
 
   const loadAddresses = async () => {
     try {
       const data = await AddressService.getAll();
       setAddresses(data);
-      if (!selectedAddress) {
-          const defaultAddr = data.find(a => a.isDefault) || data[0];
-          if (defaultAddr) handleSelectAddress(defaultAddr);
-      } else {
-          const updated = data.find(a => a.id === selectedAddress.id);
-          if (updated) handleSelectAddress(updated);
-      }
-    } catch (error) {
-      toast.error("Erro ao carregar endereços.");
-    } finally {
-      setLoadingData(false);
-    }
+      if (!selectedAddress && data.length > 0) handleSelectAddress(data.find(a => a.isDefault) || data[0]);
+    } catch (error) { toast.error("Erro ao carregar endereços."); } finally { setLoadingData(false); }
   };
 
   useEffect(() => { loadAddresses(); }, []);
@@ -54,7 +40,6 @@ export const Checkout = () => {
     setSelectedAddress(address);
     setSelectedShipping(null);
     setShippingOptions([]);
-
     if (!address.zipCode) return;
 
     setLoadingShipping(true);
@@ -63,44 +48,24 @@ export const Checkout = () => {
       const options = await ShippingService.calculate(address.zipCode, itemsForShipping);
       setShippingOptions(options);
       if (options.length > 0) setSelectedShipping(options[0]);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoadingShipping(false);
-    }
+    } catch (error) { console.error(error); } finally { setLoadingShipping(false); }
   };
 
   const handleCheckout = async () => {
     if (!selectedAddress || !selectedShipping) return toast.error("Selecione endereço e frete.");
-    
     setIsRedirecting(true);
     const toastId = toast.loading("Processando pedido...");
-
     try {
       const { id, userId, ...addressPayload } = selectedAddress; 
-      
-      // 1. Cria o Pedido no Backend (Status: Pendente)
       const order = await CartService.checkout({
-        address: addressPayload,
-        couponCode: coupon?.code,
-        shippingCost: selectedShipping.price,
-        shippingMethod: selectedShipping.name
+        address: addressPayload, couponCode: coupon?.code, shippingCost: selectedShipping.price, shippingMethod: selectedShipping.name
       });
-      
       toast.loading("Redirecionando para pagamento...", { id: toastId });
-
-      // 2. Chama o Backend para gerar a URL do Stripe
       const { url } = await PaymentService.createCheckoutSession(order.id);
-
-      // 3. Limpa o carrinho local e redireciona
       await refreshCart();
-      
-      // Redirecionamento externo para o Stripe
       window.location.href = url;
-
     } catch (error) {
-      console.error(error);
-      toast.error(error.response?.data?.message || "Erro ao processar checkout.", { id: toastId });
+      toast.error(error.response?.data?.message || "Erro ao processar.", { id: toastId });
       setIsRedirecting(false);
     }
   };
@@ -110,7 +75,7 @@ export const Checkout = () => {
   const shippingCost = selectedShipping ? selectedShipping.price : 0;
   const total = subTotal - discountAmount + shippingCost;
 
-  if (loadingData) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div></div>;
+  if (loadingData) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div></div>;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
@@ -118,32 +83,19 @@ export const Checkout = () => {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          
-          {/* Endereços */}
           <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2"><MapPin className="text-blue-600" /> Endereço de Entrega</h2>
-                <Button size="sm" variant="ghost" className="text-blue-600 text-xs gap-1" onClick={() => setIsManageModalOpen(true)}>
-                    <Settings size={14}/> Gerenciar Endereços
-                </Button>
+                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2"><MapPin className="text-primary" /> Endereço de Entrega</h2>
+                <Button size="sm" variant="ghost" className="text-primary text-xs gap-1" onClick={() => setIsManageModalOpen(true)}><Settings size={14}/> Gerenciar</Button>
             </div>
-
             {addresses.length === 0 ? (
-                <div className="text-center py-8 border-2 border-dashed rounded-lg">
-                    <p className="text-gray-500 mb-4">Nenhum endereço cadastrado.</p>
-                </div>
+                <div className="text-center py-8 border-2 border-dashed rounded-lg"><p className="text-gray-500 mb-4">Nenhum endereço cadastrado.</p></div>
             ) : (
                 <div className="grid md:grid-cols-2 gap-4">
                     {addresses.map(addr => (
                         <div key={addr.id} onClick={() => handleSelectAddress(addr)}
-                            className={`cursor-pointer p-4 rounded-lg border-2 transition-all relative ${selectedAddress?.id === addr.id ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-gray-200 hover:border-blue-300 bg-white'}`}>
-                            
-                            {selectedAddress?.id === addr.id && (
-                                <div className="absolute top-2 right-2">
-                                    <CheckCircle size={22} className="text-blue-600" fill="currentColor" color="white"/>
-                                </div>
-                            )}
-
+                            className={`cursor-pointer p-4 rounded-lg border-2 transition-all relative ${selectedAddress?.id === addr.id ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-gray-200 hover:border-primary/50 bg-white'}`}>
+                            {selectedAddress?.id === addr.id && <div className="absolute top-2 right-2"><CheckCircle size={22} className="text-primary" fill="currentColor" color="white"/></div>}
                             <div className="font-bold text-gray-800 text-sm mb-1">{addr.name}</div>
                             <div className="text-sm text-gray-600 leading-snug">{addr.street}, {addr.number} <br/> {addr.neighborhood} - {addr.city}/{addr.state}</div>
                         </div>
@@ -152,10 +104,9 @@ export const Checkout = () => {
             )}
           </section>
 
-          {/* Frete */}
           {selectedAddress && (
               <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-in fade-in">
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4"><Truck className="text-blue-600" /> Envio</h2>
+                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4"><Truck className="text-primary" /> Envio</h2>
                 {loadingShipping ? <div className="text-sm text-gray-500">Calculando...</div> : (
                     <div className="space-y-3">
                         {shippingOptions.map((opt, idx) => (
@@ -167,48 +118,30 @@ export const Checkout = () => {
                                 <div className="font-bold text-gray-700">R$ {opt.price.toFixed(2)}</div>
                             </label>
                         ))}
-                        {shippingOptions.length === 0 && <div className="text-red-500 text-sm flex gap-2"><AlertCircle size={16}/> Falha no cálculo de frete.</div>}
                     </div>
                 )}
               </section>
           )}
         </div>
 
-        {/* Resumo */}
         <div className="h-fit bg-white p-6 rounded-xl shadow-lg border border-gray-100 sticky top-24">
             <h3 className="font-bold text-xl text-gray-800 mb-6 border-b pb-4">Resumo</h3>
-            
-            <div className="mb-6">
-                <label className="text-xs font-bold text-gray-500 mb-2 block">CUPOM DE DESCONTO</label>
-                <CouponInput onApply={setCoupon} initialCoupon={coupon} />
-            </div>
-
+            <div className="mb-6"><label className="text-xs font-bold text-gray-500 mb-2 block">CUPOM DE DESCONTO</label><CouponInput onApply={setCoupon} initialCoupon={coupon} /></div>
             <div className="space-y-3 text-sm text-gray-600 mb-6">
                 <div className="flex justify-between"><span>Subtotal</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(subTotal)}</span></div>
                 <div className="flex justify-between text-green-600"><span>Desconto</span><span>- {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(discountAmount)}</span></div>
                 <div className="flex justify-between"><span>Frete</span><span>{selectedShipping ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(shippingCost) : '--'}</span></div>
             </div>
             <div className="flex justify-between items-center text-xl font-extrabold text-gray-900 pt-4 border-t border-gray-100 mb-6">
-                <span>Total</span><span className="text-blue-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}</span>
+                <span>Total</span><span className="text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}</span>
             </div>
-            
-            <Button 
-                onClick={handleCheckout} 
-                isLoading={isRedirecting} 
-                disabled={!selectedAddress || !selectedShipping || isRedirecting} 
-                variant="success" 
-                className="w-full py-4 text-lg shadow-green-500/30"
-            >
+            <Button onClick={handleCheckout} isLoading={isRedirecting} disabled={!selectedAddress || !selectedShipping || isRedirecting} variant="success" className="w-full py-4 text-lg shadow-green-500/30">
                 <CreditCard size={20}/> {isRedirecting ? 'Redirecionando...' : 'Pagar com Stripe'}
             </Button>
-            
-            <p className="text-xs text-gray-400 text-center mt-3 flex items-center justify-center gap-1">
-                <Settings size={10}/> Ambiente Seguro Stripe
-            </p>
+            <p className="text-xs text-gray-400 text-center mt-3 flex items-center justify-center gap-1"><Settings size={10}/> Ambiente Seguro Stripe</p>
         </div>
       </div>
 
-      {/* Modal de Endereços */}
       {isManageModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
@@ -216,9 +149,7 @@ export const Checkout = () => {
                     <h3 className="font-bold text-lg text-gray-800">Meus Endereços</h3>
                     <button onClick={() => setIsManageModalOpen(false)}><Plus className="rotate-45 text-gray-400 hover:text-red-500"/></button>
                 </div>
-                <div className="p-6 overflow-y-auto flex-1">
-                    <AddressManager onUpdate={loadAddresses} />
-                </div>
+                <div className="p-6 overflow-y-auto flex-1"><AddressManager onUpdate={loadAddresses} /></div>
             </div>
         </div>
       )}

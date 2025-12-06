@@ -835,6 +835,9 @@ const SettingsTab = () => {
             if (logoFile) updatedData.site_logo = await ProductService.uploadImage(logoFile);
 
             await ContentService.saveSettings(updatedData);
+            
+            // Opcional: Recarregar a página para aplicar as novas cores imediatamente ao Admin também
+            // window.location.reload(); 
             toast.success("Configurações atualizadas!");
         } catch (e) {
             toast.error("Erro ao salvar configurações.");
@@ -845,21 +848,87 @@ const SettingsTab = () => {
 
     return (
         <form onSubmit={handleSave} className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 max-w-4xl mx-auto space-y-8">
-            <div className="grid md:grid-cols-2 gap-4">
-                <InputGroup label="Nome do Negócio" name="site_name" value={formData.site_name} onChange={handleChange} placeholder="Ex: Minha Gráfica" />
-                <InputGroup label="Badge (Hero)" name="hero_badge" value={formData.hero_badge} onChange={handleChange} />
-                <InputGroup label="Título (Hero)" name="hero_title" value={formData.hero_title} onChange={handleChange} />
-                <InputGroup label="Subtítulo (Hero)" name="hero_subtitle" value={formData.hero_subtitle} onChange={handleChange} />
-                <InputGroup label="WhatsApp (Números)" name="whatsapp_number" value={formData.whatsapp_number} onChange={handleChange} />
-                <InputGroup label="WhatsApp (Visível)" name="whatsapp_display" value={formData.whatsapp_display} onChange={handleChange} />
-                <InputGroup label="CEP de Origem" name="sender_cep" value={formData.sender_cep} onChange={handleChange} />
-                <InputGroup label="Email" name="contact_email" value={formData.contact_email} onChange={handleChange} />
+            
+            {/* Seção de Identidade e Contato */}
+            <div className="space-y-4">
+                <h3 className="font-bold text-lg text-gray-800 border-b pb-2">Identidade e Contato</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                    <InputGroup label="Nome do Negócio" name="site_name" value={formData.site_name} onChange={handleChange} placeholder="Ex: Minha Gráfica" />
+                    <InputGroup label="Email de Contato" name="contact_email" value={formData.contact_email} onChange={handleChange} />
+                    <InputGroup label="WhatsApp (Números)" name="whatsapp_number" value={formData.whatsapp_number} onChange={handleChange} placeholder="5511999999999" />
+                    <InputGroup label="WhatsApp (Visível)" name="whatsapp_display" value={formData.whatsapp_display} onChange={handleChange} placeholder="(11) 99999-9999" />
+                    <InputGroup label="CEP de Origem (Frete)" name="sender_cep" value={formData.sender_cep} onChange={handleChange} />
+                    <div className="md:col-span-2">
+                        <InputGroup label="Endereço Físico" name="address" value={formData.address} onChange={handleChange} placeholder="Rua Exemplo, 123 - Cidade/UF" />
+                    </div>
+                </div>
             </div>
-            <div className="grid md:grid-cols-2 gap-4">
-                 <div className="border-2 border-dashed border-gray-300 p-4 rounded-lg text-center"><label>Logo</label><input type="file" onChange={e => setLogoFile(e.target.files[0])} className="text-xs"/></div>
-                 <div className="border-2 border-dashed border-gray-300 p-4 rounded-lg text-center"><label>Hero BG</label><input type="file" onChange={e => setHeroImageFile(e.target.files[0])} className="text-xs"/></div>
+
+            {/* Seção Hero */}
+            <div className="space-y-4">
+                <h3 className="font-bold text-lg text-gray-800 border-b pb-2">Cabeçalho (Hero)</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                    <InputGroup label="Badge (Destaque)" name="hero_badge" value={formData.hero_badge} onChange={handleChange} />
+                    <InputGroup label="Título Principal" name="hero_title" value={formData.hero_title} onChange={handleChange} />
+                    <div className="md:col-span-2">
+                        <InputGroup label="Subtítulo" name="hero_subtitle" value={formData.hero_subtitle} onChange={handleChange} />
+                    </div>
+                    <div className="border-2 border-dashed border-gray-300 p-4 rounded-lg text-center"><label className="block text-sm font-bold mb-2">Logo do Site</label><input type="file" onChange={e => setLogoFile(e.target.files[0])} className="text-xs"/></div>
+                    <div className="border-2 border-dashed border-gray-300 p-4 rounded-lg text-center"><label className="block text-sm font-bold mb-2">Fundo do Hero</label><input type="file" onChange={e => setHeroImageFile(e.target.files[0])} className="text-xs"/></div>
+                </div>
             </div>
-            <Button type="submit" className="w-full" isLoading={loading}>Salvar Configurações</Button>
+
+            {/* Seção Rodapé */}
+            <div className="space-y-4">
+                <h3 className="font-bold text-lg text-gray-800 border-b pb-2">Rodapé</h3>
+                <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Texto "Sobre a Empresa"</label>
+                    <textarea 
+                        name="footer_about" 
+                        value={formData.footer_about || ''} 
+                        onChange={handleChange}
+                        className="w-full border border-gray-300 px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-colors h-24 resize-none"
+                        placeholder="Escreva um breve resumo sobre a empresa para aparecer no rodapé..."
+                    />
+                </div>
+            </div>
+
+            {/* Seção de Cores */}
+            <div className="space-y-4">
+                <h3 className="font-bold text-lg text-gray-800 border-b pb-2">Personalização Visual</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Cor Primária</label>
+                        <div className="flex items-center gap-2">
+                            <input type="color" name="primary_color" value={formData.primary_color || '#2563eb'} onChange={handleChange} className="h-10 w-10 border-0 p-0 rounded cursor-pointer"/>
+                            <span className="text-xs text-gray-500">{formData.primary_color}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Cor Secundária</label>
+                        <div className="flex items-center gap-2">
+                            <input type="color" name="secondary_color" value={formData.secondary_color || '#1e40af'} onChange={handleChange} className="h-10 w-10 border-0 p-0 rounded cursor-pointer"/>
+                            <span className="text-xs text-gray-500">{formData.secondary_color}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Fundo Rodapé</label>
+                        <div className="flex items-center gap-2">
+                            <input type="color" name="footer_bg_color" value={formData.footer_bg_color || '#111827'} onChange={handleChange} className="h-10 w-10 border-0 p-0 rounded cursor-pointer"/>
+                            <span className="text-xs text-gray-500">{formData.footer_bg_color}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Texto Rodapé</label>
+                        <div className="flex items-center gap-2">
+                            <input type="color" name="footer_text_color" value={formData.footer_text_color || '#d1d5db'} onChange={handleChange} className="h-10 w-10 border-0 p-0 rounded cursor-pointer"/>
+                            <span className="text-xs text-gray-500">{formData.footer_text_color}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <Button type="submit" className="w-full" isLoading={loading}>Salvar Todas as Configurações</Button>
         </form>
     );
 };

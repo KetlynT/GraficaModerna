@@ -7,22 +7,14 @@ import { Search, Printer, ChevronLeft, ChevronRight, Filter } from 'lucide-react
 import { motion } from 'framer-motion';
 
 export const Home = () => {
-  // Estado dos Dados
   const [products, setProducts] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalItems: 0 });
   const [loading, setLoading] = useState(true);
-  
-  // Estado para controle de "primeiro carregamento" para evitar piscada
   const [isFirstLoad, setIsFirstLoad] = useState(true);
-  
-  // Estado para Input de Página Manual
   const [inputPage, setInputPage] = useState(1);
-
-  // Estado dos Filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState(""); 
   
-  // Estado das Configurações
   const [settings, setSettings] = useState({
     hero_badge: 'Carregando...',
     hero_title: '...',
@@ -33,7 +25,6 @@ export const Home = () => {
     hero_bg_url: '' 
   });
 
-  // Debounce para busca
   useEffect(() => {
     const timer = setTimeout(() => {
       loadProducts(1);
@@ -55,7 +46,7 @@ export const Home = () => {
         [sort, order] = sortOption.split('-');
       }
 
-      const data = await ProductService.getAll(page, 8, searchTerm, sort, order); // 8 itens por página
+      const data = await ProductService.getAll(page, 8, searchTerm, sort, order);
       
       setProducts(data.items);
       setPagination({
@@ -63,12 +54,12 @@ export const Home = () => {
         totalPages: data.totalPages,
         totalItems: data.totalItems
       });
-      setInputPage(data.page); // Sincroniza o input com a página atual
+      setInputPage(data.page); 
     } catch (error) {
       console.error("Erro ao carregar catálogo:", error);
     } finally {
       setLoading(false);
-      setIsFirstLoad(false); // Marca que o primeiro load já ocorreu
+      setIsFirstLoad(false); 
     }
   };
 
@@ -94,8 +85,8 @@ export const Home = () => {
 
   return (
     <>
-      {/* Hero Section */}
-      <div className="relative bg-blue-900 text-white overflow-hidden transition-all duration-500">
+      {/* Hero Section: bg-blue-900 -> bg-secondary */}
+      <div className="relative bg-secondary text-white overflow-hidden transition-all duration-500">
         <div 
             className="absolute inset-0 bg-cover bg-center opacity-20 transform scale-105"
             style={{ 
@@ -109,17 +100,18 @@ export const Home = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <span className="inline-block py-1 px-3 rounded-full bg-blue-800/50 border border-blue-700 text-blue-200 text-sm font-semibold mb-6 backdrop-blur-sm">
+            {/* Badge: Cores fixas substituídas por fundo branco transparente */}
+            <span className="inline-block py-1 px-3 rounded-full bg-white/10 border border-white/20 text-white text-sm font-semibold mb-6 backdrop-blur-sm">
               {settings.hero_badge}
             </span>
             <h2 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight drop-shadow-lg">
               {settings.hero_title}
             </h2>
-            <p className="text-xl text-blue-100 mb-10 max-w-2xl mx-auto drop-shadow-md">
+            <p className="text-xl text-gray-200 mb-10 max-w-2xl mx-auto drop-shadow-md">
               {settings.hero_subtitle}
             </p>
             <div className="flex gap-4 justify-center">
-              <Button variant="success" className="rounded-full px-8 py-4 text-lg shadow-xl shadow-green-900/20" onClick={scrollToCatalog}>
+              <Button variant="success" className="rounded-full px-8 py-4 text-lg shadow-xl shadow-black/20" onClick={scrollToCatalog}>
                 Ver Catálogo
               </Button>
             </div>
@@ -128,34 +120,32 @@ export const Home = () => {
       </div>
 
       <section id="catalogo" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        {/* Barra de Ferramentas */}
         <div className="flex flex-col lg:flex-row justify-between items-end mb-12 gap-6">
           <div>
             <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <Printer className="text-blue-600" />
+              {/* Printer icon usa cor primary */}
+              <Printer className="text-primary" />
               {settings.home_products_title}
             </h2>
             <p className="text-gray-500 mt-2">{settings.home_products_subtitle}</p>
           </div>
           
           <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-4">
-            {/* Campo de Busca */}
             <div className="relative flex-grow sm:w-80">
               <input 
                 type="text" 
                 placeholder="Buscar produto..." 
-                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition-all"
+                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none shadow-sm transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
               <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
             </div>
 
-            {/* Filtro de Ordenação */}
             <div className="relative min-w-[200px]">
                 <Filter className="absolute left-4 top-3.5 text-gray-400" size={20} />
                 <select 
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm appearance-none cursor-pointer"
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary outline-none shadow-sm appearance-none cursor-pointer"
                     value={sortOption}
                     onChange={(e) => setSortOption(e.target.value)}
                 >
@@ -169,10 +159,10 @@ export const Home = () => {
           </div>
         </div>
 
-        {/* LÓGICA DE RENDERIZAÇÃO CORRIGIDA: Evita remover o grid se já existirem produtos */}
         {loading && isFirstLoad ? (
           <div className="text-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
+            {/* Loader usa border-primary */}
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
             <p className="text-gray-500">Carregando catálogo...</p>
           </div>
         ) : (
@@ -188,7 +178,6 @@ export const Home = () => {
                   ))}
                 </div>
 
-                {/* Paginação */}
                 {pagination.totalPages > 1 && (
                     <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-16">
                         <Button 
@@ -209,7 +198,7 @@ export const Home = () => {
                                 value={inputPage}
                                 onChange={(e) => setInputPage(e.target.value)}
                                 onBlur={() => handlePageChange(parseInt(inputPage) || 1)}
-                                className="w-12 text-center border border-gray-300 rounded p-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800"
+                                className="w-12 text-center border border-gray-300 rounded p-1 text-sm outline-none focus:ring-2 focus:ring-primary font-bold text-gray-800"
                                 disabled={loading}
                             />
                             <span className="text-gray-400 text-sm">de {pagination.totalPages}</span>
@@ -229,7 +218,7 @@ export const Home = () => {
             ) : (
               <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 text-center">
                 <p className="text-gray-500 text-lg mb-4">Nenhum produto encontrado com estes filtros.</p>
-                <Button variant="ghost" className="text-blue-600" onClick={() => {setSearchTerm(''); setSortOption('');}}>
+                <Button variant="ghost" className="text-primary" onClick={() => {setSearchTerm(''); setSortOption('');}}>
                     Limpar Filtros
                 </Button>
               </div>

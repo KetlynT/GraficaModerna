@@ -63,7 +63,8 @@ export const ShippingCalculator = ({ items = [], productId = null, onSelectOptio
   return (
     <div className={`bg-gray-50 p-5 rounded-lg border border-gray-200 ${className}`}>
       <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-        <Truck size={18} className="text-blue-600"/> Calcular Frete e Prazo
+        {/* Ícone com cor primária */}
+        <Truck size={18} className="text-primary"/> Calcular Frete e Prazo
       </h3>
       
       <form onSubmit={handleCalculate} className="flex gap-2 mb-4">
@@ -71,7 +72,8 @@ export const ShippingCalculator = ({ items = [], productId = null, onSelectOptio
           type="text" 
           placeholder="Digite seu CEP" 
           maxLength="9"
-          className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          // Focus ring dinâmico
+          className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary bg-white"
           value={cep} 
           onChange={(e) => setCep(e.target.value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2'))}
         />
@@ -94,15 +96,17 @@ export const ShippingCalculator = ({ items = [], productId = null, onSelectOptio
             <div 
               key={idx} 
               onClick={() => handleSelect(opt)}
+              // Seleção visual usando cores primárias
               className={`flex justify-between items-center p-3 rounded border cursor-pointer transition-all ${
                 selectedOption?.name === opt.name 
-                  ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' 
-                  : 'bg-white border-gray-200 hover:border-blue-300'
+                  ? 'bg-primary/5 border-primary ring-1 ring-primary' 
+                  : 'bg-white border-gray-200 hover:border-primary/50'
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedOption?.name === opt.name ? 'border-blue-600' : 'border-gray-300'}`}>
-                    {selectedOption?.name === opt.name && <div className="w-2 h-2 bg-blue-600 rounded-full"/>}
+                {/* Radio button customizado dinâmico */}
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedOption?.name === opt.name ? 'border-primary' : 'border-gray-300'}`}>
+                    {selectedOption?.name === opt.name && <div className="w-2 h-2 bg-primary rounded-full"/>}
                 </div>
                 <div>
                   <span className="font-bold text-gray-800 text-sm block">{opt.name}</span>

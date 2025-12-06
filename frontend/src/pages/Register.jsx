@@ -14,7 +14,7 @@ export const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { register } = useAuth(); // Contexto
+  const { register } = useAuth();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,12 +22,11 @@ export const Register = () => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    
     if (formData.password !== formData.confirmPassword) {
       toast.error("As senhas não conferem.");
       return;
     }
-    if (formData.password.length < 8) { // Ajustado para política mais forte
+    if (formData.password.length < 8) {
       toast.error("A senha deve ter pelo menos 8 caracteres.");
       return;
     }
@@ -37,21 +36,17 @@ export const Register = () => {
     }
 
     setLoading(true);
-    
     try {
-      // Envia objeto único, conforme esperado pelo AuthContext -> AuthService
       await register({
         fullName: formData.fullName,
         email: formData.email,
         password: formData.password,
         phoneNumber: formData.phoneNumber
       });
-      
       toast.success("Conta criada com sucesso!");
       navigate('/'); 
     } catch (err) {
       console.error(err);
-      // Extrai mensagem de erro do backend (ex: "Senha deve ter caractere especial")
       const msg = err.response?.data?.message || "Erro ao criar conta. Verifique os dados.";
       toast.error(msg);
     } finally {
@@ -63,8 +58,9 @@ export const Register = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg border border-gray-100 p-8">
         <div className="text-center mb-8">
-            <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <UserPlus size={32} className="text-blue-600" />
+            {/* Ícone com cor primária dinâmica */}
+            <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <UserPlus size={32} className="text-primary" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900">Crie sua Conta</h2>
             <p className="text-gray-500 text-sm">Junte-se a nós para gerenciar seus pedidos.</p>
@@ -77,7 +73,7 @@ export const Register = () => {
                 <User size={18} className="absolute left-3 top-3 text-gray-400" />
                 <input 
                     name="fullName"
-                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Seu nome"
                     value={formData.fullName}
                     onChange={handleChange}
@@ -93,7 +89,7 @@ export const Register = () => {
                 <input 
                     name="email"
                     type="email"
-                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary"
                     placeholder="seu@email.com"
                     value={formData.email}
                     onChange={handleChange}
@@ -109,7 +105,7 @@ export const Register = () => {
                 <input 
                     name="phoneNumber"
                     type="tel"
-                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary"
                     placeholder="(11) 99999-9999"
                     value={formData.phoneNumber}
                     onChange={handleChange}
@@ -125,8 +121,8 @@ export const Register = () => {
                 <input 
                     name="password"
                     type="password"
-                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Mínimo 8 caracteres, maiúscula e especial"
+                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Mínimo 8 caracteres"
                     value={formData.password}
                     onChange={handleChange}
                     required
@@ -141,7 +137,7 @@ export const Register = () => {
                 <input 
                     name="confirmPassword"
                     type="password"
-                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Repita a senha"
                     value={formData.confirmPassword}
                     onChange={handleChange}
@@ -153,7 +149,7 @@ export const Register = () => {
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors flex justify-center mt-6 shadow-lg shadow-blue-500/30 disabled:opacity-70"
+            className="w-full bg-primary hover:brightness-90 text-white font-bold py-3 rounded-lg transition-colors flex justify-center mt-6 shadow-lg shadow-primary/30 disabled:opacity-70"
           >
             {loading ? 'Criando conta...' : 'Cadastrar'}
           </button>
@@ -162,7 +158,7 @@ export const Register = () => {
         <div className="mt-6 text-center pt-6 border-t border-gray-100">
             <p className="text-sm text-gray-600">
                 Já tem uma conta?{' '}
-                <Link to="/login" className="text-blue-600 font-bold hover:underline">
+                <Link to="/login" className="text-primary font-bold hover:underline">
                     Fazer Login
                 </Link>
             </p>

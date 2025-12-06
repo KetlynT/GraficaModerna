@@ -6,7 +6,7 @@ import { useCart } from '../context/CartContext';
 import { AuthService } from '../services/authService';
 import { ShoppingCart, MessageSquare, Plus, Minus, Zap } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { ShippingCalculator } from '../components/ShippingCalculator'; // Importado
+import { ShippingCalculator } from '../components/ShippingCalculator';
 
 export const ProductDetails = () => {
   const { id } = useParams();
@@ -85,16 +85,17 @@ export const ProductDetails = () => {
         {/* Coluna Direita: Detalhes e Ações */}
         <div className="md:w-1/2 p-8 flex flex-col">
           <div className="mb-auto">
-            <Link to="/" className="text-blue-500 hover:underline text-sm mb-4 block">← Voltar para o catálogo</Link>
+            {/* Link de voltar: text-primary */}
+            <Link to="/" className="text-primary hover:underline text-sm mb-4 block">← Voltar para o catálogo</Link>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
-            <div className="text-3xl font-bold text-blue-600 mb-6">{formattedPrice} <span className="text-sm text-gray-400 font-normal">/ unidade</span></div>
+            {/* Preço: text-primary */}
+            <div className="text-3xl font-bold text-primary mb-6">{formattedPrice} <span className="text-sm text-gray-400 font-normal">/ unidade</span></div>
             
             <p className="text-gray-500 mb-8 leading-relaxed whitespace-pre-line border-b pb-6">
                 {product.description}
             </p>
 
             <div className="flex flex-col gap-4 mb-8">
-                {/* Seletor de Quantidade */}
                 {!isAdmin && (
                     <div className="flex items-center gap-4">
                         <div className="flex items-center border border-gray-300 rounded-lg">
@@ -111,11 +112,13 @@ export const ProductDetails = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {!isAdmin && (
                         <>
-                            <Button onClick={handleAddToCart} disabled={product.stockQuantity < 1} variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50">
+                            {/* Botão Adicionar: Outline dinâmica */}
+                            <Button onClick={handleAddToCart} disabled={product.stockQuantity < 1} variant="outline" className="text-primary border-primary hover:bg-primary/5">
                                 <ShoppingCart size={20}/> Adicionar
                             </Button>
                             
-                            <Button onClick={handleBuyNow} disabled={product.stockQuantity < 1} className="w-full py-3 text-base shadow-blue-500/30">
+                            {/* Botão Comprar: Sombra dinâmica */}
+                            <Button onClick={handleBuyNow} disabled={product.stockQuantity < 1} className="w-full py-3 text-base shadow-primary/30">
                                 <Zap size={20}/> Comprar Agora
                             </Button>
                         </>
@@ -130,7 +133,6 @@ export const ProductDetails = () => {
                 </div>
             </div>
 
-            {/* Calculadora de Frete Reutilizável */}
             <ShippingCalculator 
                 productId={product.id} 
                 className="bg-gray-50 border border-gray-200"

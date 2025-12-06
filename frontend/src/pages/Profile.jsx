@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '../components/ui/Button';
 import { User, Phone, Mail } from 'lucide-react';
 import api from '../services/api';
 import { AddressManager } from '../components/AddressManager';
@@ -21,14 +20,14 @@ export const Profile = () => {
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-3">
-        <User className="text-blue-600" /> Meu Perfil
+        <User className="text-primary" /> Meu Perfil
       </h1>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Cartão de Dados Pessoais */}
         <div className="lg:col-span-1 h-fit bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <div className="flex flex-col items-center text-center mb-6">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-3xl mb-3">
+            {/* Avatar com cor primária */}
+            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-3xl mb-3">
               {userData.fullName?.charAt(0) || 'U'}
             </div>
             <h2 className="text-xl font-bold text-gray-800">{userData.fullName}</h2>
@@ -36,14 +35,13 @@ export const Profile = () => {
             
             <div className="w-full pt-4 border-t border-gray-100">
                <div className="flex items-center justify-center gap-2 text-gray-700 bg-gray-50 p-2 rounded-lg">
-                  <Phone size={16} className="text-blue-500"/>
+                  <Phone size={16} className="text-primary"/>
                   <span className="font-mono text-sm">{userData.phoneNumber || 'Sem telefone'}</span>
                </div>
             </div>
           </div>
         </div>
 
-        {/* Gerenciador de Endereços Reutilizável */}
         <div className="lg:col-span-2">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
              <AddressManager />

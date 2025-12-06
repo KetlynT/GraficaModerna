@@ -53,7 +53,8 @@ export const CouponInput = ({ onApply, initialCoupon = null }) => {
       <div className="relative flex-grow">
         <Tag size={18} className="absolute left-3 top-3 text-gray-400" />
         <input 
-          className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-blue-500 uppercase transition-all"
+          // Focus ring dinâmico (focus:ring-primary)
+          className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary uppercase transition-all"
           placeholder="CÓDIGO" 
           value={code} 
           onChange={e => setCode(e.target.value)}

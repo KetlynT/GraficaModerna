@@ -3,15 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MessageSquare, ShoppingCart, User, LogOut, LayoutDashboard, Package } from 'lucide-react';
 import { ContentService } from '../../services/contentService';
 import { useCart } from '../../context/CartContext';
-import { useAuth } from '../../context/AuthContext'; // IMPORTANTE
+import { useAuth } from '../../context/AuthContext'; 
 
 export const Header = () => {
   const [logoUrl, setLogoUrl] = useState('');
-  const [siteName, setSiteName] = useState('Gráfica Moderna');
+  const [siteName, setSiteName] = useState(''); // Começa vazio para não piscar padrão
   const [settingsLoading, setSettingsLoading] = useState(true);
   
   const { cartCount } = useCart();
-  const { user, logout, isAuthenticated } = useAuth(); // Hook Reativo
+  const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
   const isAdmin = user?.role === 'Admin';
@@ -22,10 +22,12 @@ export const Header = () => {
         const settings = await ContentService.getSettings();
         if (settings) {
             if (settings.site_logo) setLogoUrl(settings.site_logo);
-            if (settings.site_name) setSiteName(settings.site_name);
+            // Se não tiver nome no banco, usa um padrão genérico, mas só agora
+            setSiteName(settings.site_name || 'Gráfica Online');
         }
       } catch (error) {
         console.error("Erro ao carregar topo", error);
+        setSiteName('Gráfica Online');
       } finally {
         setSettingsLoading(false);
       }
@@ -53,8 +55,8 @@ export const Header = () => {
               {logoUrl ? (
                 <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain transition-transform group-hover:scale-105"/>
               ) : (
-                <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-black rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition-all">
-                    X
+                <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition-all">
+                    {siteName.charAt(0) || 'G'}
                 </div>
               )}
               <div>
@@ -68,16 +70,17 @@ export const Header = () => {
           {settingsLoading ? (
              <div className="animate-pulse h-4 w-24 bg-gray-200 rounded hidden md:block"></div>
           ) : (
-             <Link to="/contato" className="hidden md:flex items-center gap-2 text-gray-500 hover:text-blue-600 transition-colors font-medium">
+             // text-blue-600 -> text-primary
+             <Link to="/contato" className="hidden md:flex items-center gap-2 text-gray-500 hover:text-primary transition-colors font-medium">
                 <MessageSquare size={20} />
                 <span className="hidden lg:inline">Fale Conosco</span>
              </Link>
           )}
 
-          {/* Carrinho some para Admin ou Carregando */}
           {!isAdmin && !settingsLoading && (
             <Link to="/carrinho" className="relative group p-2">
-                <ShoppingCart size={24} className="text-gray-600 group-hover:text-blue-600 transition-colors" />
+                {/* hover:text-blue-600 -> hover:text-primary */}
+                <ShoppingCart size={24} className="text-gray-600 group-hover:text-primary transition-colors" />
                 {cartCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-sm animate-bounce">
                         {cartCount}
@@ -92,17 +95,18 @@ export const Header = () => {
                     {isAdmin ? (
                         <Link 
                             to="/putiroski/dashboard" 
-                            className="flex items-center gap-2 text-sm font-bold text-blue-700 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 hover:bg-blue-100 transition-all" 
+                            // Cores fixas substituídas por primary/10 para fundo e text-primary
+                            className="flex items-center gap-2 text-sm font-bold text-primary bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-all" 
                         >
                             <LayoutDashboard size={18} />
                             <span className="hidden md:inline">Painel</span>
                         </Link>
                     ) : (
                         <>
-                            <Link to="/meus-pedidos" className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-blue-600" title="Meus Pedidos">
+                            <Link to="/meus-pedidos" className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-primary" title="Meus Pedidos">
                                 <Package size={20} />
                             </Link>
-                            <Link to="/perfil" className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-blue-600" title="Meu Perfil">
+                            <Link to="/perfil" className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-primary" title="Meu Perfil">
                                 <User size={20} />
                             </Link>
                         </>
@@ -113,7 +117,8 @@ export const Header = () => {
                     </button>
                 </div>
             ) : (
-                <Link to="/login" className="flex items-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-800 border border-blue-100 bg-blue-50 px-4 py-2 rounded-full transition-all hover:shadow-md">
+                // Botão de login adaptado para borda e texto primary
+                <Link to="/login" className="flex items-center gap-2 text-sm font-bold text-primary hover:brightness-75 border border-gray-200 bg-gray-50 px-4 py-2 rounded-full transition-all hover:shadow-md">
                     <User size={18} /> Entrar
                 </Link>
             )

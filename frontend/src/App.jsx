@@ -76,6 +76,11 @@ function App() {
           if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.getElementsByTagName('head')[0].appendChild(link); }
           link.href = settings.site_logo;
         } else { setFallbackFavicon(); }
+        const root = document.documentElement;
+        if (settings?.primary_color) root.style.setProperty('--color-primary', settings.primary_color);
+        if (settings?.secondary_color) root.style.setProperty('--color-secondary', settings.secondary_color);
+        if (settings?.footer_bg_color) root.style.setProperty('--color-footer-bg', settings.footer_bg_color);
+        if (settings?.footer_text_color) root.style.setProperty('--color-footer-text', settings.footer_text_color);
       } catch (error) { setFallbackFavicon(); }
     };
     updateSiteIdentity();
