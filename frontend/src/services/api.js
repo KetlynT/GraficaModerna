@@ -3,7 +3,7 @@ import axios from 'axios';
 // CORREÇÃO: Porta alterada de 5000 para 7255 (HTTPS) conforme seu launchSettings.json
 // Se tiver problemas de certificado, tente usar 'http://localhost:5150/api'
 const api = axios.create({
-  baseURL: 'https://localhost:5150/api', 
+  baseURL: 'https://localhost:7255/api', 
   headers: {
     'Content-Type': 'application/json',
   },

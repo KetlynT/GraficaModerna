@@ -26,6 +26,12 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.RedirectStatusCode = StatusCodes.Status307TemporaryRedirect;
+    options.HttpsPort = 7255;
+});
+
 if (builder.Environment.IsDevelopment()) Env.Load();
 builder.Configuration.AddEnvironmentVariables();
 
