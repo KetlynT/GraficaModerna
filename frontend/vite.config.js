@@ -11,8 +11,6 @@ export default defineConfig({
     https: true,
     port: 5173,
     open: true,
-    hmr: {
-        host: 'localhost',
-    },
+    host: true, 
   }
 })
