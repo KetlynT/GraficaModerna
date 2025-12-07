@@ -127,32 +127,32 @@ public class AuthService(
     }
 
     private JwtSecurityToken GenerateAccessToken(ApplicationUser user)
+{
+    var userRoles = _userManager.GetRolesAsync(user).Result;
+    var primaryRole = userRoles.Contains(Roles.Admin) ? Roles.Admin : userRoles.FirstOrDefault() ?? Roles.User;
+
+    var authClaims = new List<Claim>
     {
-        var userRoles = _userManager.GetRolesAsync(user).Result;
-        var primaryRole = userRoles.Contains(Roles.Admin) ? Roles.Admin : userRoles.FirstOrDefault() ?? Roles.User;
+        new(JwtRegisteredClaimNames.Sub, user.Id), 
+        new(JwtRegisteredClaimNames.Email, user.Email!),
+        new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new("role", primaryRole),                 
+        
+        new(JwtRegisteredClaimNames.UniqueName, user.UserName!) 
+    };
 
-        var authClaims = new List<Claim>
-        {
-            new(ClaimTypes.Name, user.UserName!),
-            new(ClaimTypes.NameIdentifier, user.Id),
-            new(ClaimTypes.Email, user.Email!),
-            new(ClaimTypes.Role, primaryRole),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
+    var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];
+    if (string.IsNullOrEmpty(keyString) || keyString.Length < 32) throw new Exception("Erro config JWT");
+    var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
 
-        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];
-        if (string.IsNullOrEmpty(keyString) || keyString.Length < 32) throw new Exception("Erro config JWT");
-        var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
-
-        return new JwtSecurityToken(
-            _configuration["Jwt:Issuer"],
-            _configuration["Jwt:Audience"],
-            expires: DateTime.UtcNow.AddMinutes(15), 
-            claims: authClaims,
-            signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
-        );
-    }
-
+    return new JwtSecurityToken(
+        _configuration["Jwt:Issuer"],
+        _configuration["Jwt:Audience"],
+        expires: DateTime.UtcNow.AddMinutes(15), 
+        claims: authClaims,
+        signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+    );
+}
     private static string GenerateRefreshToken()
     {
         var randomNumber = new byte[64];

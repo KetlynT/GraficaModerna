@@ -69,13 +69,13 @@ public class JwtValidationMiddleware(ITokenBlacklistService blacklistService) : 
     private static string? ExtractToken(HttpContext context)
     {
 
-        if (context.Request.Cookies.TryGetValue("jwt", out var cookieToken))
-            return cookieToken;
-
         var header = context.Request.Headers.Authorization.ToString();
         if (!string.IsNullOrEmpty(header) && header.StartsWith("Bearer "))
             return header["Bearer ".Length..].Trim();
 
+        if (context.Request.Cookies.TryGetValue("jwt", out var cookieToken))
+            return cookieToken;
+            
         return null;
     }
 }
