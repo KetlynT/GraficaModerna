@@ -382,17 +382,6 @@ using (var scope = app.Services.CreateScope())
         var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL") ?? app.Configuration["Admin:Email"];
         var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? app.Configuration["Admin:Password"];
 
-        if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
-            if (app.Environment.IsDevelopment())
-            {
-                var guidPart = Guid.NewGuid().ToString("N")[..12];
-                var tempPassword = $"Adm!{guidPart}A1";
-                adminEmail ??= "admin.local@local.local";
-                adminPassword ??= tempPassword;
-                logger.LogInformation("Admin tempor�rio criado (Development): {Email} / {Password}", adminEmail,
-                    tempPassword);
-            }
-
         if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
         {
             var adminUser = await userManager.FindByEmailAsync(adminEmail);
@@ -415,12 +404,12 @@ using (var scope = app.Services.CreateScope())
             {
                 new()
                 {
-                    Title = "Sobre N�s", Slug = "about-us", Content = "<h1>Sobre</h1><p>...</p>",
+                    Title = "Sobre Nós", Slug = "about-us", Content = "<h1>Sobre</h1><p>...</p>",
                     LastUpdated = DateTime.UtcNow
                 },
                 new()
                 {
-                    Title = "Pol�tica de Privacidade", Slug = "privacy-policy",
+                    Title = "Política de Privacidade", Slug = "privacy-policy",
                     Content = "<h1>Privacidade</h1><p>...</p>", LastUpdated = DateTime.UtcNow
                 },
                 new()
@@ -435,7 +424,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Erro na inicializa��o do banco de dados.");
+        logger.LogError(ex, "Erro na inicialização do banco de dados.");
     }
 }
 
