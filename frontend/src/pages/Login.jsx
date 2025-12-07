@@ -23,7 +23,7 @@ export const Login = () => {
       const data = await login({ email, password });
       
       if (data.role === 'Admin') {
-          toast("Bem-vindo, Administrador!", { icon: '🛡️' });
+          await authService.logout();
       } else {
           await syncGuestCart();
       }

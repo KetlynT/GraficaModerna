@@ -13,16 +13,24 @@ namespace GraficaModerna.API.Controllers;
 public class AuthController(
     IAuthService authService,
     ITokenBlacklistService blacklistService,
-    ILogger<AuthController> logger) : ControllerBase
+    ILogger<AuthController> logger,
+    IContentService contentService) : ControllerBase
 {
     private readonly IAuthService _authService = authService;
     private readonly ITokenBlacklistService _blacklistService = blacklistService;
     private readonly ILogger<AuthController> _logger = logger;
+    private readonly IContentService _contentService = contentService;
 
     [EnableRateLimiting("AuthPolicy")]
     [HttpPost("register")]
     public async Task<ActionResult> Register(RegisterDto dto)
     {
+        var settings = await _contentService.GetSettingsAsync();
+        if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
+        {
+            return StatusCode(403, new { message = "O cadastro de novos usuários está temporariamente desativado." });
+        }
+
         var result = await _authService.RegisterAsync(dto);
 
         return Ok(new
@@ -35,6 +43,16 @@ public class AuthController(
     {
         var result = await _authService.LoginAsync(dto);
 
+        var settings = await _contentService.GetSettingsAsync();
+        if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
+        {
+            if (result.Role != "Admin")
+            {
+                await _blacklistService.BlacklistTokenAsync(result.AccessToken, DateTime.UtcNow.AddDays(1));
+                return StatusCode(403, new { message = "Loja em modo orçamento. Login restrito a administradores." });
+            }
+        }
+
         return Ok(new
             { token = result.AccessToken, result.Email, result.Role, message = "Login realizado com sucesso." });
     }
@@ -43,7 +61,6 @@ public class AuthController(
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-
         string? token = null;
 
         if (Request.Headers.TryGetValue("Authorization", out var authHeader))
@@ -92,6 +109,16 @@ public class AuthController(
     [Authorize(Roles = "User,Admin")]
     public async Task<IActionResult> UpdateProfile(UpdateProfileDto dto)
     {
+        var settings = await _contentService.GetSettingsAsync();
+        if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
+        {
+            var role = User.FindFirstValue(ClaimTypes.Role);
+            if (role != "Admin")
+            {
+                return StatusCode(403, new { message = "Edição de perfil desativada temporariamente." });
+            }
+        }
+
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
@@ -103,7 +130,7 @@ public class AuthController(
     [AllowAnonymous] 
     public async Task<IActionResult> RefreshToken([FromBody] TokenModel tokenModel)
     {
-        if (tokenModel is null) return BadRequest("Requisi��o inv�lida");
+        if (tokenModel is null) return BadRequest("Requisição inválida");
 
         try
         {

@@ -11,18 +11,27 @@ namespace GraficaModerna.API.Controllers;
 [ApiController]
 [Authorize]
 [EnableRateLimiting("UserActionPolicy")]
-public class AddressesController(IAddressService service) : ControllerBase
+public class AddressesController(IAddressService service, IContentService contentService) : ControllerBase
 {
     private readonly IAddressService _service = service;
+    private readonly IContentService _contentService = contentService;
 
     private string GetUserId()
     {
         return User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     }
 
+    private async Task CheckPurchaseEnabled()
+    {
+        var settings = await _contentService.GetSettingsAsync();
+        if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
+            throw new Exception("Gerenciamento de endereços indisponível no modo orçamento.");
+    }
+
     [HttpGet]
     public async Task<ActionResult<List<AddressDto>>> GetAll()
     {
+        // Leitura permitida (ou poderia ser bloqueada também se desejar esconder tudo)
         return Ok(await _service.GetUserAddressesAsync(GetUserId()));
     }
 
@@ -42,17 +51,26 @@ public class AddressesController(IAddressService service) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<AddressDto>> Create(CreateAddressDto dto)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-        var created = await _service.CreateAsync(GetUserId(), dto);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        try
+        {
+            await CheckPurchaseEnabled();
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var created = await _service.CreateAsync(GetUserId(), dto);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid id, CreateAddressDto dto)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
         try
         {
+            await CheckPurchaseEnabled();
+            if (!ModelState.IsValid) return BadRequest(ModelState);
             await _service.UpdateAsync(id, GetUserId(), dto);
             return NoContent();
         }
@@ -60,12 +78,24 @@ public class AddressesController(IAddressService service) : ControllerBase
         {
             return NotFound();
         }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _service.DeleteAsync(id, GetUserId());
-        return NoContent();
+        try
+        {
+            await CheckPurchaseEnabled();
+            await _service.DeleteAsync(id, GetUserId());
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

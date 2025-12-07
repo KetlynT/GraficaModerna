@@ -22,7 +22,8 @@ export const Home = () => {
     home_products_title: 'Nossos Produtos',
     home_products_subtitle: 'Confira nosso catálogo',
     whatsapp_number: '',
-    hero_bg_url: '' 
+    hero_bg_url: '',
+    purchase_enabled: 'true'
   });
 
   useEffect(() => {
@@ -85,7 +86,6 @@ export const Home = () => {
 
   return (
     <>
-      {/* Hero Section: bg-blue-900 -> bg-secondary */}
       <div className="relative bg-secondary text-white overflow-hidden transition-all duration-500">
         <div 
             className="absolute inset-0 bg-cover bg-center opacity-20 transform scale-105"
@@ -100,7 +100,6 @@ export const Home = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            {/* Badge: Cores fixas substituídas por fundo branco transparente */}
             <span className="inline-block py-1 px-3 rounded-full bg-white/10 border border-white/20 text-white text-sm font-semibold mb-6 backdrop-blur-sm">
               {settings.hero_badge}
             </span>
@@ -123,7 +122,6 @@ export const Home = () => {
         <div className="flex flex-col lg:flex-row justify-between items-end mb-12 gap-6">
           <div>
             <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              {/* Printer icon usa cor primary */}
               <Printer className="text-primary" />
               {settings.home_products_title}
             </h2>
@@ -161,7 +159,6 @@ export const Home = () => {
 
         {loading && isFirstLoad ? (
           <div className="text-center py-20">
-            {/* Loader usa border-primary */}
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
             <p className="text-gray-500">Carregando catálogo...</p>
           </div>
@@ -173,7 +170,8 @@ export const Home = () => {
                   {products.map((prod) => (
                     <ProductCard 
                       key={prod.id} 
-                      product={prod} 
+                      product={prod}
+                      purchaseEnabled={settings.purchase_enabled !== 'false'}
                     />
                   ))}
                 </div>

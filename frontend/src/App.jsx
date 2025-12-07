@@ -1,15 +1,14 @@
-import React, { useEffect, Suspense, lazy } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
 import { MainLayout } from './components/layout/MainLayout';
 import { ContentService } from './services/contentService';
 import { CartProvider } from './context/CartContext';
-import { AuthProvider, useAuth } from './context/AuthContext'; // NOVO
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ScrollToTop from './components/ScrollToTop';
 import { CookieConsent } from './components/CookieConsent';
 
-// Lazy Loading
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
 const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
@@ -31,7 +30,6 @@ const PageLoader = () => (
   </div>
 );
 
-// Rota Privada Atualizada: Espera o AuthContext carregar
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -39,14 +37,12 @@ const PrivateRoute = ({ children }) => {
   if (loading) return <PageLoader />;
   
   if (!user) {
-    // Redireciona para login salvando a origem
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return children;
 };
 
-// Rota Pública (Login/Register): Se já logado, redireciona
 const PublicOnlyRoute = ({ children }) => {
   const { user, loading } = useAuth();
   
@@ -59,9 +55,26 @@ const PublicOnlyRoute = ({ children }) => {
   return children;
 };
 
+const PurchaseGuard = ({ children }) => {
+    const [enabled, setEnabled] = useState(null);
+    
+    useEffect(() => {
+        const check = async () => {
+            const settings = await ContentService.getSettings();
+            setEnabled(settings?.purchase_enabled !== 'false');
+        };
+        check();
+    }, []);
+
+    if (enabled === null) return <PageLoader />;
+    if (!enabled) return <Navigate to="/" replace />;
+    
+    return children;
+};
+
 const setFallbackFavicon = () => {
     const link = document.querySelector("link[rel~='icon']") || document.createElement('link');
-    link.type = 'image/png'; link.rel = 'icon'; link.href = '/favicon.ico'; // Simplificado
+    link.type = 'image/png'; link.rel = 'icon'; link.href = '/favicon.ico';
     document.getElementsByTagName('head')[0].appendChild(link);
 };
 
@@ -102,20 +115,18 @@ function App() {
                 <Route path="/contato" element={<Contact />} />
                 <Route path="/produto/:id" element={<ProductDetails />} />
                 <Route path="/pagina/:slug" element={<GenericPage />} />
-                <Route path="/carrinho" element={<Cart />} />
                 
-                {/* Rotas Protegidas */}
-                <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
+                <Route path="/carrinho" element={<PurchaseGuard><Cart /></PurchaseGuard>} />
+                
+                <Route path="/checkout" element={<PrivateRoute><PurchaseGuard><Checkout /></PurchaseGuard></PrivateRoute>} />
                 <Route path="/meus-pedidos" element={<PrivateRoute><MyOrders /></PrivateRoute>} />
                 <Route path="/perfil" element={<PrivateRoute><Profile /></PrivateRoute>} />
                 <Route path="/sucesso" element={<PrivateRoute><Success /></PrivateRoute>} />
               </Route>
 
-              {/* Rotas de Acesso */}
               <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
-              <Route path="/cadastro" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
+              <Route path="/cadastro" element={<PublicOnlyRoute><PurchaseGuard><Register /></PurchaseGuard></PublicOnlyRoute>} />
               
-              {/* Admin */}
               <Route path="/putiroski" element={<PublicOnlyRoute><AdminLogin /></PublicOnlyRoute>} />
               <Route path="/putiroski/dashboard" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />
 

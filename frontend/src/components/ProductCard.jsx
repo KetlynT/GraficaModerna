@@ -6,7 +6,7 @@ import { Button } from './ui/Button';
 import { useCart } from '../context/CartContext';
 import AuthService from '../services/authService';
 
-export const ProductCard = ({ product }) => {
+export const ProductCard = ({ product, purchaseEnabled = true }) => {
   const { addToCart } = useCart();
   const [imgSrc, setImgSrc] = useState(product.imageUrl);
 
@@ -59,7 +59,6 @@ export const ProductCard = ({ product }) => {
 
       <div className="p-6 flex flex-col flex-grow">
         <div className="flex justify-between items-start mb-2">
-            {/* group-hover:text-blue-600 -> group-hover:text-primary */}
             <h3 className="text-lg font-bold text-gray-800 line-clamp-1 group-hover:text-primary transition-colors">
                 <Link to={`/produto/${product.id}`}>{product.name}</Link>
             </h3>
@@ -72,11 +71,10 @@ export const ProductCard = ({ product }) => {
         <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-auto">
           <div>
             <span className="text-xs text-gray-400 uppercase font-bold block">A partir de</span>
-            {/* text-blue-600 -> text-primary */}
             <span className="text-xl font-bold text-primary">{formattedPrice}</span>
           </div>
           
-          {!isAdmin && (
+          {!isAdmin && purchaseEnabled && (
             <Button 
                 size="sm"
                 onClick={handleQuickAdd}
