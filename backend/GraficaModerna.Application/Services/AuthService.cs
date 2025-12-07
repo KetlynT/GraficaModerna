@@ -77,9 +77,22 @@ public class AuthService(
             throw new Exception("Credenciais inválidas.");
 
         var roles = await _userManager.GetRolesAsync(user);
-        if (!roles.Contains(Roles.Admin))
+        var isAdmin = roles.Contains(Roles.Admin);
+
+        if (dto.IsAdminLogin)
         {
-             await CheckPurchaseEnabled();
+            if (!isAdmin)
+                throw new Exception("Acesso não autorizado para contas de cliente.");
+            }
+        else
+        {
+            if (isAdmin)
+                throw new Exception("Administradores devem acessar exclusivamente pelo Painel Administrativo.");
+            }
+        
+        if (!isAdmin)
+        {
+            await CheckPurchaseEnabled();
         }
 
         return await CreateTokenPairAsync(user);

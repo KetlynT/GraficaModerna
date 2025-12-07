@@ -4,7 +4,8 @@ namespace GraficaModerna.Application.DTOs;
 
 public record LoginDto(
     [Required] string Email,
-    [Required] string Password
+    [Required] string Password,
+    bool IsAdminLogin = false
 );
 
 public record RegisterDto(
