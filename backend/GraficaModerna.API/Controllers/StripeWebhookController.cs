@@ -40,7 +40,7 @@ public class StripeWebhookController : ControllerBase
         {
 
             _authorizedIps = []; 
-            _logger.LogWarning("ALERTA: 'STRIPE_WEBHOOK_IPS' n�o configurado. Webhooks podem ser bloqueados.");
+            _logger.LogWarning("ALERTA: 'STRIPE_WEBHOOK' não configurado.");
         }
     }
 
@@ -51,9 +51,8 @@ public class StripeWebhookController : ControllerBase
         if (!IsRequestFromStripe(HttpContext.Connection.RemoteIpAddress))
         {
 
-            _logger.LogWarning("[Webhook] Bloqueado IP n�o autorizado: {RemoteIp}",
-                HttpContext.Connection.RemoteIpAddress);
-            return StatusCode(403, "Forbidden: IP Source Denied");
+            _logger.LogWarning("[Webhook] Bloqueado");
+            return StatusCode(403, "Forbidden: Source Denied");
         }
 
         var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
@@ -62,7 +61,7 @@ public class StripeWebhookController : ControllerBase
 
         if (string.IsNullOrEmpty(endpointSecret))
         {
-            _logger.LogError("CR�TICO: Stripe Webhook Secret n�o configurado.");
+            _logger.LogError("CRÍTICO: Stripe Webhook não configurado.");
             return StatusCode(500);
         }
 
@@ -81,7 +80,7 @@ public class StripeWebhookController : ControllerBase
                     var amountPaid = session.AmountTotal ?? 0;
 
                     _logger.LogInformation(
-                        "[Webhook] Processando pagamento para Pedido {OrderId}. Transa��o: {TransactionId}. Valor: {AmountPaid}",
+                        "[Webhook] Processando pagamento para Pedido {OrderId}. Transação: {TransactionId}. Valor: {AmountPaid}",
                         orderId, transactionId, amountPaid);
 
                     await _orderService.ConfirmPaymentViaWebhookAsync(orderId, transactionId, amountPaid);
@@ -89,7 +88,7 @@ public class StripeWebhookController : ControllerBase
                 else
                 {
 
-                    _logger.LogWarning("[Webhook] Order ID inv�lido nos metadados: {OrderIdString}", orderIdString);
+                    _logger.LogWarning("[Webhook] Order ID inválido nos metadados: {OrderIdString}", orderIdString);
                 }
             }
             else if (stripeEvent.Type == Events.PaymentIntentPaymentFailed)
@@ -103,7 +102,7 @@ public class StripeWebhookController : ControllerBase
         catch (StripeException e)
         {
 
-            _logger.LogError(e, "Erro valida��o Stripe.");
+            _logger.LogError(e, "Erro validação Stripe.");
             return BadRequest();
         }
         catch (Exception e)
