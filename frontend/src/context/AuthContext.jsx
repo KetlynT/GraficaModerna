@@ -36,8 +36,8 @@ export const AuthProvider = ({ children }) => {
     checkLoginStatus();
   }, []);
 
-  const login = async (credentials) => {
-    const data = await authService.login(credentials);
+  const login = async (credentials, isAdmin = false) => {
+    const data = await authService.login(credentials, isAdmin);
     if (data.token) {
         localStorage.setItem('access_token', data.token);
     }

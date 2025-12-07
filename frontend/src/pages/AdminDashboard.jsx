@@ -18,6 +18,7 @@ import 'react-quill/dist/quill.snow.css';
 import { useAuth } from '../context/AuthContext';
 
 export const AdminDashboard = () => {
+  const [logoUrl, setLogoUrl] = useState('');
   const { user } = useAuth();
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -28,13 +29,33 @@ export const AdminDashboard = () => {
       navigate('/'); 
       toast.error("Acesso não autorizado.");
     }
+    const loadSettings = async () => {
+          try {
+            const settings = await ContentService.getSettings();
+            if (settings) {
+                if (settings.site_logo) setLogoUrl(settings.site_logo);
+            }
+          } catch (error) {
+            console.error("Erro ao carregar topo", error);
+          }
+        };
+        loadSettings();
   }, [user, navigate]);
+
+      
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-2">
-           <div className="bg-blue-600 p-2 rounded-lg text-white font-bold">GM</div>
+                {logoUrl ? (
+  <img src={logoUrl} alt="Logo" className="h-10 w-auto" />
+) : (
+  <div className="h-10 w-24 flex items-center justify-center text-xs font-medium text-gray-600 border rounded">
+    {"<logo />"}
+  </div>
+)}
+
            <h1 className="text-xl font-bold text-gray-800">Painel Restrito</h1>
         </div>
         <div className="flex items-center gap-4">

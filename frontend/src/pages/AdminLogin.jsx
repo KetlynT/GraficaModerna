@@ -15,11 +15,10 @@ export const AdminLogin = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await login({ email, password });
+      const data = await login({ email, password }, true);
       
-      // ✅ CORREÇÃO: Valida se é Admin ANTES de redirecionar
       if (data.role !== 'Admin') {
-        await logout(); // Desloga imediatamente
+        await logout();
         toast.error("Acesso restrito a administradores.", { 
           icon: <AlertTriangle className="text-red-500"/> 
         });

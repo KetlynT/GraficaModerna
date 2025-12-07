@@ -3,10 +3,12 @@ import api from './api';
 const TOKEN_KEY = 'access_token';
 
 const authService = {
-  // Login: backend should return { token, role, ... }
-  login: async (credentials) => {
-    const response = await api.post('/auth/login', credentials);
+  login: async (credentials, isAdmin = false) => {
+    const url = isAdmin ? '/auth/admin/login' : '/auth/login';
+    
+    const response = await api.post(url, credentials);
     const data = response.data || {};
+    
     if (data.token) {
       try { localStorage.setItem(TOKEN_KEY, data.token); } catch {}
     }
