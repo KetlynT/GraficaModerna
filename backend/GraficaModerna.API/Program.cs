@@ -42,7 +42,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32)
-    throw new Exception("FATAL: JWT_SECRET_KEY n�o configurada ou insegura (m�nimo 32 caracteres).");
+    throw new Exception("FATAL: JWT_SECRET_KEY não configurada ou insegura.");
 
 builder.Services.AddHttpClient(); 
 builder.Services.AddControllers();
@@ -330,14 +330,8 @@ builder.Services.AddSwaggerGen(c =>
 
 var allowedOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>();
 
-if (builder.Environment.IsDevelopment())
-{
-    allowedOrigins ??= ["http://localhost:5173", "https://localhost:5173", "http://localhost:3000"];
-}
-else
-{
-    allowedOrigins ??= []; 
-}
+if (allowedOrigins == null || allowedOrigins.Length == 0)
+    throw new Exception("CorsOrigins não configurado!");
 
 builder.Services.AddCors(options =>
 {
@@ -420,8 +414,10 @@ using (var scope = app.Services.CreateScope())
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));
 
-        var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL") ?? app.Configuration["Admin:Email"];
-        var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? app.Configuration["Admin:Password"];
+        var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL")
+            ?? throw new Exception("ADMIN_EMAIL não configurada!");
+        var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD")
+            ?? throw new Exception("ADMIN_PASSWORD não configurada!");
 
         if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
         {

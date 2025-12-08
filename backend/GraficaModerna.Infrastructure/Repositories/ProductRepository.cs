@@ -29,9 +29,10 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
                 var term = searchTerm.Trim();
                 
                 var termLower = term.ToLowerInvariant();
+                var escaped = termLower.Replace("%", "\\%").Replace("_", "\\_");
                 query = query.Where(p =>
-                    EF.Functions.ILike(p.Name, $"%{termLower}%") ||
-                    EF.Functions.ILike(p.Description, $"%{termLower}%"));
+                    EF.Functions.ILike(p.Name, $"%{escaped}%") ||
+                    EF.Functions.ILike(p.Description, $"%{escaped}%"));
             }
 
             var totalCount = await query.CountAsync();

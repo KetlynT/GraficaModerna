@@ -43,7 +43,6 @@ public class ExceptionMiddleware(
             {
                 statusCode = context.Response.StatusCode,
                 message = env.IsDevelopment() ? ex.Message : "Erro interno no servidor.",
-                stackTrace = env.IsDevelopment() ? ex.StackTrace : null,
                 traceId
             };
 
