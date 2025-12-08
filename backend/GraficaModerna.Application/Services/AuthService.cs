@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Web; // Se der erro aqui, use System.Net.WebUtility.UrlEncode
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Application.Validators;
@@ -17,12 +18,14 @@ public class AuthService(
     UserManager<ApplicationUser> userManager,
     IConfiguration configuration,
     IContentService contentService,
-    IPasswordHasher<ApplicationUser> passwordHasher) : IAuthService
+    IPasswordHasher<ApplicationUser> passwordHasher,
+    IEmailService emailService) : IAuthService // Adicionado IEmailService aqui
 {
     private readonly IConfiguration _configuration = configuration;
     private readonly IPasswordHasher<ApplicationUser> _passwordHasher = passwordHasher;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IContentService _contentService = contentService;
+    private readonly IEmailService _emailService = emailService; // Campo privado
 
     private async Task CheckPurchaseEnabled()
     {
@@ -48,7 +51,8 @@ public class AuthService(
             Email = dto.Email,
             FullName = dto.FullName,
             CpfCnpj = dto.CpfCnpj,
-            PhoneNumber = dto.PhoneNumber
+            PhoneNumber = dto.PhoneNumber,
+            EmailConfirmed = false // Garante que inicia como não confirmado
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
@@ -67,19 +71,42 @@ public class AuthService(
 
         await _userManager.AddToRoleAsync(user, Roles.User);
 
+        // --- Lógica de Email de Confirmação ---
+        try
+        {
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            // Se preferir não usar System.Web, use Uri.EscapeDataString(token)
+            var encodedToken = HttpUtility.UrlEncode(token);
+            var frontendUrl = _configuration["FRONTEND_URL"] ?? "http://localhost:5173";
+            var link = $"{frontendUrl}/confirm-email?userid={user.Id}&token={encodedToken}";
+
+            var body = $@"
+                <h2>Bem-vindo à Gráfica Moderna!</h2>
+                <p>Olá {user.FullName}, obrigado por se cadastrar.</p>
+                <p>Confirme seu e-mail clicando abaixo:</p>
+                <p><a href='{link}'>CONFIRMAR CONTA</a></p>";
+
+            await _emailService.SendEmailAsync(user.Email!, "Confirme sua conta", body);
+        }
+        catch
+        {
+            // Falha silenciosa no envio do e-mail para não impedir o cadastro
+        }
+
         return await CreateTokenPairAsync(user);
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
     {
-
         var user = await _userManager.FindByEmailAsync(dto.Email)
-        ?? throw new Exception("Credenciais inválidas.");
+                   ?? throw new Exception("Credenciais inválidas.");
+
+        // Opcional: Validar se EmailConfirmed == true aqui se desejar bloquear não confirmados
 
         if (await _userManager.IsLockedOutAsync(user))
         {
             var end = await _userManager.GetLockoutEndDateAsync(user);
-            var timeLeft = end.Value - DateTimeOffset.UtcNow;
+            var timeLeft = end!.Value - DateTimeOffset.UtcNow;
             throw new Exception($"Conta bloqueada temporariamente. Tente novamente em {Math.Ceiling(timeLeft.TotalMinutes)} minutos.");
         }
 
@@ -113,6 +140,17 @@ public class AuthService(
         {
             await CheckPurchaseEnabled();
         }
+
+        // --- Email de Alerta de Login ---
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _emailService.SendEmailAsync(user.Email!, "Alerta de Login",
+                    $"<p>Novo login detectado em sua conta em {DateTime.Now:dd/MM/yyyy HH:mm}.</p>");
+            }
+            catch { }
+        });
 
         return await CreateTokenPairAsync(user);
     }
@@ -167,6 +205,53 @@ public class AuthService(
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded) throw new Exception("Erro ao atualizar perfil.");
     }
+
+    // --- NOVOS MÉTODOS DE EMAIL E SENHA ---
+
+    public async Task ConfirmEmailAsync(ConfirmEmailDto dto)
+    {
+        var user = await _userManager.FindByIdAsync(dto.UserId) ?? throw new Exception("Usuário inválido.");
+
+        var result = await _userManager.ConfirmEmailAsync(user, dto.Token);
+        if (!result.Succeeded) throw new Exception("Falha ao confirmar e-mail.");
+    }
+
+    public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null) return;
+
+        try
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encodedToken = HttpUtility.UrlEncode(token);
+            var frontendUrl = _configuration["FRONTEND_URL"] ?? "http://localhost:5173";
+            var link = $"{frontendUrl}/reset-password?email={dto.Email}&token={encodedToken}";
+
+            var body = $@"
+                <h2>Recuperação de Senha</h2>
+                <p>Clique abaixo para redefinir sua senha:</p>
+                <p><a href='{link}'>REDEFINIR SENHA</a></p>";
+
+            await _emailService.SendEmailAsync(user.Email!, "Recuperação de Senha", body);
+        }
+        catch { }
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordDto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email)
+                   ?? throw new Exception("Usuário não encontrado.");
+
+        var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+
+        if (!result.Succeeded)
+            throw new Exception("Erro ao redefinir senha: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+
+        _ = Task.Run(() => _emailService.SendEmailAsync(user.Email!, "Senha Alterada", "<p>Sua senha foi alterada com sucesso.</p>"));
+    }
+
+    // --- MÉTODOS PRIVADOS EXISTENTES ---
 
     private async Task<AuthResponseDto> CreateTokenPairAsync(ApplicationUser user)
     {

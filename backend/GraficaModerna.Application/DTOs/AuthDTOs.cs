@@ -1,30 +1,32 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using GraficaModerna.Application.Validators;
 
 namespace GraficaModerna.Application.DTOs;
 
+public record RegisterDto(
+    [Required] string FullName,
+    [Required][EmailAddress] string Email,
+    [Required] string Password,
+    [Required] string CpfCnpj,
+    string? PhoneNumber
+);
+
 public record LoginDto(
-    [Required] string Email,
+    [Required][EmailAddress] string Email,
     [Required] string Password,
     bool IsAdminLogin = false
 );
+public record ForgotPasswordDto([Required][EmailAddress] string Email);
 
-public record RegisterDto(
-    [Required] [EmailAddress] string Email,
-    [Required] string Password,
-    [Required] string FullName,
-    [Required] string CpfCnpj,
-    [Required] string PhoneNumber
-) : IValidatableObject
-{
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-    {
-        if (!DocumentValidator.IsValid(CpfCnpj))
-        {
-            yield return new ValidationResult("Documento (CPF ou CNPJ) inválido.", [nameof(CpfCnpj)]);
-        }
-    }
-}
+public record ResetPasswordDto(
+    [Required][EmailAddress] string Email,
+    [Required] string Token,
+    [Required][MinLength(6)] string NewPassword
+);
+
+public record ConfirmEmailDto(
+    [Required] string UserId,
+    [Required] string Token
+);
 
 public record AuthResponseDto(
     string AccessToken,
@@ -34,8 +36,4 @@ public record AuthResponseDto(
     string CpfCnpj
 );
 
-public class TokenModel
-{
-    public string? AccessToken { get; set; }
-    public string? RefreshToken { get; set; }
-}
+public record TokenModel(string? AccessToken, string? RefreshToken);

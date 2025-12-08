@@ -34,7 +34,7 @@ public class AuthController(
         var result = await _authService.RegisterAsync(dto);
 
         return Ok(new
-            { token = result.AccessToken, result.Email, result.Role, message = "Cadastro realizado com sucesso." });
+        { token = result.AccessToken, result.Email, result.Role, message = "Cadastro realizado com sucesso." });
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public class AuthController(
         }
 
         return Ok(new
-            { token = result.AccessToken, result.Email, result.Role, message = "Login realizado com sucesso." });
+        { token = result.AccessToken, result.Email, result.Role, message = "Login realizado com sucesso." });
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public class AuthController(
         var result = await _authService.LoginAsync(adminLoginDto);
 
         return Ok(new
-            { token = result.AccessToken, result.Email, result.Role, message = "Login administrativo realizado com sucesso." });
+        { token = result.AccessToken, result.Email, result.Role, message = "Login administrativo realizado com sucesso." });
     }
 
     [HttpPost("logout")]
@@ -147,7 +147,7 @@ public class AuthController(
     }
 
     [HttpPost("refresh-token")]
-    [AllowAnonymous] 
+    [AllowAnonymous]
     public async Task<IActionResult> RefreshToken([FromBody] TokenModel tokenModel)
     {
         if (tokenModel is null) return BadRequest("Requisição inválida");
@@ -161,5 +161,31 @@ public class AuthController(
         {
             return BadRequest(ex.Message);
         }
+    }
+
+    // --- NOVOS ENDPOINTS (EMAIL) ---
+
+    [HttpPost("confirm-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailDto dto)
+    {
+        await _authService.ConfirmEmailAsync(dto);
+        return Ok(new { Message = "Email confirmado com sucesso!" });
+    }
+
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+    {
+        await _authService.ForgotPasswordAsync(dto);
+        return Ok(new { Message = "Se o e-mail estiver cadastrado, você receberá um link de recuperação." });
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    {
+        await _authService.ResetPasswordAsync(dto);
+        return Ok(new { Message = "Senha redefinida com sucesso. Faça login com a nova senha." });
     }
 }
