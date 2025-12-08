@@ -72,10 +72,9 @@ public class AuthService(
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
     {
-        var user = await _userManager.FindByEmailAsync(dto.Email);
 
-        if (user == null)
-            throw new Exception("Credenciais inválidas.");
+        var user = await _userManager.FindByEmailAsync(dto.Email)
+        ?? throw new Exception("Credenciais inválidas.");
 
         if (await _userManager.IsLockedOutAsync(user))
         {

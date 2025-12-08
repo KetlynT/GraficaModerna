@@ -11,9 +11,9 @@ public class ConsoleEmailService(ILogger<ConsoleEmailService> logger) : IEmailSe
     {
 
         _logger.LogInformation("--------------------------------------------------");
-        _logger.LogInformation($"[EMAIL SIMULADO] Para: {to}");
-        _logger.LogInformation($"[EMAIL SIMULADO] Assunto: {subject}");
-        _logger.LogInformation($"[EMAIL SIMULADO] Corpo: {body}");
+        _logger.LogInformation("[EMAIL SIMULADO] Para: {To}", to);
+        _logger.LogInformation("[EMAIL SIMULADO] Assunto: {Subject}", subject);
+        _logger.LogInformation("[EMAIL SIMULADO] Corpo: {Body}", body);
         _logger.LogInformation("--------------------------------------------------");
         return Task.CompletedTask;
     }

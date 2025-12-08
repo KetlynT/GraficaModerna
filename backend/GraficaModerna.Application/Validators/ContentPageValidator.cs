@@ -12,7 +12,7 @@ public class ContentPageValidator : AbstractValidator<ContentPage>
             .MaximumLength(200).WithMessage("O título deve ter no máximo 200 caracteres.");
 
         RuleFor(x => x.Content)
-            .NotEmpty().WithMessage("O conte�do da página não pode ser vazio.");
+            .NotEmpty().WithMessage("O conteúdo da página não pode ser vazio.");
 
         RuleFor(x => x.Slug)
             .NotEmpty().WithMessage("O slug é obrigat�rio.")
