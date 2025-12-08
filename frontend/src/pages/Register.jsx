@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserPlus, User, Mail, Lock, Phone, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { maskCpfCnpj, maskPhone, cleanString, validateDocument } from '../utils/formatters';
 
 export const Register = () => {
   const [formData, setFormData] = useState({
@@ -18,19 +19,37 @@ export const Register = () => {
   const { register } = useAuth();
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    let formattedValue = value;
+
+    // Aplica máscaras enquanto digita
+    if (name === 'cpfCnpj') {
+      formattedValue = maskCpfCnpj(value);
+    } else if (name === 'phoneNumber') {
+      formattedValue = maskPhone(value);
+    }
+
+    setFormData({ ...formData, [name]: formattedValue });
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
+
+    if (!validateDocument(formData.cpfCnpj)) {
+      toast.error("CPF ou CNPJ inválido (verifique os dígitos).");
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       toast.error("As senhas não conferem.");
       return;
     }
+
     if (formData.password.length < 8) {
       toast.error("A senha deve ter pelo menos 8 caracteres.");
       return;
     }
+
     if (!formData.phoneNumber) {
       toast.error("O telefone é obrigatório.");
       return;
@@ -40,10 +59,11 @@ export const Register = () => {
     try {
       await register({
         fullName: formData.fullName,
-        cpfCnpj: formData.cpfCnpj,
+        // Remove pontuação antes de enviar ao backend
+        cpfCnpj: cleanString(formData.cpfCnpj),
+        phoneNumber: cleanString(formData.phoneNumber),
         email: formData.email,
-        password: formData.password,
-        phoneNumber: formData.phoneNumber
+        password: formData.password
       });
       toast.success("Conta criada com sucesso!");
       navigate('/'); 
@@ -60,7 +80,6 @@ export const Register = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg border border-gray-100 p-8">
         <div className="text-center mb-8">
-            {/* Ícone com cor primária dinâmica */}
             <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <UserPlus size={32} className="text-primary" />
             </div>
@@ -69,6 +88,7 @@ export const Register = () => {
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
+          {/* CPF/CNPJ */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">CPF ou CNPJ</label>
             <div className="relative">
@@ -79,11 +99,13 @@ export const Register = () => {
                     placeholder="000.000.000-00"
                     value={formData.cpfCnpj}
                     onChange={handleChange}
+                    maxLength={18} // Limita tamanho visual
                     required
                 />
             </div>
           </div>
 
+          {/* Nome */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
             <div className="relative">
@@ -99,6 +121,7 @@ export const Register = () => {
             </div>
           </div>
 
+          {/* Email */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">E-mail</label>
             <div className="relative">
@@ -115,6 +138,7 @@ export const Register = () => {
             </div>
           </div>
 
+          {/* Telefone */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Telefone / WhatsApp</label>
             <div className="relative">
@@ -126,11 +150,13 @@ export const Register = () => {
                     placeholder="(11) 99999-9999"
                     value={formData.phoneNumber}
                     onChange={handleChange}
+                    maxLength={15}
                     required
                 />
             </div>
           </div>
 
+          {/* Senha */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Senha</label>
             <div className="relative">
@@ -147,6 +173,7 @@ export const Register = () => {
             </div>
           </div>
 
+          {/* Confirmar Senha */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Confirmar Senha</label>
             <div className="relative">

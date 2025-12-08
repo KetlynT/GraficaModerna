@@ -3,9 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import authService from '../services/authService';
 import toast from 'react-hot-toast';
 import { User, Phone, FileText, Save, Loader } from 'lucide-react';
+import { maskCpfCnpj, maskPhone, cleanString } from '../utils/formatters';
 
 export const Profile = () => {
-  const { user, logout } = useAuth(); // Pega dados iniciais do contexto
+  const { user, logout } = useAuth();
   const [formData, setFormData] = useState({
     fullName: '',
     phoneNumber: '',
@@ -16,15 +17,15 @@ export const Profile = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Busca dados atualizados do servidor ao carregar
     const fetchProfile = async () => {
       try {
         const data = await authService.getProfile();
         setFormData({
             fullName: data.fullName || '',
-            phoneNumber: data.phoneNumber || '',
-            cpfCnpj: data.cpfCnpj || '',
-            email: data.email || '' // Email geralmente é readonly
+            // Aplica máscara ao receber os dados brutos do backend
+            phoneNumber: maskPhone(data.phoneNumber || ''),
+            cpfCnpj: maskCpfCnpj(data.cpfCnpj || ''),
+            email: data.email || ''
         });
       } catch (error) {
         toast.error("Erro ao carregar perfil.");
@@ -36,17 +37,28 @@ export const Profile = () => {
   }, []);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    let formattedValue = value;
+
+    // Aplica máscara em tempo real
+    if (name === 'cpfCnpj') {
+      formattedValue = maskCpfCnpj(value);
+    } else if (name === 'phoneNumber') {
+      formattedValue = maskPhone(value);
+    }
+
+    setFormData({ ...formData, [name]: formattedValue });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
+      // Remove formatação antes de enviar para o backend
       await authService.updateProfile({
         fullName: formData.fullName,
-        phoneNumber: formData.phoneNumber,
-        cpfCnpj: formData.cpfCnpj
+        phoneNumber: cleanString(formData.phoneNumber),
+        cpfCnpj: cleanString(formData.cpfCnpj)
       });
       toast.success("Perfil atualizado com sucesso!");
     } catch (error) {
@@ -108,6 +120,8 @@ export const Profile = () => {
                             value={formData.cpfCnpj}
                             onChange={handleChange}
                             className="w-full border border-gray-300 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-primary outline-none"
+                            placeholder="000.000.000-00"
+                            maxLength={18}
                             required
                         />
                     </div>
@@ -123,6 +137,8 @@ export const Profile = () => {
                             value={formData.phoneNumber}
                             onChange={handleChange}
                             className="w-full border border-gray-300 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-primary outline-none"
+                            placeholder="(00) 00000-0000"
+                            maxLength={15}
                             required
                         />
                     </div>
