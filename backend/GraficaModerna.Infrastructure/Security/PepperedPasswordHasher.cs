@@ -21,21 +21,26 @@ public class PepperedPasswordHasher(IOptions<PepperSettings> options, ILogger<Pe
         var activeVersion = _settings.ActiveVersion;
 
         // PROTEÇÃO ESTRUTURAL 1: Validação de Configuração
-        // Se o .env não carregar, não deixa o servidor explodir. Lança erro claro.
         if (string.IsNullOrEmpty(activeVersion))
         {
-            _logger.LogError("CRÍTICO: A configuração 'PepperSettings.ActiveVersion' está vazia. Verifique se o arquivo .env está na raiz e se as chaves usam '__' (duplo underscore).");
+            _logger.LogError("CRÍTICO: A configuração 'PepperSettings.ActiveVersion' está vazia.");
             throw new InvalidOperationException("Erro de configuração de segurança: ActiveVersion não definida.");
         }
 
         if (!_settings.Peppers.TryGetValue(activeVersion, out var pepper))
         {
-            _logger.LogError("CRÍTICO: Pepper para a versão '{Version}' não encontrado no .env ou appsettings.", activeVersion);
+            _logger.LogError("CRÍTICO: Pepper para a versão '{Version}' não encontrado no .env.", activeVersion);
             throw new InvalidOperationException($"Pepper não encontrado para a versão {activeVersion}.");
         }
 
         var hash = base.HashPassword(user, password + pepper);
-        return $"$v{activeVersion}${hash}";
+
+        // CORREÇÃO DO BUG: Verifica se a versão já começa com 'v' para não duplicar
+        // Se activeVersion for "v1", prefixo será "$". Resultado: "$v1$..."
+        // Se activeVersion for "1", prefixo será "$v". Resultado: "$v1$..."
+        var prefix = activeVersion.StartsWith("v") ? "$" : "$v";
+        
+        return $"{prefix}{activeVersion}${hash}";
     }
 
     public override PasswordVerificationResult VerifyHashedPassword(ApplicationUser user, string hashedPassword, string providedPassword)
@@ -48,7 +53,7 @@ public class PepperedPasswordHasher(IOptions<PepperSettings> options, ILogger<Pe
         {
             var parts = hashedPassword.Split('$', 3, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2) return PasswordVerificationResult.Failed;
-            version = parts[0];
+            version = parts[0]; // Extrai "v1"
             actualHash = parts[1];
         }
         else
@@ -68,19 +73,13 @@ public class PepperedPasswordHasher(IOptions<PepperSettings> options, ILogger<Pe
         // Verifica a senha
         var result = base.VerifyHashedPassword(user, actualHash, providedPassword + pepper);
 
-        // PROTEÇÃO ESTRUTURAL 2: Loop de Rehash
-        // O erro 500 acontecia aqui. Se a senha está certa, mas a config falhou, 
-        // o sistema tentava atualizar a senha e quebrava. Agora protegemos isso.
         if (result == PasswordVerificationResult.Success)
         {
-            // Se a configuração ativa sumiu, NÃO tente atualizar a senha. Apenas logue e deixe entrar.
             if (string.IsNullOrEmpty(_settings.ActiveVersion))
             {
-                _logger.LogWarning("ALERTA DE SEGURANÇA: Login bem-sucedido, mas 'ActiveVersion' não está configurada. O sistema não pode rotacionar a chave.");
                 return PasswordVerificationResult.Success; 
             }
 
-            // Apenas se tudo estiver saudável, solicitamos a atualização do hash
             if (version != _settings.ActiveVersion)
             {
                 return PasswordVerificationResult.SuccessRehashNeeded;
