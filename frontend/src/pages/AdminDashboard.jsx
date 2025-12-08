@@ -455,7 +455,10 @@ const OrdersTab = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('Todos');
-    
+    const [refundReason, setRefundReason] = useState('');
+    const [refundProof, setRefundProof] = useState('');
+    const [uploadingProof, setUploadingProof] = useState(false);
+
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [trackingInput, setTrackingInput] = useState('');
     const [statusInput, setStatusInput] = useState('');
@@ -496,10 +499,27 @@ const OrdersTab = () => {
         setTrackingInput(order.trackingCode || '');
         setReverseCodeInput(order.reverseLogisticsCode || '');
         setReturnInstructionsInput(order.returnInstructions || '');
+        setRefundReason(order.refundRejectionReason || '');
+        setRefundProof(order.refundRejectionProof || '');
     };
 
     const handleCloseModal = () => {
         setSelectedOrder(null);
+    };
+
+    const handleProofUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setUploadingProof(true);
+        try {
+            const url = await ProductService.uploadImage(file); 
+            setRefundProof(url);
+            toast.success("Arquivo anexado!");
+        } catch (error) {
+            toast.error("Erro no upload.");
+        } finally {
+            setUploadingProof(false);
+        }
     };
 
     const handleUpdateOrder = async (e) => {
@@ -510,7 +530,9 @@ const OrdersTab = () => {
                 status: statusInput,
                 trackingCode: trackingInput,
                 reverseLogisticsCode: reverseCodeInput,
-                returnInstructions: returnInstructionsInput
+                returnInstructions: returnInstructionsInput,
+                refundRejectionReason: refundReason,
+                refundRejectionProof: refundProof
             });
             
             const updatedList = orders.map(o => o.id === selectedOrder.id ? {
@@ -694,6 +716,43 @@ const OrdersTab = () => {
                                             </div>
                                         </div>
                                     )}
+
+                                    {statusInput === 'Reembolso Reprovado' && (
+    <div className="bg-red-50 p-4 rounded border border-red-200 space-y-3 animate-in fade-in mt-3">
+        <h5 className="font-bold text-xs text-red-800 uppercase border-b border-red-200 pb-1 mb-2">
+            Motivo da Reprovação
+        </h5>
+        
+        <div>
+            <label className="block text-xs font-bold text-red-700 mb-1">Justificativa (Obrigatório)</label>
+            <textarea 
+                className="w-full border border-red-300 rounded p-2 text-sm outline-none focus:border-red-500 h-24 resize-none"
+                placeholder="Explique ao cliente por que o reembolso foi negado..."
+                value={refundReason}
+                onChange={e => setRefundReason(e.target.value)}
+                required={statusInput === 'Reembolso Reprovado'}
+            />
+        </div>
+
+        <div>
+            <label className="block text-xs font-bold text-red-700 mb-1">Prova / Evidência (Opcional)</label>
+            <div className="flex gap-2 items-center">
+                <input 
+                    type="file" 
+                    accept="image/*,video/mp4,video/webm"
+                    onChange={handleProofUpload}
+                    className="text-xs w-full file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-red-100 file:text-red-700 hover:file:bg-red-200"
+                />
+                {uploadingProof && <span className="text-xs text-gray-500">Enviando...</span>}
+            </div>
+            {refundProof && (
+                <div className="mt-2 text-xs text-green-600 truncate">
+                    Arquivo anexado: <a href={refundProof} target="_blank" rel="noopener noreferrer" className="underline">Ver arquivo</a>
+                </div>
+            )}
+        </div>
+    </div>
+)}
                                 </div>
 
                                 <div className="flex justify-end gap-3">

@@ -200,6 +200,8 @@ public class OrderService(
         var order = await _context.Orders
             .Include(o => o.History)
             .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado");
+
+        var oldStatus = order.Status;
         var auditMessage = $"Status alterado manualmente para {dto.Status}";
 
         if (dto.Status == "Aguardando Devolução")
@@ -212,6 +214,13 @@ public class OrderService(
                 : "Instruções padrão de devolução...";
 
             auditMessage += ". Instruções geradas.";
+        }
+
+        if (dto.Status == "Reembolso Reprovado")
+        {
+            order.RefundRejectionReason = dto.RefundRejectionReason;
+            order.RefundRejectionProof = dto.RefundRejectionProof;
+            auditMessage += ". Justificativa e provas anexadas.";
         }
 
         if (dto.Status == "Reembolsado" || dto.Status == "Cancelado")
@@ -238,6 +247,11 @@ public class OrderService(
         AddAuditLog(order, dto.Status, auditMessage, $"Admin:{adminUserId}");
 
         await _context.SaveChangesAsync();
+
+        if (oldStatus != dto.Status)
+        {
+            _ = SendOrderUpdateEmailAsync(order.UserId, order, dto.Status);
+        }
     }
 
     public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents)
@@ -277,6 +291,8 @@ public class OrderService(
                 "STRIPE-WEBHOOK");
 
             await _context.SaveChangesAsync();
+
+            _ = SendOrderUpdateEmailAsync(order.UserId, order, "Pago");
         }
     }
 
@@ -319,7 +335,7 @@ public class OrderService(
     {
         var order = await _context.Orders
             .Include(o => o.Items)
-            .Include(o => o.History) 
+            .Include(o => o.History)
             .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado.");
         if (order.UserId != userId)
             throw new UnauthorizedAccessException("Você não tem permissão para acessar este pedido.");
@@ -341,6 +357,63 @@ public class OrderService(
         }
     }
 
+    private async Task SendOrderUpdateEmailAsync(string userId, Order order, string newStatus)
+    {
+        try
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null || string.IsNullOrEmpty(user.Email)) return;
+
+            string subject;
+            string body;
+
+            switch (newStatus)
+            {
+                case "Pago":
+                    subject = $"Pagamento Confirmado - Pedido #{order.Id}";
+                    body = $"Olá! O pagamento do seu pedido #{order.Id} foi confirmado e ele já está sendo preparado.";
+                    break;
+                case "Enviado":
+                    subject = $"Pedido Enviado - #{order.Id}";
+                    body = $"Seu pedido #{order.Id} foi enviado! <br> Código de rastreio: {order.TrackingCode}";
+                    break;
+                case "Entregue":
+                    subject = $"Pedido Entregue - #{order.Id}";
+                    body = $"Seu pedido #{order.Id} foi marcado como entregue. Esperamos que goste!";
+                    break;
+                case "Cancelado":
+                    subject = $"Pedido Cancelado - #{order.Id}";
+                    body = $"Seu pedido #{order.Id} foi cancelado.";
+                    break;
+                case "Reembolsado":
+                    subject = $"Reembolso Processado - #{order.Id}";
+                    body = $"O reembolso do seu pedido #{order.Id} foi processado e deve aparecer na sua fatura em breve.";
+                    break;
+                case "Aguardando Devolução":
+                    subject = $"Instruções de Devolução - Pedido #{order.Id}";
+                    body = $"Solicitação de troca/devolução aceita.<br>Código de Logística Reversa: <b>{order.ReverseLogisticsCode}</b><br><br>Instruções:<br>{order.ReturnInstructions}";
+                    break;
+                case "Reembolso Reprovado":
+                    subject = $"Solicitação de Reembolso Negada - Pedido #{order.Id}";
+                    body = $"Sua solicitação de reembolso para o pedido #{order.Id} foi analisada e reprovada.<br><br><b>Motivo:</b> {order.RefundRejectionReason}";
+
+                    if (!string.IsNullOrEmpty(order.RefundRejectionProof))
+                    {
+                        body += $"<br><br><b>Evidência da análise:</b> <a href=\"{order.RefundRejectionProof}\">Clique aqui para visualizar</a>";
+                    }
+                    break;
+                default:
+                    return;
+            }
+
+            await _emailService.SendEmailAsync(user.Email, subject, body);
+        }
+        catch
+        {
+            // Logar erro de envio silenciosamente ou usar ILogger se disponível
+        }
+    }
+
     private static OrderDto MapToDto(Order order)
     {
         return new OrderDto(
@@ -355,6 +428,8 @@ public class OrderService(
             order.TrackingCode,
             order.ReverseLogisticsCode,
             order.ReturnInstructions,
+            order.RefundRejectionReason, // Novo campo
+            order.RefundRejectionProof,  // Novo campo
             order.ShippingAddress,
             [
                 .. order.Items.Select(i =>

@@ -110,6 +110,44 @@ export const MyOrders = () => {
               </div>
 
               <AnimatePresence>
+              {order.status === 'Reembolso Reprovado' && (
+    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+        <h4 className="text-red-800 font-bold flex items-center gap-2 mb-2">
+            <AlertTriangle size={18}/> Solicitação de Reembolso Negada
+        </h4>
+        
+        <div className="space-y-3">
+            <div>
+                <span className="text-xs font-bold text-red-700 uppercase block mb-1">Motivo da Análise:</span>
+                <p className="text-sm text-gray-800 bg-white p-3 rounded border border-red-100">
+                    {order.refundRejectionReason || "Entre em contato com o suporte para mais detalhes."}
+                </p>
+            </div>
+
+            {order.refundRejectionProof && (
+                <div>
+                    <span className="text-xs font-bold text-red-700 uppercase block mb-1">Evidência Anexada:</span>
+                    <div className="mt-2">
+                        {order.refundRejectionProof.endsWith('.mp4') || order.refundRejectionProof.endsWith('.webm') ? (
+                            <video controls className="w-full max-w-sm rounded border border-gray-300 max-h-64">
+                                <source src={order.refundRejectionProof} type="video/mp4" />
+                                Seu navegador não suporta vídeos.
+                            </video>
+                        ) : (
+                            <a href={order.refundRejectionProof} target="_blank" rel="noopener noreferrer">
+                                <img 
+                                    src={order.refundRejectionProof} 
+                                    alt="Prova" 
+                                    className="h-32 w-auto object-cover rounded border border-gray-300 hover:opacity-90 transition-opacity" 
+                                />
+                            </a>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    </div>
+)}
                 {expandedOrderId === order.id && (
                     <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden border-t border-gray-100">
                         <div className="p-6 bg-white">

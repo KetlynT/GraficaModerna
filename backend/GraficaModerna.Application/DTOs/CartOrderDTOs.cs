@@ -4,11 +4,11 @@ namespace GraficaModerna.Application.DTOs;
 
 public record AddToCartDto(
     Guid ProductId,
-    [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser no m�nimo 1.")]
+    [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser no mínimo 1.")]
     int Quantity);
 
 public record UpdateCartItemDto(
-    [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser no m�nimo 1.")]
+    [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser no mínimo 1.")]
     int Quantity);
 
 public record CartItemDto(
@@ -40,6 +40,8 @@ public record OrderDto(
     string? TrackingCode,
     string? ReverseLogisticsCode,
     string? ReturnInstructions,
+    string? RefundRejectionReason,
+    string? RefundRejectionProof,
     string ShippingAddress,
     List<OrderItemDto> Items
 );
@@ -50,5 +52,7 @@ public record UpdateOrderStatusDto(
     string Status,
     string? TrackingCode,
     string? ReverseLogisticsCode,
-    string? ReturnInstructions
+    string? ReturnInstructions,
+    string? RefundRejectionReason,
+    string? RefundRejectionProof
 );

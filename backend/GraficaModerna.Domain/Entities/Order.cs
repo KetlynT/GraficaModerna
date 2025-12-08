@@ -27,11 +27,14 @@ public class Order
     public string? ReverseLogisticsCode { get; set; }
     public string? ReturnInstructions { get; set; }
 
+    public string? RefundRejectionReason { get; set; }
+    public string? RefundRejectionProof { get; set; }
+
     public string ShippingAddress { get; set; } = string.Empty;
     public string ShippingZipCode { get; set; } = string.Empty;
 
     public string? CustomerIp { get; set; }
-    public string? UserAgent { get; set; } 
+    public string? UserAgent { get; set; }
 
     public List<OrderItem> Items { get; set; } = [];
 
