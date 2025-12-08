@@ -18,7 +18,7 @@ export const ShippingService = {
   calculate: async (destinationCep, items) => {
     try {
       const cleanCep = destinationCep.replace(/\D/g, '');
-      const response = await api.post('/shipping/calculate', { 
+      const response = await api.get('/shipping/calculate', { 
         destinationCep: cleanCep, 
         items 
       });

@@ -27,7 +27,7 @@ public class ShippingController(
             throw new Exception("Cálculo de frete temporariamente indisponível. Utilize o orçamento personalizado.");
     }
 
-    [HttpPost("calculate")]
+    [HttpGet("calculate")]
     public async Task<ActionResult<List<ShippingOptionDto>>> Calculate([FromBody] CalculateShippingRequest request)
     {
         try
