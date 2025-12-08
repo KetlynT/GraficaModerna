@@ -35,11 +35,8 @@ public class PepperedPasswordHasher(IOptions<PepperSettings> options, ILogger<Pe
 
         var hash = base.HashPassword(user, password + pepper);
 
-        // CORREÇÃO DO BUG: Verifica se a versão já começa com 'v' para não duplicar
-        // Se activeVersion for "v1", prefixo será "$". Resultado: "$v1$..."
-        // Se activeVersion for "1", prefixo será "$v". Resultado: "$v1$..."
-        var prefix = activeVersion.StartsWith("v") ? "$" : "$v";
-        
+        var prefix = activeVersion.StartsWith('v') ? "$" : "$v";
+
         return $"{prefix}{activeVersion}${hash}";
     }
 

@@ -8,15 +8,15 @@ public class ContentPageValidator : AbstractValidator<ContentPage>
     public ContentPageValidator()
     {
         RuleFor(x => x.Title)
-            .NotEmpty().WithMessage("O t�tulo � obrigat�rio.")
-            .MaximumLength(200).WithMessage("O t�tulo deve ter no m�ximo 200 caracteres.");
+            .NotEmpty().WithMessage("O título é obrigatório.")
+            .MaximumLength(200).WithMessage("O título deve ter no máximo 200 caracteres.");
 
         RuleFor(x => x.Content)
-            .NotEmpty().WithMessage("O conte�do da p�gina n�o pode ser vazio.");
+            .NotEmpty().WithMessage("O conte�do da página não pode ser vazio.");
 
         RuleFor(x => x.Slug)
-            .NotEmpty().WithMessage("O slug � obrigat�rio.")
+            .NotEmpty().WithMessage("O slug é obrigat�rio.")
             .Matches("^[a-z0-9-]+$")
-            .WithMessage("O slug deve conter apenas letras min�sculas, n�meros e h�fens (ex: minha-pagina).");
+            .WithMessage("O slug deve conter apenas letras minúsculas, números e hífens (ex: minha-pagina).");
     }
 }

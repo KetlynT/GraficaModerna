@@ -51,9 +51,9 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("userId inválido.", nameof(userId));
 
         if (dto.Quantity <= 0)
-            throw new ArgumentOutOfRangeException(nameof(dto.Quantity), "Quantidade deve ser maior que zero.");
+            throw new ArgumentOutOfRangeException(nameof(dto), "Quantidade deve ser maior que zero.");
         if (dto.Quantity > MaxQuantityPerItem)
-            throw new ArgumentOutOfRangeException(nameof(dto.Quantity),
+            throw new ArgumentOutOfRangeException(nameof(dto),
                 $"Quantidade excede o limite permitido de {MaxQuantityPerItem}.");
 
         for (var attempt = 1; attempt <= MaxConcurrencyRetries; attempt++)
