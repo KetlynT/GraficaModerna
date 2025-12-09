@@ -399,8 +399,7 @@ public class OrderService : IOrderService
     {
         try
         {
-            var securityEmail = Environment.GetEnvironmentVariable("SECURITY_ALERT_EMAIL") 
-                               ?? "security@graficamoderna.com";
+            var securityEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL")!;
 
             var subject = $"🚨 ALERTA DE SEGURANÇA CRÍTICO - Tentativa de Fraude";
             var body = $@"
