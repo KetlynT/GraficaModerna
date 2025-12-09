@@ -41,7 +41,6 @@ public class AuthController(
     [HttpPost("login")]
     public async Task<ActionResult> Login(LoginDto dto)
     {
-        // Força IsAdminLogin = false para este endpoint
         var userLoginDto = dto with { IsAdminLogin = false };
         var result = await _authService.LoginAsync(userLoginDto);
 
@@ -63,7 +62,6 @@ public class AuthController(
     [HttpPost("admin/login")]
     public async Task<ActionResult> AdminLogin(LoginDto dto)
     {
-        // Força IsAdminLogin = true para este endpoint
         var adminLoginDto = dto with { IsAdminLogin = true };
         var result = await _authService.LoginAsync(adminLoginDto);
 

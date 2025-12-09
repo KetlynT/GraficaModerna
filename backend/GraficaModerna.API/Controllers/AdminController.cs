@@ -22,13 +22,13 @@ public class AdminController(IOrderService orderService, IProductService product
         return Ok(orders);
     }
 
-    [HttpPut("orders/{id}/status")]
+    [HttpPatch("{id}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)
     {
         try
         {
             await _orderService.UpdateAdminOrderAsync(id, dto);
-            return Ok(new { message = "Status atualizado com sucesso." });
+            return Ok();
         }
         catch (Exception ex)
         {
