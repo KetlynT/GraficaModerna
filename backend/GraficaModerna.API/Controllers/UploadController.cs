@@ -11,20 +11,19 @@ namespace GraficaModerna.API.Controllers;
 [EnableRateLimiting("UploadPolicy")]
 public class UploadController : ControllerBase
 {
-    // Aumentado para 50MB para suportar vídeos curtos
     private const long MaxFileSize = 50 * 1024 * 1024;
     private const int MaxImageDimension = 2048;
 
-    private static readonly Dictionary<string, string> _validMimeTypes = new()
+    // Assinaturas corrigidas e completas
+    private static readonly Dictionary<string, List<byte[]>> _fileSignatures = new()
     {
-        { ".jpg", "image/jpeg" },
-        { ".jpeg", "image/jpeg" },
-        { ".png", "image/png" },
-        { ".webp", "image/webp" },
-        // Novos tipos de vídeo
-        { ".mp4", "video/mp4" },
-        { ".webm", "video/webm" },
-        { ".mov", "video/quicktime" }
+        { ".jpg", [new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE1 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE2 }] },
+        { ".jpeg", [new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE1 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE2 }] },
+        { ".png", [new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }] },
+        { ".webp", [new byte[] { 0x52, 0x49, 0x46, 0x46 }] }, // Apenas verifica RIFF, WEBP vem depois
+        { ".mp4", [new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 }, new byte[] { 0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70 }] },
+        { ".webm", [new byte[] { 0x1A, 0x45, 0xDF, 0xA3 }] },
+        { ".mov", [new byte[] { 0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70 }] }
     };
 
     private readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".webp", ".mp4", ".webm", ".mov"];
@@ -43,35 +42,62 @@ public class UploadController : ControllerBase
         if (!AllowedExtensions.Contains(ext))
             return BadRequest("Formato de ficheiro não permitido.");
 
-        if (!_validMimeTypes.TryGetValue(ext, out var expectedMime) ||
-            !file.ContentType.Equals(expectedMime, StringComparison.CurrentCultureIgnoreCase))
-            // Nota: Browsers às vezes enviam mime types genéricos, cuidado com essa validação estrita em produção
-            return BadRequest($"Tipo MIME inválido. Esperado: {expectedMime}, Recebido: {file.ContentType}");
+        if (!_fileSignatures.TryGetValue(ext, out var signatures))
+            return BadRequest($"Tipo MIME inválido. Esperado imagem/vídeo, recebido: {file.ContentType}");
 
-        var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads"); // Mudado para 'uploads' para ser genérico
-        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+        var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+        if (!Directory.Exists(folderPath)) 
+            Directory.CreateDirectory(folderPath);
 
         var fileName = $"{Guid.NewGuid()}{ext}";
         var filePath = Path.Combine(folderPath, fileName);
 
         try
         {
-            // Se for imagem, redimensiona. Se for vídeo, apenas salva.
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            // Validação de assinatura melhorada
+            var headerBytes = new byte[12];
+            var bytesRead = await memoryStream.ReadAsync(headerBytes.AsMemory(0, 12));
+            
+            bool isValid = false;
+            foreach (var signature in signatures)
+            {
+                if (bytesRead >= signature.Length && 
+                    headerBytes.Take(signature.Length).SequenceEqual(signature))
+                {
+                    isValid = true;
+                    break;
+                }
+            }
+
+            // Validação extra para WEBP (precisa ter WEBP nos bytes 8-11)
+            if (ext == ".webp" && isValid)
+            {
+                if (bytesRead < 12 || 
+                    !(headerBytes[8] == 0x57 && headerBytes[9] == 0x45 && 
+                      headerBytes[10] == 0x42 && headerBytes[11] == 0x50))
+                {
+                    isValid = false;
+                }
+            }
+
+            if (!isValid)
+                return BadRequest("O arquivo está corrompido ou a extensão não corresponde ao conteúdo real.");
+
+            memoryStream.Position = 0;
+
+            // Processa imagem ou apenas salva vídeo
             if (ext == ".mp4" || ext == ".webm" || ext == ".mov")
             {
                 using var stream = new FileStream(filePath, FileMode.Create);
-                await file.CopyToAsync(stream);
+                await memoryStream.CopyToAsync(stream);
             }
             else
             {
-                using var stream = file.OpenReadStream();
-                using var image = await Image.LoadAsync(stream);
-
-                var format = image.Metadata.DecodedImageFormat;
-                if (format == null || !_validMimeTypes[ext].Contains(format.DefaultMimeType))
-                {
-                    return BadRequest("O conteúdo da imagem não corresponde à extensão declarada.");
-                }
+                using var image = await Image.LoadAsync(memoryStream);
 
                 if (image.Width > MaxImageDimension || image.Height > MaxImageDimension)
                 {
@@ -85,16 +111,15 @@ public class UploadController : ControllerBase
                 await image.SaveAsync(filePath);
             }
         }
-        catch (ImageFormatException)
+        catch (UnknownImageFormatException)
         {
-            return BadRequest("O arquivo não é uma imagem válida ou está corrompido.");
+            return BadRequest("Formato de imagem não suportado ou arquivo corrompido.");
         }
         catch (Exception ex)
         {
-            return StatusCode(500, $"Erro interno ao processar o ficheiro: {ex.Message}");
+            return StatusCode(500, $"Erro ao processar o ficheiro: {ex.Message}");
         }
 
-        // Ajuste a URL conforme sua pasta estática (images ou uploads)
         var fileUrl = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
         return Ok(new { url = fileUrl });
     }

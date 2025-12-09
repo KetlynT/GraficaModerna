@@ -17,12 +17,11 @@ public class AdminController(IOrderService orderService, IProductService product
     private readonly IProductService _productService = productService;
 
     [HttpGet("orders")]
-    public async Task<IActionResult> GetAllOrders()
+    public async Task<ActionResult<List<AdminOrderDto>>> GetAllOrders()
     {
         var orders = await _orderService.GetAllOrdersAsync();
         return Ok(orders);
     }
-
 
     [HttpPut("orders/{id}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)

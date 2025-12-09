@@ -28,16 +28,25 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
             {
                 var term = searchTerm.Trim();
                 
-                var termLower = term.ToLowerInvariant();
-                var escaped = termLower.Replace("%", "\\%").Replace("_", "\\_");
                 query = query.Where(p =>
-                    EF.Functions.ILike(p.Name, $"%{escaped}%") ||
-                    EF.Functions.ILike(p.Description, $"%{escaped}%"));
+                    EF.Functions.ILike(p.Name, $"%{term}%") ||
+                    EF.Functions.ILike(p.Description, $"%{term}%"));
             }
 
             var totalCount = await query.CountAsync();
 
-            query = sortColumn?.ToLower() switch
+            var allowedSortColumns = new[] { "price", "name", "stockquantity" };
+            var safeSortColumn = sortColumn?.ToLower();
+            
+            if (!string.IsNullOrEmpty(safeSortColumn) && 
+                !allowedSortColumns.Contains(safeSortColumn))
+            {
+                _logger.LogWarning(
+                    "Tentativa de ordenação por coluna não permitida: {Column}", sortColumn);
+                safeSortColumn = null; // Usa ordenação padrão
+            }
+
+            query = safeSortColumn switch
             {
                 "price" => sortOrder?.ToLower() == "desc"
                     ? query.OrderByDescending(p => p.Price)
@@ -60,7 +69,7 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao recuperar produtos. Termo: {SearchTerm}, Page: {Page}", searchTerm, page);
+            _logger.LogError(ex, "Erro ao recuperar produtos. Page: {Page}, PageSize: {PageSize}", page, pageSize);
             throw new Exception("Não foi possível recuperar a lista de produtos no momento.");
         }
     }

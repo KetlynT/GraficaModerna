@@ -4,95 +4,139 @@ using Microsoft.Extensions.Configuration;
 
 namespace GraficaModerna.Infrastructure.Security;
 
+/// <summary>
+/// Serviço de criptografia autenticada usando AES-GCM para metadados do Stripe.
+/// AES-GCM fornece confidencialidade E integridade em uma única operação.
+/// </summary>
 public class MetadataSecurityService
 {
     private readonly byte[] _encryptionKey;
-    private readonly byte[] _hmacKey;
+    private const int NonceSize = 12; // 96 bits recomendado para AES-GCM
+    private const int TagSize = 16; // 128 bits para autenticação
 
     public MetadataSecurityService(IConfiguration configuration)
     {
         var encKeyString = Environment.GetEnvironmentVariable("METADATA_ENC_KEY")
                            ?? configuration["Security:MetadataEncryptionKey"];
-        var hmacKeyString = Environment.GetEnvironmentVariable("METADATA_HMAC_KEY")
-                            ?? configuration["Security:MetadataHmacKey"];
 
-        if (string.IsNullOrEmpty(encKeyString) || string.IsNullOrEmpty(hmacKeyString))
-            throw new Exception("Chaves de segurança de metadados não configuradas.");
+        if (string.IsNullOrEmpty(encKeyString))
+            throw new Exception("METADATA_ENC_KEY não configurada.");
 
-        _encryptionKey = Convert.FromBase64String(encKeyString);
-        _hmacKey = Convert.FromBase64String(hmacKeyString);
+        try
+        {
+            _encryptionKey = Convert.FromBase64String(encKeyString);
+        }
+        catch (FormatException)
+        {
+            throw new Exception("METADATA_ENC_KEY deve estar em formato Base64 válido.");
+        }
+
+        // AES-GCM requer chave de 128, 192 ou 256 bits
+        if (_encryptionKey.Length != 16 && _encryptionKey.Length != 24 && _encryptionKey.Length != 32)
+            throw new Exception("METADATA_ENC_KEY deve ter 128, 192 ou 256 bits (16, 24 ou 32 bytes).");
     }
 
-    public (string encryptedData, string signature) Protect(string plainText)
+    /// <summary>
+    /// Criptografa dados com AES-GCM (Autenticação Embutida).
+    /// Retorna: Base64(Nonce || Ciphertext || Tag)
+    /// </summary>
+    public string Protect(string plainText)
     {
-        byte[] encryptedBytes;
-        byte[] iv;
+        if (string.IsNullOrEmpty(plainText))
+            throw new ArgumentException("Texto a criptografar não pode ser vazio.");
 
-        using (var aes = Aes.Create())
+        var plainBytes = Encoding.UTF8.GetBytes(plainText);
+        var nonce = new byte[NonceSize];
+        var ciphertext = new byte[plainBytes.Length];
+        var tag = new byte[TagSize];
+
+        // Gera nonce aleatório (crucial: nunca reusar nonce com mesma chave!)
+        using (var rng = RandomNumberGenerator.Create())
         {
-            aes.Key = _encryptionKey;
-            aes.GenerateIV();
-            iv = aes.IV;
-
-            using var encryptor = aes.CreateEncryptor(aes.Key, iv);
-            using var ms = new MemoryStream();
-            using (var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
-            using (var sw = new StreamWriter(cs))
-            {
-                sw.Write(plainText);
-            }
-            encryptedBytes = ms.ToArray();
+            rng.GetBytes(nonce);
         }
 
-        // Combina IV + CipherText para garantir que o IV faça parte da assinatura
-        var combinedData = new byte[iv.Length + encryptedBytes.Length];
-        Array.Copy(iv, 0, combinedData, 0, iv.Length);
-        Array.Copy(encryptedBytes, 0, combinedData, iv.Length, encryptedBytes.Length);
-
-        string encryptedData = Convert.ToBase64String(combinedData);
-        string signature;
-
-        // Calcula o HMAC sobre os bytes combinados (IV + CipherText)
-        using (var hmac = new HMACSHA256(_hmacKey))
+        using var aesGcm = new AesGcm(_encryptionKey, TagSize);
+        
+        try
         {
-            var hashBytes = hmac.ComputeHash(combinedData);
-            signature = Convert.ToBase64String(hashBytes);
+            // Encrypt-and-Authenticate em uma única operação
+            aesGcm.Encrypt(nonce, plainBytes, ciphertext, tag);
+        }
+        catch (CryptographicException ex)
+        {
+            throw new Exception("Falha na criptografia dos metadados.", ex);
         }
 
-        return (encryptedData, signature);
+        // Combina: Nonce + Ciphertext + Tag
+        var result = new byte[NonceSize + ciphertext.Length + TagSize];
+        Buffer.BlockCopy(nonce, 0, result, 0, NonceSize);
+        Buffer.BlockCopy(ciphertext, 0, result, NonceSize, ciphertext.Length);
+        Buffer.BlockCopy(tag, 0, result, NonceSize + ciphertext.Length, TagSize);
+
+        return Convert.ToBase64String(result);
     }
 
-    public string Unprotect(string encryptedData, string signature)
+    /// <summary>
+    /// Descriptografa e valida integridade em uma única operação.
+    /// Lança SecurityException se a autenticação falhar.
+    /// </summary>
+    public string Unprotect(string encryptedData)
     {
-        var fullCipher = Convert.FromBase64String(encryptedData);
+        if (string.IsNullOrEmpty(encryptedData))
+            throw new ArgumentException("Dados criptografados não podem ser vazios.");
 
-        // Verifica a assinatura antes de qualquer operação de decifragem
-        using (var hmac = new HMACSHA256(_hmacKey))
+        byte[] fullCipher;
+        try
         {
-            var computedHash = hmac.ComputeHash(fullCipher);
-            var computedSignature = Convert.ToBase64String(computedHash);
-
-            if (computedSignature != signature)
-                throw new System.Security.SecurityException("Assinatura dos metadados inválida ou IV modificado.");
+            fullCipher = Convert.FromBase64String(encryptedData);
+        }
+        catch (FormatException)
+        {
+            throw new System.Security.SecurityException("Formato de dados inválido.");
         }
 
-        using var aes = Aes.Create();
-        aes.Key = _encryptionKey;
-
-        // Extrai o IV (primeiros 16 bytes)
-        var iv = new byte[16];
-        if (fullCipher.Length < 16)
+        // Valida tamanho mínimo
+        if (fullCipher.Length < NonceSize + TagSize)
             throw new System.Security.SecurityException("Dados corrompidos ou inválidos.");
 
-        Array.Copy(fullCipher, 0, iv, 0, iv.Length);
-        aes.IV = iv;
+        // Extrai componentes
+        var nonce = new byte[NonceSize];
+        var tag = new byte[TagSize];
+        var ciphertext = new byte[fullCipher.Length - NonceSize - TagSize];
 
-        // Decifra o restante (CipherText)
-        using var ms = new MemoryStream(fullCipher, 16, fullCipher.Length - 16);
-        using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-        using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
-        using var sr = new StreamReader(cs);
+        Buffer.BlockCopy(fullCipher, 0, nonce, 0, NonceSize);
+        Buffer.BlockCopy(fullCipher, NonceSize, ciphertext, 0, ciphertext.Length);
+        Buffer.BlockCopy(fullCipher, NonceSize + ciphertext.Length, tag, 0, TagSize);
 
-        return sr.ReadToEnd();
+        var plainBytes = new byte[ciphertext.Length];
+
+        using var aesGcm = new AesGcm(_encryptionKey, TagSize);
+
+        try
+        {
+            // Decrypt-and-Verify em uma única operação atômica
+            aesGcm.Decrypt(nonce, ciphertext, tag, plainBytes);
+        }
+        catch (CryptographicException)
+        {
+            // Falha na autenticação = dados foram modificados
+            throw new System.Security.SecurityException(
+                "Falha na verificação de integridade: dados foram modificados ou corrompidos.");
+        }
+
+        return Encoding.UTF8.GetString(plainBytes);
+    }
+
+    /// <summary>
+    /// Gera uma chave segura de 256 bits para usar no .env
+    /// Executar uma vez e salvar no METADATA_ENC_KEY
+    /// </summary>
+    public static string GenerateNewKey()
+    {
+        var key = new byte[32]; // 256 bits
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(key);
+        return Convert.ToBase64String(key);
     }
 }

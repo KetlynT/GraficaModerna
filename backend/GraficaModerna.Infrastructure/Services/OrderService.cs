@@ -169,28 +169,167 @@ public class OrderService(
     }
 
     public async Task<List<OrderDto>> GetUserOrdersAsync(string userId)
-    {
-        var orders = await _context.Orders
-            .Where(o => o.UserId == userId)
-            .Include(o => o.Items)
-            .Include(o => o.User)
-            .OrderByDescending(o => o.OrderDate)
-            .ToListAsync();
+{
+    var orders = await _context.Orders
+        .Where(o => o.UserId == userId)
+        .Include(o => o.Items)
+        .Include(o => o.User)
+        .OrderByDescending(o => o.OrderDate)
+        .ToListAsync();
 
-        return [.. orders.Select(MapToDto)];
+    return orders.Select(MapToDto).ToList();
+}
+
+    public async Task<List<AdminOrderDto>> GetAllOrdersAsync()
+{
+    var orders = await _context.Orders
+        .Include(o => o.Items)
+        .Include(o => o.User)
+        .Include(o => o.History) // Inclui auditoria completa
+        .OrderByDescending(o => o.OrderDate)
+        .ToListAsync();
+
+    return orders.Select(MapToAdminDto).ToList();
+}
+
+// Adicione este método ao OrderService.cs existente
+
+public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents)
+{
+    // Verifica se já foi processado
+    var isAlreadyProcessed = await _context.Orders
+        .AnyAsync(o => o.StripePaymentIntentId == transactionId && o.Status == "Pago");
+
+    if (isAlreadyProcessed)
+    {
+        _logger.LogWarning(
+            "[Webhook] Tentativa de reprocessamento detectada. Transaction: {TransactionId}", 
+            transactionId);
+        return;
     }
 
-    public async Task<List<OrderDto>> GetAllOrdersAsync()
-    {
-        var orders = await _context.Orders
-            .Include(o => o.Items)
-            .Include(o => o.User)
-            .OrderByDescending(o => o.OrderDate)
-            .ToListAsync();
+    var order = await _context.Orders
+        .Include(o => o.History)
+        .Include(o => o.User)
+        .FirstOrDefaultAsync(o => o.Id == orderId);
 
-        return [.. orders.Select(MapToDto)];
+    if (order == null)
+    {
+        _logger.LogError(
+            "[Webhook] Pedido não encontrado. OrderId: {OrderId}, Transaction: {TransactionId}", 
+            orderId, transactionId);
+        return;
     }
 
+    // **VALIDAÇÃO CRÍTICA DE SEGURANÇA**
+    var expectedAmountInCents = (long)(order.TotalAmount * 100);
+    var tolerance = 2; // Tolerância de 2 centavos para arredondamento
+
+    if (Math.Abs(amountPaidInCents - expectedAmountInCents) > tolerance)
+    {
+        // **BLOQUEIO TOTAL - NÃO PROCESSAR PAGAMENTO**
+        var divergence = amountPaidInCents - expectedAmountInCents;
+        
+        AddAuditLog(order, "⚠️ FRAUDE DETECTADA", 
+            $"CRITICAL SECURITY VIOLATION - Divergência de valor: Esperado {expectedAmountInCents}, " +
+            $"Recebido {amountPaidInCents}, Diferença {divergence} centavos. " +
+            $"Transaction: {transactionId}. PAGAMENTO REJEITADO.",
+            "SYSTEM-SECURITY-ALERT");
+
+        await _context.SaveChangesAsync();
+
+        // **Notifica time de segurança**
+        _ = NotifySecurityTeamAsync(order, transactionId, expectedAmountInCents, amountPaidInCents);
+
+        // Lança exceção FATAL que será capturada pelo webhook
+        throw new Exception(
+            $"FATAL: Tentativa de manipulação de valor detectada. " +
+            $"Pedido {orderId}. Esperado {expectedAmountInCents}, Recebido {amountPaidInCents}. " +
+            $"Divergência: {divergence} centavos. TRANSAÇÃO BLOQUEADA.");
+    }
+
+    // **Validação adicional: evita processar pedidos já pagos**
+    if (order.Status == "Pago")
+    {
+        _logger.LogWarning(
+            "[Webhook] Pedido já estava marcado como pago. OrderId: {OrderId}", orderId);
+        return;
+    }
+
+    // **TUDO OK - Confirma pagamento**
+    order.StripePaymentIntentId = transactionId;
+    order.Status = "Pago";
+
+    AddAuditLog(order, "Pago",
+        $"✅ Pagamento confirmado via Webhook. Transaction ID: {transactionId}. " +
+        $"Valor validado: {amountPaidInCents / 100.0:C} (esperado: {expectedAmountInCents / 100.0:C})",
+        "STRIPE-WEBHOOK");
+
+    await _context.SaveChangesAsync();
+
+    _logger.LogInformation(
+        "[Webhook] Pagamento confirmado com sucesso. OrderId: {OrderId}, Amount: {Amount}", 
+        orderId, amountPaidInCents);
+
+    // Notifica usuário
+    _ = SendOrderUpdateEmailAsync(order.UserId, order, "Pago");
+}
+
+// **NOVO MÉTODO**: Notificação de segurança
+private async Task NotifySecurityTeamAsync(
+    Order order, 
+    string transactionId, 
+    long expectedAmount, 
+    long receivedAmount)
+{
+    try
+    {
+        var securityEmail = Environment.GetEnvironmentVariable("SECURITY_ALERT_EMAIL") 
+                           ?? "security@graficamoderna.com";
+
+        var subject = $"🚨 ALERTA DE SEGURANÇA CRÍTICO - Tentativa de Fraude";
+        var body = $@"
+            <h2 style='color: red;'>⚠️ TENTATIVA DE MANIPULAÇÃO DE PAGAMENTO DETECTADA</h2>
+            
+            <h3>Detalhes do Incidente:</h3>
+            <ul>
+                <li><b>Pedido:</b> {order.Id}</li>
+                <li><b>Usuário:</b> {order.User?.Email ?? "N/A"} (ID: {order.UserId})</li>
+                <li><b>Transaction ID:</b> {transactionId}</li>
+                <li><b>Valor Esperado:</b> R$ {expectedAmount / 100.0:F2}</li>
+                <li><b>Valor Recebido:</b> R$ {receivedAmount / 100.0:F2}</li>
+                <li><b>Divergência:</b> R$ {Math.Abs(expectedAmount - receivedAmount) / 100.0:F2}</li>
+                <li><b>IP do Cliente:</b> {order.CustomerIp ?? "N/A"}</li>
+                <li><b>User Agent:</b> {order.UserAgent ?? "N/A"}</li>
+                <li><b>Data/Hora:</b> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</li>
+            </ul>
+
+            <h3>⚠️ Ações Tomadas:</h3>
+            <ul>
+                <li>✅ Pagamento foi <b>BLOQUEADO</b></li>
+                <li>✅ Transação foi <b>REJEITADA</b></li>
+                <li>✅ Incidente registrado no histórico do pedido</li>
+                <li>⚠️ Requer <b>investigação manual imediata</b></li>
+            </ul>
+
+            <p style='color: red; font-weight: bold;'>
+                Este é um alerta automático de segurança. 
+                Investigue imediatamente e considere bloquear a conta do usuário.
+            </p>
+        ";
+
+        await _emailService.SendEmailAsync(securityEmail, subject, body);
+
+        _logger.LogCritical(
+            "[SECURITY] Alerta enviado para time de segurança. OrderId: {OrderId}, User: {UserId}", 
+            order.Id, order.UserId);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, 
+            "[SECURITY] Falha ao enviar alerta de segurança. OrderId: {OrderId}", order.Id);
+    }
+}
     public async Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto)
     {
         var user = _httpContextAccessor.HttpContext?.User;
@@ -417,29 +556,56 @@ public class OrderService(
 
     private static OrderDto MapToDto(Order order)
     {
-        return new OrderDto(
-            order.Id,
-            order.OrderDate,
-            order.DeliveryDate,
-            order.SubTotal,
-            order.Discount,
-            order.ShippingCost,
-            order.TotalAmount,
-            order.Status,
-            order.TrackingCode,
-            order.ReverseLogisticsCode,
-            order.ReturnInstructions,
-            order.RefundRejectionReason,
-            order.RefundRejectionProof,
-            order.ShippingAddress,
-            order.User?.FullName ?? "Cliente Desconhecido",
-            order.User?.CpfCnpj ?? "N/A",
-            order.User?.Email ?? "N/A",
-            [
-                .. order.Items.Select(i =>
-                    new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
-                )
-            ]
-        );
+    return new OrderDto(
+        order.Id,
+        order.OrderDate,
+        order.DeliveryDate,
+        order.SubTotal,
+        order.Discount,
+        order.ShippingCost,
+        order.TotalAmount,
+        order.Status,
+        order.TrackingCode,
+        order.ReverseLogisticsCode,
+        order.ReturnInstructions,
+        order.RefundRejectionReason,
+        order.RefundRejectionProof,
+        order.ShippingAddress,
+        order.User?.FullName ?? "Cliente",
+        order.Items.Select(i =>
+            new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
+        ).ToList()
+    );
     }
+
+    private static AdminOrderDto MapToAdminDto(Order order)
+{
+    return new AdminOrderDto(
+        order.Id,
+        order.OrderDate,
+        order.DeliveryDate,
+        order.SubTotal,
+        order.Discount,
+        order.ShippingCost,
+        order.TotalAmount,
+        order.Status,
+        order.TrackingCode,
+        order.ReverseLogisticsCode,
+        order.ReturnInstructions,
+        order.RefundRejectionReason,
+        order.RefundRejectionProof,
+        order.ShippingAddress,
+        order.User?.FullName ?? "Cliente Desconhecido",
+        DataMaskingExtensions.MaskCpfCnpj(order.User?.CpfCnpj ?? ""),
+        order.User?.Email ?? "N/A",
+        DataMaskingExtensions.MaskIpAddress(order.CustomerIp),
+        order.Items.Select(i =>
+            new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
+        ).ToList(),
+        order.History.Select(h =>
+            new OrderHistoryDto(h.Status, h.Message, h.ChangedBy, h.Timestamp)
+        ).OrderByDescending(h => h.Timestamp).ToList()
+    );
+}
+
 }

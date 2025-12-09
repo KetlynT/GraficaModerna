@@ -5,15 +5,24 @@ using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
+public class CartService : ICartService
 {
     private const int MaxConcurrencyRetries = 3;
     private const int MaxQuantityPerItem = 5000;
-    private readonly AppDbContext _context = context;
-    private readonly IUnitOfWork _uow = uow;
+    private readonly AppDbContext _context;
+    private readonly IUnitOfWork _uow;
+    private readonly ILogger<CartService> _logger;
+
+    public CartService(IUnitOfWork uow, AppDbContext context, ILogger<CartService> logger)
+    {
+        _uow = uow;
+        _context = context;
+        _logger = logger;
+    }
 
     public async Task<CartDto> GetCartAsync(string userId)
     {
@@ -48,12 +57,14 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
     public async Task AddItemAsync(string userId, AddToCartDto dto)
     {
         ArgumentNullException.ThrowIfNull(dto);
-        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("userId inválido.", nameof(userId));
+        if (string.IsNullOrWhiteSpace(userId)) 
+            throw new ArgumentException("userId inválido.", nameof(userId));
 
         if (dto.Quantity <= 0)
             throw new ArgumentOutOfRangeException(nameof(dto), "Quantidade deve ser maior que zero.");
+        
         if (dto.Quantity > MaxQuantityPerItem)
-            throw new ArgumentOutOfRangeException(nameof(dto),
+            throw new ArgumentOutOfRangeException(nameof(dto), 
                 $"Quantidade excede o limite permitido de {MaxQuantityPerItem}.");
 
         for (var attempt = 1; attempt <= MaxConcurrencyRetries; attempt++)
@@ -61,10 +72,17 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
             using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
+                // **CORREÇÃO CRÍTICA**: Row-level locking com FOR UPDATE
                 var product = await _context.Products
-                    .Where(p => p.Id == dto.ProductId && p.IsActive)
-                    .SingleOrDefaultAsync() ?? throw new InvalidOperationException("Produto indisponível ou removido.");
-                
+                    .FromSqlRaw(@"
+                        SELECT * FROM ""Products"" 
+                        WHERE ""Id"" = {0} AND ""IsActive"" = true 
+                        FOR UPDATE", dto.ProductId)
+                    .SingleOrDefaultAsync();
+
+                if (product == null)
+                    throw new InvalidOperationException("Produto indisponível ou removido.");
+
                 if (product.StockQuantity < dto.Quantity)
                     throw new InvalidOperationException("Estoque insuficiente para a quantidade solicitada.");
 
@@ -82,6 +100,7 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
                     if (newTotal > int.MaxValue)
                         throw new InvalidOperationException("Quantidade inválida (Excesso de itens).");
 
+                    // Re-verifica estoque com o novo total
                     if (product.StockQuantity < newTotal)
                         throw new InvalidOperationException(
                             "Não é possível adicionar mais itens: estoque insuficiente.");
@@ -101,12 +120,25 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
                 cart.LastUpdated = DateTime.UtcNow;
                 await _uow.CommitAsync();
                 await transaction.CommitAsync();
+                
+                _logger.LogInformation(
+                    "Item adicionado ao carrinho. User: {UserId}, Product: {ProductId}, Qty: {Quantity}", 
+                    userId, dto.ProductId, dto.Quantity);
+                
                 return;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException ex)
             {
                 await transaction.RollbackAsync();
-                if (attempt == MaxConcurrencyRetries) throw;
+                _logger.LogWarning(ex, 
+                    "Tentativa {Attempt} de {MaxAttempts} falhou (concorrência). User: {UserId}", 
+                    attempt, MaxConcurrencyRetries, userId);
+                
+                if (attempt == MaxConcurrencyRetries) 
+                    throw new InvalidOperationException(
+                        "Não foi possível processar a operação devido a alta concorrência. Tente novamente.");
+                
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt)); // Exponential backoff
             }
             catch
             {
@@ -118,9 +150,12 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
 
     public async Task UpdateItemQuantityAsync(string userId, Guid cartItemId, int quantity)
     {
-        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("userId inválido.", nameof(userId));
+        if (string.IsNullOrWhiteSpace(userId)) 
+            throw new ArgumentException("userId inválido.", nameof(userId));
 
-        if (quantity < 0) throw new ArgumentException("A quantidade não pode ser negativa.");
+        if (quantity < 0) 
+            throw new ArgumentException("A quantidade não pode ser negativa.");
+        
         if (quantity > MaxQuantityPerItem)
             throw new ArgumentException($"Quantidade excede o limite permitido de {MaxQuantityPerItem}.");
 
@@ -136,14 +171,22 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
             try
             {
                 var cart = await GetOrCreateCart(userId);
-                var item = cart.Items.FirstOrDefault(i => i.Id == cartItemId) ??
-                           throw new InvalidOperationException("Item não encontrado no carrinho.");
-                
+                var item = cart.Items.FirstOrDefault(i => i.Id == cartItemId) 
+                    ?? throw new InvalidOperationException("Item não encontrado no carrinho.");
+
+                // **CORREÇÃO**: Lock no produto
                 var product = await _context.Products
-                    .Where(p => p.Id == item.ProductId && p.IsActive)
-                    .SingleOrDefaultAsync() ?? throw new InvalidOperationException("Produto indisponível.");
-                
-                if (product.StockQuantity < quantity) throw new InvalidOperationException("Estoque insuficiente.");
+                    .FromSqlRaw(@"
+                        SELECT * FROM ""Products"" 
+                        WHERE ""Id"" = {0} AND ""IsActive"" = true 
+                        FOR UPDATE", item.ProductId)
+                    .SingleOrDefaultAsync();
+
+                if (product == null)
+                    throw new InvalidOperationException("Produto indisponível.");
+
+                if (product.StockQuantity < quantity) 
+                    throw new InvalidOperationException("Estoque insuficiente.");
 
                 item.Quantity = quantity;
                 cart.LastUpdated = DateTime.UtcNow;
@@ -155,7 +198,11 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
             catch (DbUpdateConcurrencyException)
             {
                 await transaction.RollbackAsync();
-                if (attempt == MaxConcurrencyRetries) throw;
+                if (attempt == MaxConcurrencyRetries) 
+                    throw new InvalidOperationException(
+                        "Não foi possível atualizar o item devido a alta concorrência.");
+                
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt));
             }
             catch
             {
@@ -167,7 +214,8 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
 
     public async Task RemoveItemAsync(string userId, Guid itemId)
     {
-        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("userId inválido.", nameof(userId));
+        if (string.IsNullOrWhiteSpace(userId)) 
+            throw new ArgumentException("userId inválido.", nameof(userId));
 
         var cart = await GetOrCreateCart(userId);
         var item = cart.Items.FirstOrDefault(i => i.Id == itemId);
@@ -181,7 +229,8 @@ public class CartService(IUnitOfWork uow, AppDbContext context) : ICartService
 
     public async Task ClearCartAsync(string userId)
     {
-        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("userId inválido.", nameof(userId));
+        if (string.IsNullOrWhiteSpace(userId)) 
+            throw new ArgumentException("userId inválido.", nameof(userId));
 
         var cart = await _uow.Carts.GetByUserIdAsync(userId);
         if (cart != null)
