@@ -295,7 +295,7 @@ builder.Services.AddSingleton<IHtmlSanitizer>(s =>
     return sanitizer;
 });
 
-builder.Services.AddValidatorsFromAssemblyContaining<CreateProductValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>();
 builder.Services.AddFluentValidationAutoValidation();
 
 builder.Services.AddTransient<JwtValidationMiddleware>();

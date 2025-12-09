@@ -47,7 +47,7 @@ public class ProductsController(IProductService service) : ControllerBase
 
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult> Update(Guid id, [FromBody] CreateProductDto dto)
+    public async Task<ActionResult> Update(Guid id, [FromBody] UpdateProductDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 

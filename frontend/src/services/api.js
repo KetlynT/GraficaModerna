@@ -87,6 +87,18 @@ api.interceptors.response.use(
       }
     }
 
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers['retry-after'];
+      const message = retryAfter 
+        ? `Muitas solicitações. Por favor, aguarde ${retryAfter} segundos.` 
+        : 'Muitas tentativas consecutivas. Aguarde um momento antes de tentar novamente.';
+      toast.error(message);
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+    }
+
     return Promise.reject(error);
   }
 );

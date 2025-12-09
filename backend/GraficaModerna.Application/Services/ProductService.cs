@@ -56,7 +56,7 @@ public class ProductService(IProductRepository repository, IMemoryCache cache) :
         return MapToDto(created);
     }
 
-    public async Task UpdateAsync(Guid id, CreateProductDto dto)
+    public async Task UpdateAsync(Guid id, UpdateProductDto dto)
     {
         var product = await _repository.GetByIdAsync(id) ?? throw new KeyNotFoundException("Produto n�o encontrado.");
         product.Update(
