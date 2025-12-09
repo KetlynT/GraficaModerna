@@ -388,6 +388,11 @@ public class OrderService(
                 await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId, amountToRefund);
 
                 auditMessage += $". Reembolso de R$ {amountToRefund:N2} processado no Stripe.";
+
+                if (amountToRefund < order.TotalAmount)
+                {
+                    dto = dto with { Status = "Reembolsado Parcialmente" };
+                }
             }
             catch (Exception ex)
             {
@@ -443,9 +448,8 @@ public class OrderService(
 
             foreach (var itemRequest in dto.Items)
             {
-                var orderItem = order.Items.FirstOrDefault(i => i.ProductId == itemRequest.ProductId);
-                if (orderItem == null)
-                    throw new Exception($"Produto {itemRequest.ProductId} não pertence a este pedido.");
+                var orderItem = order.Items.FirstOrDefault(i => i.ProductId == itemRequest.ProductId)
+    ?? throw        new Exception($"Produto {itemRequest.ProductId} não pertence a este pedido.");
 
                 if (itemRequest.Quantity > orderItem.Quantity || itemRequest.Quantity <= 0)
                     throw new Exception($"Quantidade inválida para o produto {orderItem.ProductName}.");
@@ -612,6 +616,10 @@ public class OrderService(
                 case "Reembolsado":
                     subject = $"Reembolso Processado - #{order.Id}";
                     body = $"O reembolso do seu pedido #{order.Id} foi processado e deve aparecer na sua fatura em breve.";
+                    break;
+                case "Reembolsado Parcialmente":
+                    subject = $"Reembolso Parcial Processado - #{order.Id}";
+                    body = $"Um reembolso parcial do seu pedido #{order.Id} foi processado e o valor deve aparecer na sua fatura em breve.";
                     break;
                 case "Aguardando Devolução":
                     subject = $"Instruções de Devolução - Pedido #{order.Id}";
