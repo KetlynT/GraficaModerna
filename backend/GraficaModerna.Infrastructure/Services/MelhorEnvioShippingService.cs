@@ -33,7 +33,7 @@ public class MelhorEnvioShippingService(
 
     if (items == null || items.Count == 0) return [];
 
-    var originCep = "01001000";
+    var originCep = Environment.GetEnvironmentVariable("CEP_ORIGEM")!;
     try
     {
         var originCepSetting = await _context.SiteSettings
