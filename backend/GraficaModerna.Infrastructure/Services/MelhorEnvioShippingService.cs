@@ -29,15 +29,7 @@ public class MelhorEnvioShippingService(
 
     public async Task<List<ShippingOptionDto>> CalculateAsync(string destinationCep, List<ShippingItemDto> items)
     {
-    var token = Environment.GetEnvironmentVariable("MELHOR_ENVIO_TOKEN");
-
-    if (string.IsNullOrEmpty(token) && _env.IsDevelopment()) token = _configuration["MelhorEnvio:Token"];
-
-    if (string.IsNullOrEmpty(token))
-    {
-        _logger.LogWarning("Melhor Envio: Token não configurado. Cálculo ignorado.");
-        return [];
-    }
+    var token = Environment.GetEnvironmentVariable("MELHOR_ENVIO_TOKEN")!;
 
     if (items == null || items.Count == 0) return [];
 

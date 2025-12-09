@@ -12,11 +12,7 @@ public class MetadataSecurityService
 
     public MetadataSecurityService(IConfiguration configuration)
     {
-        var encKeyString = Environment.GetEnvironmentVariable("METADATA_ENC_KEY")
-                           ?? configuration["Security:MetadataEncryptionKey"];
-
-        if (string.IsNullOrEmpty(encKeyString))
-            throw new Exception("METADATA_ENC_KEY não configurada.");
+        var encKeyString = Environment.GetEnvironmentVariable("METADATA_ENC_KEY")!;
 
         try
         {

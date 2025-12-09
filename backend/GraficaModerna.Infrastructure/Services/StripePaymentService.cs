@@ -20,13 +20,7 @@ public class StripePaymentService : IPaymentService
         _logger = logger;
         _securityService = securityService;
 
-        var apiKey = Environment.GetEnvironmentVariable("STRIPE_SECRET_KEY") ?? _configuration["Stripe:SecretKey"];
-
-        if (string.IsNullOrEmpty(apiKey))
-        {
-            _logger.LogCritical("STRIPE_SECRET_KEY não encontrada.");
-            throw new Exception("Erro de configuração no servidor de pagamentos.");
-        }
+        var apiKey = Environment.GetEnvironmentVariable("STRIPE_SECRET_KEY")!;
 
         StripeConfiguration.ApiKey = apiKey;
     }
@@ -35,22 +29,15 @@ public class StripePaymentService : IPaymentService
     {
         try
         {
-            var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
-                              ?? _configuration["FrontendUrl"]
-                              ?? "http://localhost:5173";
+            var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")!;
 
             frontendUrl = frontendUrl.TrimEnd('/');
 
             var successUrl = $"{frontendUrl}/sucesso?session_id={{CHECKOUT_SESSION_ID}}";
             var cancelUrl = $"{frontendUrl}/meus-pedidos";
 
-            // CORREÇÃO: MetadataSecurityService.Protect retorna apenas uma string.
-            // O algoritmo AES-GCM inclui a Tag de autenticação no próprio payload, 
-            // garantindo a integridade sem precisar de um campo "sig" separado.
             var encryptedOrder = _securityService.Protect(order.Id.ToString());
 
-            // A string gerada tem ~88 caracteres (Base64 de ~64 bytes), 
-            // bem abaixo do limite de 500 caracteres do Stripe.
             var options = new SessionCreateOptions
             {
                 Mode = "payment",

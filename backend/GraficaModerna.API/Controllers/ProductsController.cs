@@ -39,8 +39,6 @@ public class ProductsController(IProductService service) : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<ProductResponseDto>> Create([FromBody] CreateProductDto dto)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
         var result = await _service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetAll), new { id = result.Id }, result);
     }
@@ -49,8 +47,6 @@ public class ProductsController(IProductService service) : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult> Update(Guid id, [FromBody] UpdateProductDto dto)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
         try
         {
             await _service.UpdateAsync(id, dto);

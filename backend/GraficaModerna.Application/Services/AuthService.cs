@@ -277,8 +277,7 @@ public class AuthService(
             new(JwtRegisteredClaimNames.UniqueName, user.UserName!)
         };
 
-        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];
-        if (string.IsNullOrEmpty(keyString) || keyString.Length < 32) throw new Exception("Erro config JWT");
+        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")!;
         var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
 
         return new JwtSecurityToken(
@@ -300,7 +299,7 @@ public class AuthService(
 
     private ClaimsPrincipal? GetPrincipalFromExpiredToken(string? token)
     {
-        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? _configuration["Jwt:Key"];
+        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")!;
         var tokenValidationParameters = new TokenValidationParameters
         {
             ValidateAudience = false,

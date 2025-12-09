@@ -36,18 +36,9 @@ public class StripeWebhookController : ControllerBase
     [HttpPost("stripe")]
     public async Task<IActionResult> HandleStripeEvent()
     {
-        // REMOVIDO: Validação por IP. O Stripe recomenda validar apenas a assinatura (Stripe-Signature).
-        // IPs podem mudar sem aviso prévio, causando falsos positivos.
 
         var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
-        var endpointSecret = Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET")
-                             ?? _configuration["Stripe:WebhookSecret"];
-
-        if (string.IsNullOrEmpty(endpointSecret))
-        {
-            _logger.LogError("CRÍTICO: Stripe Webhook Secret não configurado.");
-            return StatusCode(500);
-        }
+        var endpointSecret = Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET")!;
 
         try
         {
