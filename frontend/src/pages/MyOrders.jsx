@@ -5,14 +5,15 @@ import { Package, Calendar, MapPin, ChevronDown, ChevronUp, CreditCard, Truck, R
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../components/ui/Button';
 import toast from 'react-hot-toast';
+import RefundRequestModal from '../components/RefundRequestModal';
 
 export const MyOrders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
-  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null);
+  const [isRefundLoading, setIsRefundLoading] = useState(false);
 
   useEffect(() => { loadOrders(); }, []);
 
@@ -40,31 +41,36 @@ export const MyOrders = () => {
     }
   };
 
-  const openRefundModal = (orderId) => {
-    setSelectedOrderForRefund(orderId);
-    setIsRefundModalOpen(true);
+  const handleOpenRefundModal = (order) => {
+    setSelectedOrderForRefund(order);
   };
 
-  const confirmRefund = async () => {
+  const handleRefundSubmit = async (payload) => {
     if (!selectedOrderForRefund) return;
+    
     const loadingToast = toast.loading("Enviando solicitação...");
+    setIsRefundLoading(true);
+
     try {
-        await OrderService.requestRefund(selectedOrderForRefund);
-        toast.success("Solicitação enviada!", { id: loadingToast });
-        loadOrders();
+        await OrderService.requestRefund(selectedOrderForRefund.id, payload);
+        toast.success("Solicitação enviada com sucesso!", { id: loadingToast });
+        await loadOrders();
+        setSelectedOrderForRefund(null);
     } catch (error) {
         toast.error(error.response?.data?.message || "Erro ao solicitar reembolso.", { id: loadingToast });
     } finally {
-        setIsRefundModalOpen(false);
-        setSelectedOrderForRefund(null);
+        setIsRefundLoading(false);
     }
   };
 
   const getRefundStatus = (order) => {
     const status = order.status;
     const validStatuses = ['Pago', 'Enviado', 'Entregue'];
+    
     if (!validStatuses.includes(status)) return { showSection: false, canRefund: false, label: '' };
+    
     if (status === 'Pago' || status === 'Enviado') return { showSection: true, canRefund: true, label: "Solicitar Cancelamento" };
+    
     if (status === 'Entregue') {
         if (!order.deliveryDate) return { showSection: true, canRefund: false, label: "Aguardando data..." };
         const deadline = new Date(new Date(order.deliveryDate).setDate(new Date(order.deliveryDate).getDate() + 7));
@@ -110,44 +116,45 @@ export const MyOrders = () => {
               </div>
 
               <AnimatePresence>
-              {order.status === 'Reembolso Reprovado' && (
-    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-        <h4 className="text-red-800 font-bold flex items-center gap-2 mb-2">
-            <AlertTriangle size={18}/> Solicitação de Reembolso Negada
-        </h4>
-        
-        <div className="space-y-3">
-            <div>
-                <span className="text-xs font-bold text-red-700 uppercase block mb-1">Motivo da Análise:</span>
-                <p className="text-sm text-gray-800 bg-white p-3 rounded border border-red-100">
-                    {order.refundRejectionReason || "Entre em contato com o suporte para mais detalhes."}
-                </p>
-            </div>
+                {order.status === 'Reembolso Reprovado' && (
+                    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 mx-6 mt-4">
+                        <h4 className="text-red-800 font-bold flex items-center gap-2 mb-2">
+                            <AlertTriangle size={18}/> Solicitação de Reembolso Negada
+                        </h4>
+                        
+                        <div className="space-y-3">
+                            <div>
+                                <span className="text-xs font-bold text-red-700 uppercase block mb-1">Motivo da Análise:</span>
+                                <p className="text-sm text-gray-800 bg-white p-3 rounded border border-red-100">
+                                    {order.refundRejectionReason || "Entre em contato com o suporte para mais detalhes."}
+                                </p>
+                            </div>
 
-            {order.refundRejectionProof && (
-                <div>
-                    <span className="text-xs font-bold text-red-700 uppercase block mb-1">Evidência Anexada:</span>
-                    <div className="mt-2">
-                        {order.refundRejectionProof.endsWith('.mp4') || order.refundRejectionProof.endsWith('.webm') ? (
-                            <video controls className="w-full max-w-sm rounded border border-gray-300 max-h-64">
-                                <source src={order.refundRejectionProof} type="video/mp4" />
-                                Seu navegador não suporta vídeos.
-                            </video>
-                        ) : (
-                            <a href={order.refundRejectionProof} target="_blank" rel="noopener noreferrer">
-                                <img 
-                                    src={order.refundRejectionProof} 
-                                    alt="Prova" 
-                                    className="h-32 w-auto object-cover rounded border border-gray-300 hover:opacity-90 transition-opacity" 
-                                />
-                            </a>
-                        )}
+                            {order.refundRejectionProof && (
+                                <div>
+                                    <span className="text-xs font-bold text-red-700 uppercase block mb-1">Evidência Anexada:</span>
+                                    <div className="mt-2">
+                                        {order.refundRejectionProof.endsWith('.mp4') || order.refundRejectionProof.endsWith('.webm') ? (
+                                            <video controls className="w-full max-w-sm rounded border border-gray-300 max-h-64">
+                                                <source src={order.refundRejectionProof} type="video/mp4" />
+                                                Seu navegador não suporta vídeos.
+                                            </video>
+                                        ) : (
+                                            <a href={order.refundRejectionProof} target="_blank" rel="noopener noreferrer">
+                                                <img 
+                                                    src={order.refundRejectionProof} 
+                                                    alt="Prova" 
+                                                    className="h-32 w-auto object-cover rounded border border-gray-300 hover:opacity-90 transition-opacity" 
+                                                />
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
-    </div>
-)}
+                )}
+                
                 {expandedOrderId === order.id && (
                     <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden border-t border-gray-100">
                         <div className="p-6 bg-white">
@@ -197,7 +204,7 @@ export const MyOrders = () => {
                                 <div className="border-t pt-3 flex justify-end">
                                     <button
                                         disabled={!canRefund}
-                                        onClick={() => openRefundModal(order.id)}
+                                        onClick={() => handleOpenRefundModal(order)}
                                         className={`text-xs font-medium px-3 py-1.5 rounded transition-colors flex items-center gap-1.5
                                             ${canRefund ? 'text-red-600 hover:bg-red-50 border border-red-200' : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed opacity-70'}`}
                                     >
@@ -213,18 +220,14 @@ export const MyOrders = () => {
           )})}
         </div>
       )}
-      {/* Modal Omitido para brevidade (já corrigido em outros lugares ou usa UI genérica) */}
-      {isRefundModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 text-center">
-                 <h3 className="text-lg font-bold text-gray-900 mb-2">Confirmar Solicitação</h3>
-                 <p className="text-gray-500 mb-6">Deseja prosseguir com o pedido de reembolso/cancelamento?</p>
-                 <div className="flex justify-center gap-3">
-                    <Button variant="ghost" onClick={() => setIsRefundModalOpen(false)}>Voltar</Button>
-                    <Button variant="danger" onClick={confirmRefund}>Confirmar</Button>
-                 </div>
-            </div>
-        </div>
+      
+      {selectedOrderForRefund && (
+        <RefundRequestModal
+            order={selectedOrderForRefund}
+            onClose={() => setSelectedOrderForRefund(null)}
+            onSubmit={handleRefundSubmit}
+            isLoading={isRefundLoading}
+        />
       )}
     </div>
   );
@@ -235,7 +238,7 @@ const StatusBadge = ({ status }) => {
         'Pendente': 'bg-yellow-100 text-yellow-800', 'Pago': 'bg-green-100 text-green-800', 'Enviado': 'bg-blue-100 text-blue-800',
         'Entregue': 'bg-gray-100 text-gray-800', 'Cancelado': 'bg-red-100 text-red-800', 
         'Reembolso Solicitado': 'bg-purple-100 text-purple-800', 'Aguardando Devolução': 'bg-orange-100 text-orange-800',
-        'Reembolsado': 'bg-gray-800 text-white', 'Reembolso Reprovado': 'bg-red-200 text-red-900'
+        'Reembolsado': 'bg-gray-800 text-white', 'Reembolso Reprovado': 'bg-red-200 text-red-900', 'Parcialmente Reembolsado': 'bg-purple-200 text-purple-900'
     };
     return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${styles[status] || 'bg-gray-100'}`}>{status}</span>;
 };

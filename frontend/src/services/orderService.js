@@ -12,8 +12,8 @@ export const OrderService = {
     return response.data;
   },
 
-  requestRefund: async (orderId) => {
-    const response = await api.post(`/orders/${orderId}/request-refund`);
+  requestRefund: async (orderId, refundData) => {
+    const response = await api.post(`/orders/${orderId}/request-refund`, refundData);
     return response.data;
   },
 

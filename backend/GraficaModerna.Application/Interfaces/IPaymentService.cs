@@ -6,5 +6,5 @@ public interface IPaymentService
 {
     Task<string> CreateCheckoutSessionAsync(Order order);
 
-    Task RefundPaymentAsync(string paymentIntentId);
+    Task RefundPaymentAsync(string paymentIntentId, decimal? amount = null);
 }

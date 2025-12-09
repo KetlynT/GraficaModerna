@@ -3,7 +3,7 @@ import { OrderService } from '../../services/orderService';
 import { ProductService } from '../../services/productService';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
-import { Search, Eye, X, Settings, RefreshCcw } from 'lucide-react';
+import { Search, Eye, X, Settings, RefreshCcw, AlertCircle } from 'lucide-react';
 
 const OrdersTab = () => {
     const [orders, setOrders] = useState([]);
@@ -11,15 +11,19 @@ const OrdersTab = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('Todos');
-    const [refundReason, setRefundReason] = useState('');
-    const [refundProof, setRefundProof] = useState('');
-    const [uploadingProof, setUploadingProof] = useState(false);
-
+    
+    // Estados do Modal
     const [selectedOrder, setSelectedOrder] = useState(null);
-    const [trackingInput, setTrackingInput] = useState('');
+    const [uploadingProof, setUploadingProof] = useState(false);
+    
+    // Inputs do Formulário
     const [statusInput, setStatusInput] = useState('');
+    const [trackingInput, setTrackingInput] = useState('');
     const [reverseCodeInput, setReverseCodeInput] = useState('');
     const [returnInstructionsInput, setReturnInstructionsInput] = useState('');
+    const [refundReason, setRefundReason] = useState('');
+    const [refundProof, setRefundProof] = useState('');
+    const [refundAmountInput, setRefundAmountInput] = useState(''); // Novo: Valor do Reembolso
 
     useEffect(() => { loadOrders(); }, []);
 
@@ -59,6 +63,13 @@ const OrdersTab = () => {
         setReturnInstructionsInput(order.returnInstructions || '');
         setRefundReason(order.refundRejectionReason || '');
         setRefundProof(order.refundRejectionProof || '');
+
+        // Define o valor sugerido para reembolso
+        if (order.refundRequestedAmount) {
+            setRefundAmountInput(order.refundRequestedAmount.toString());
+        } else {
+            setRefundAmountInput(order.totalAmount.toString());
+        }
     };
 
     const handleCloseModal = () => {
@@ -84,30 +95,36 @@ const OrdersTab = () => {
         e.preventDefault();
         const toastId = toast.loading("Atualizando...");
         try {
-            await OrderService.updateOrderStatus(selectedOrder.id, {
+            const payload = {
                 status: statusInput,
                 trackingCode: trackingInput,
                 reverseLogisticsCode: reverseCodeInput,
                 returnInstructions: returnInstructionsInput,
                 refundRejectionReason: refundReason,
                 refundRejectionProof: refundProof
-            });
+            };
+
+            // Se for reembolso, envia o valor definido pelo admin
+            if (statusInput === 'Reembolsado') {
+                payload.refundAmount = parseFloat(refundAmountInput);
+            }
+
+            await OrderService.updateOrderStatus(selectedOrder.id, payload);
             
+            // Atualiza a lista local
             const updatedList = orders.map(o => o.id === selectedOrder.id ? {
                 ...o, 
-                status: statusInput, 
-                trackingCode: trackingInput,
-                reverseLogisticsCode: reverseCodeInput,
-                returnInstructions: returnInstructionsInput,
-                refundRejectionReason: refundReason,
-                refundRejectionProof: refundProof
+                ...payload,
+                // Mantém dados originais que não mudaram
+                refundType: o.refundType, 
+                refundRequestedAmount: o.refundRequestedAmount
             } : o);
             
             setOrders(updatedList);
             toast.success("Pedido atualizado com sucesso!", { id: toastId });
             handleCloseModal();
         } catch (err) {
-            toast.error("Erro ao atualizar pedido.", { id: toastId });
+            toast.error(err.response?.data?.message || "Erro ao atualizar pedido.", { id: toastId });
         }
     };
 
@@ -163,11 +180,16 @@ const OrdersTab = () => {
                                 <td className="p-4 align-middle">
                                     <div className="font-bold text-gray-800 font-mono">#{o.id.slice(0, 8)}</div>
                                     <div className="text-xs text-gray-500">{new Date(o.orderDate).toLocaleDateString('pt-BR')}</div>
+                                    {o.refundType && (
+                                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded mt-1 inline-block">
+                                            Reembolso {o.refundType}
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="p-4 align-middle">
                                     <div className="font-bold text-gray-800">{o.customerName || 'Cliente'}</div>
                                     <div className="text-xs text-gray-500 flex flex-col">
-                                        <span>{o.customerCpf}</span>
+                                        <span>{o.customerCpfMasked || o.customerCpf}</span>
                                         <span>{o.customerEmail}</span>
                                     </div>
                                 </td>
@@ -201,19 +223,34 @@ const OrdersTab = () => {
                             <div>
                                 <h3 className="text-xl font-bold text-gray-800">Pedido #{selectedOrder.id.slice(0,8)}</h3>
                                 <p className="text-sm text-gray-500">
-                                    {selectedOrder.customerName} - {selectedOrder.customerCpf}
+                                    {selectedOrder.customerName} - {selectedOrder.customerCpfMasked || selectedOrder.customerCpf}
                                 </p>
                             </div>
                             <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                         </div>
                         
                         <div className="p-6 space-y-6">
+                            {selectedOrder.refundType && (
+                                <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg flex items-start gap-3">
+                                    <AlertCircle className="text-purple-600 shrink-0 mt-0.5" size={20}/>
+                                    <div>
+                                        <h4 className="font-bold text-purple-800 text-sm">Solicitação de Reembolso Ativa</h4>
+                                        <p className="text-sm text-purple-700 mt-1">
+                                            O cliente solicitou um reembolso <b>{selectedOrder.refundType}</b>.
+                                        </p>
+                                        <p className="text-sm font-bold text-purple-900 mt-1">
+                                            Valor Solicitado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedOrder.refundRequestedAmount || 0)}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded border border-gray-200 text-sm">
                                 <div>
                                     <span className="block font-bold text-gray-600 text-xs uppercase mb-1">Cliente</span>
                                     <div className="font-semibold">{selectedOrder.customerName}</div>
                                     <div>{selectedOrder.customerEmail}</div>
-                                    <div>{selectedOrder.customerCpf}</div>
+                                    <div>{selectedOrder.customerCpfMasked || selectedOrder.customerCpf}</div>
                                 </div>
                                 <div>
                                     <span className="block font-bold text-gray-600 text-xs uppercase mb-1">Entrega</span>
@@ -226,7 +263,15 @@ const OrdersTab = () => {
                                 <div className="bg-gray-50 rounded-lg p-4 space-y-2 border border-gray-100">
                                     {selectedOrder.items.map((item, idx) => (
                                         <div key={idx} className="flex justify-between text-sm">
-                                            <span>{item.quantity}x {item.productName}</span>
+                                            <div>
+                                                <span>{item.quantity}x {item.productName}</span>
+                                                {/* Exibe indicador visual se o DTO suportar a informação de quantidade devolvida */}
+                                                {item.refundQuantity > 0 && (
+                                                    <span className="text-xs text-red-600 font-bold ml-2 bg-red-50 px-1 rounded">
+                                                        (Devolução: {item.refundQuantity})
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className="font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.total)}</span>
                                         </div>
                                     ))}
@@ -256,15 +301,36 @@ const OrdersTab = () => {
                                             <option value="Reembolso Solicitado">Reembolso Solicitado</option>
                                             <option value="Aguardando Devolução">Aguardando Devolução</option>
                                             <option value="Reembolsado">Reembolsado</option>
+                                            <option value="Reembolso Reprovado">Reembolso Reprovado</option>
                                         </select>
                                     </div>
 
                                     {(statusInput === 'Reembolsado' || statusInput === 'Cancelado') && (
-                                        <div className="bg-orange-100 border border-orange-300 text-orange-800 p-3 rounded text-sm flex gap-2 items-start">
-                                            <RefreshCcw size={18} className="mt-0.5 shrink-0"/>
+                                        <div className="space-y-3">
+                                            <div className="bg-orange-100 border border-orange-300 text-orange-800 p-3 rounded text-sm flex gap-2 items-start">
+                                                <RefreshCcw size={18} className="mt-0.5 shrink-0"/>
+                                                <div>
+                                                    <strong>Atenção:</strong> O valor abaixo será estornado automaticamente no Stripe.
+                                                    Verifique o saldo antes de confirmar.
+                                                </div>
+                                            </div>
+
                                             <div>
-                                                <strong>Atenção:</strong> Ao salvar como "{statusInput}", o sistema tentará processar o estorno 
-                                                automaticamente no Stripe (se o pagamento foi feito por lá).
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                    Valor a Estornar (R$)
+                                                </label>
+                                                <input 
+                                                    type="number"
+                                                    step="0.01"
+                                                    className="w-full border border-gray-300 rounded p-2 text-sm font-mono font-bold text-red-600 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-200"
+                                                    placeholder="0.00"
+                                                    value={refundAmountInput}
+                                                    onChange={e => setRefundAmountInput(e.target.value)}
+                                                    max={selectedOrder.totalAmount}
+                                                />
+                                                <p className="text-[10px] text-gray-500 mt-1">
+                                                    Máximo permitido: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedOrder.totalAmount)}
+                                                </p>
                                             </div>
                                         </div>
                                     )}

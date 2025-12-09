@@ -132,7 +132,7 @@ public class StripePaymentService : IPaymentService
         }
     }
 
-    public async Task RefundPaymentAsync(string paymentIntentId)
+    public async Task RefundPaymentAsync(string paymentIntentId, decimal? amount = null)
     {
         if (string.IsNullOrEmpty(paymentIntentId))
             throw new ArgumentException("ID da transação inválido.");
@@ -146,6 +146,11 @@ public class StripePaymentService : IPaymentService
                 Reason = RefundReasons.RequestedByCustomer
             };
 
+            if (amount.HasValue)
+            {
+                options.Amount = (long)(amount.Value * 100);
+            }
+
             await refundService.CreateAsync(options);
         }
         catch (StripeException stripeEx)
@@ -153,6 +158,12 @@ public class StripePaymentService : IPaymentService
             _logger.LogError(stripeEx,
                 "Erro Stripe ao processar reembolso. PaymentIntent: {PaymentIntent}, Code: {Code}",
                 paymentIntentId, stripeEx.StripeError?.Code);
+
+            if (stripeEx.StripeError?.Code == "charge_already_refunded" ||
+            stripeEx.StripeError?.Code == "amount_too_large")
+            {
+                throw new Exception("O valor do reembolso excede o disponível na transação.");
+            }
 
             throw new Exception("Não foi possível processar o reembolso automático no provedor de pagamentos.");
         }

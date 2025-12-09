@@ -313,6 +313,7 @@ public class OrderService(
             throw;
         }
     }
+
     public async Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto)
     {
         var user = _httpContextAccessor.HttpContext?.User;
@@ -322,12 +323,14 @@ public class OrderService(
             throw new UnauthorizedAccessException("Apenas administradores podem alterar pedidos.");
 
         var order = await _context.Orders
+            .Include(o => o.Items)
             .Include(o => o.History)
             .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado");
 
         var oldStatus = order.Status;
         var auditMessage = $"Status alterado manualmente para {dto.Status}";
 
+        // --- 1. Lógica de Logística Reversa ---
         if (dto.Status == "Aguardando Devolução")
         {
             if (!string.IsNullOrEmpty(dto.ReverseLogisticsCode))
@@ -340,6 +343,7 @@ public class OrderService(
             auditMessage += ". Instruções geradas.";
         }
 
+        // --- 2. Lógica de Reprovação de Reembolso ---
         if (dto.Status == "Reembolso Reprovado")
         {
             order.RefundRejectionReason = dto.RefundRejectionReason;
@@ -347,28 +351,63 @@ public class OrderService(
             auditMessage += ". Justificativa e provas anexadas.";
         }
 
+        // --- 3. Lógica Principal de Reembolso (Total ou Parcial) ---
         if ((dto.Status == "Reembolsado" || dto.Status == "Cancelado")
             && order.Status != "Reembolsado"
             && !string.IsNullOrEmpty(order.StripePaymentIntentId))
+        {
             try
             {
-                await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId);
-                auditMessage += ". Reembolso processado no Stripe.";
+                decimal amountToRefund = 0;
+
+                // Define qual valor será estornado
+                if (dto.RefundAmount.HasValue)
+                {
+                    // Se o Admin digitou um valor específico
+                    amountToRefund = dto.RefundAmount.Value;
+                }
+                else
+                {
+                    // Se não digitou, assume o valor solicitado pelo cliente (se houver) ou o total do pedido
+                    amountToRefund = order.RefundRequestedAmount ?? order.TotalAmount;
+                }
+
+                // Validação de Segurança 1: Não devolver mais que o total do pedido
+                if (amountToRefund > order.TotalAmount)
+                    throw new Exception($"O valor do reembolso ({amountToRefund:C}) não pode ser maior que o total do pedido.");
+
+                // Validação de Segurança 2: Se for parcial, não devolver mais que a soma dos itens solicitados
+                if (order.RefundType == "Parcial" && order.RefundRequestedAmount.HasValue)
+                {
+                    if (amountToRefund > order.RefundRequestedAmount.Value)
+                        throw new Exception($"O valor do reembolso ({amountToRefund:C}) excede o valor calculado dos itens solicitados ({order.RefundRequestedAmount.Value:C}).");
+                }
+
+                // Chama o serviço do Stripe passando o valor calculado
+                // Nota: Seu método RefundPaymentAsync deve aceitar o segundo parâmetro decimal? (conforme passo 3 do plano)
+                await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId, amountToRefund);
+
+                auditMessage += $". Reembolso de R$ {amountToRefund:N2} processado no Stripe.";
             }
             catch (Exception ex)
             {
+                // Em caso de erro no Stripe, interrompe o processo e não salva o status "Reembolsado"
                 throw new Exception($"Erro no reembolso Stripe: {ex.Message}");
             }
+        }
 
+        // --- 4. Atualização de Data de Entrega ---
         if (dto.Status == "Entregue" && order.Status != "Entregue")
             order.DeliveryDate = DateTime.UtcNow;
 
+        // --- 5. Atualização de Rastreio ---
         if (!string.IsNullOrEmpty(dto.TrackingCode))
         {
             order.TrackingCode = dto.TrackingCode;
             auditMessage += $" (Rastreio: {dto.TrackingCode})";
         }
 
+        // --- Finalização ---
         AddAuditLog(order, dto.Status, auditMessage, $"Admin:{adminUserId}");
 
         await _context.SaveChangesAsync();
@@ -379,11 +418,59 @@ public class OrderService(
         }
     }
 
-    public async Task RequestRefundAsync(Guid orderId, string userId)
+    public async Task RequestRefundAsync(Guid orderId, string userId, RequestRefundDto dto)
     {
-        var order = await GetUserOrderOrFail(orderId, userId);
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.History)
+            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado.");
 
-        AddAuditLog(order, "Reembolso Solicitado", "Usuário solicitou cancelamento pelo painel.", userId);
+        if (order.UserId != userId)
+            throw new UnauthorizedAccessException("Sem permissão.");
+
+        if (order.Status != "Entregue" && order.Status != "Pago")
+            throw new Exception("Status do pedido não permite solicitação de reembolso.");
+
+        if (!string.IsNullOrEmpty(order.RefundType))
+            throw new Exception("Já existe uma solicitação de reembolso para este pedido.");
+
+        decimal calculatedRefundAmount = 0;
+
+        if (dto.RefundType == "Parcial")
+        {
+            if (dto.Items == null || dto.Items.Count == 0)
+                throw new Exception("Nenhum item selecionado para reembolso parcial.");
+
+            foreach (var itemRequest in dto.Items)
+            {
+                var orderItem = order.Items.FirstOrDefault(i => i.ProductId == itemRequest.ProductId);
+                if (orderItem == null)
+                    throw new Exception($"Produto {itemRequest.ProductId} não pertence a este pedido.");
+
+                if (itemRequest.Quantity > orderItem.Quantity || itemRequest.Quantity <= 0)
+                    throw new Exception($"Quantidade inválida para o produto {orderItem.ProductName}.");
+
+                orderItem.RefundQuantity = itemRequest.Quantity;
+
+                calculatedRefundAmount += orderItem.UnitPrice * itemRequest.Quantity;
+            }
+
+            order.RefundType = "Parcial";
+            order.RefundRequestedAmount = calculatedRefundAmount;
+
+            AddAuditLog(order, "Solicitação de Reembolso",
+                $"Cliente solicitou reembolso PARCIAL de R$ {calculatedRefundAmount:F2}.", userId);
+        }
+        else
+        {
+            order.RefundType = "Total";
+            order.RefundRequestedAmount = order.TotalAmount;
+
+            foreach (var item in order.Items) item.RefundQuantity = item.Quantity;
+
+            AddAuditLog(order, "Solicitação de Reembolso",
+                "Cliente solicitou reembolso TOTAL.", userId);
+        }
 
         await _context.SaveChangesAsync();
     }

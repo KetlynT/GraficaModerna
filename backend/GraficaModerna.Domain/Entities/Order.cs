@@ -32,6 +32,8 @@ public class Order
 
     public string? ReverseLogisticsCode { get; set; }
     public string? ReturnInstructions { get; set; }
+    public string? RefundType { get; set; }
+    public decimal? RefundRequestedAmount { get; set; }
 
     public string? RefundRejectionReason { get; set; }
     public string? RefundRejectionProof { get; set; }
