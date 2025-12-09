@@ -63,3 +63,5 @@ const PagesTab = () => {
         </div>
     );
 };
+
+export default PagesTab;

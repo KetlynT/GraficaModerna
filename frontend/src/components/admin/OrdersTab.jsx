@@ -4,7 +4,6 @@ import { ProductService } from '../../services/productService';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import { Search, Eye, X, Settings, RefreshCcw } from 'lucide-react';
-import { OrderStatusBadge } from './shared/OrderStatusBadge';
 
 const OrdersTab = () => {
     const [orders, setOrders] = useState([]);
@@ -353,3 +352,24 @@ const OrdersTab = () => {
         </div>
     );
 };
+
+const OrderStatusBadge = ({ status }) => {
+    const styles = {
+        'Pendente': 'bg-yellow-100 text-yellow-800',
+        'Pago': 'bg-indigo-100 text-indigo-800',
+        'Enviado': 'bg-blue-100 text-blue-800',
+        'Entregue': 'bg-green-100 text-green-800',
+        'Cancelado': 'bg-red-100 text-red-800',
+        'Reembolso Solicitado': 'bg-purple-100 text-purple-800',
+        'Aguardando Devolução': 'bg-orange-100 text-orange-800',
+        'Reembolsado': 'bg-gray-800 text-white',
+        'Reembolso Reprovado': 'bg-red-200 text-red-900'
+    };
+    return (
+        <span className={`px-2 py-1 rounded text-xs font-bold ${styles[status] || 'bg-gray-100'}`}>
+            {status}
+        </span>
+    );
+};
+
+export default OrdersTab;

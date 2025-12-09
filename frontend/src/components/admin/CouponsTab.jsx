@@ -88,3 +88,5 @@ const CouponsTab = () => {
         </div>
     );
 };
+
+export default CouponsTab;

@@ -154,3 +154,5 @@ const SettingsTab = () => {
         </form>
     );
 };
+
+export default SettingsTab;

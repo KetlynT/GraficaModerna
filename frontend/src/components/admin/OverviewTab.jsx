@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { RefreshCcw, DollarSign, ShoppingBag, AlertTriangle, RefreshCcw } from 'lucide-react';
+import { RefreshCcw, DollarSign, ShoppingBag, AlertTriangle } from 'lucide-react';
 import { DashboardService } from '../../services/dashboardService';
 
 const OverviewTab = () => {
@@ -61,3 +61,5 @@ const OverviewTab = () => {
         </div>
     );
 };
+
+export default OverviewTab;

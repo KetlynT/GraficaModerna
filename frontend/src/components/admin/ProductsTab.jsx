@@ -266,3 +266,5 @@ const ProductsTab = () => {
       </div>
   );
 };
+
+export default ProductsTab;

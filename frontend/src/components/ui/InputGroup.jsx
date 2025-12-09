@@ -1,4 +1,4 @@
-const InputGroup = ({ label, name, value, onChange, type = "text", placeholder }) => (
+export const InputGroup = ({ label, name, value, onChange, type = "text", placeholder }) => (
     <div>
         <label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>
         <input 
