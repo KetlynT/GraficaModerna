@@ -56,6 +56,21 @@ public class OrdersController(IOrderService orderService, IContentService conten
         return Ok(orders);
     }
 
+    [HttpPatch("{id}/status")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)
+    {
+        try
+        {
+            await _orderService.UpdateAdminOrderAsync(id, dto);
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpGet("all")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetAllOrders()

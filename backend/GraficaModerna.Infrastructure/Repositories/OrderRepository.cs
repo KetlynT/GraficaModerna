@@ -16,13 +16,17 @@ public class OrderRepository(AppDbContext context) : IOrderRepository
 
     public async Task<Order?> GetByIdAsync(Guid id)
     {
-        return await _context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id);
+        return await _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.User) // Inclui dados do usuário
+            .FirstOrDefaultAsync(o => o.Id == id);
     }
 
     public async Task<List<Order>> GetByUserIdAsync(string userId)
     {
         return await _context.Orders
             .Include(o => o.Items)
+            .Include(o => o.User)
             .Where(o => o.UserId == userId)
             .OrderByDescending(o => o.OrderDate)
             .ToListAsync();
@@ -32,6 +36,7 @@ public class OrderRepository(AppDbContext context) : IOrderRepository
     {
         return await _context.Orders
             .Include(o => o.Items)
+            .Include(o => o.User) // Inclui dados do usuário na listagem geral
             .OrderByDescending(o => o.OrderDate)
             .ToListAsync();
     }
