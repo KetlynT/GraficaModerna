@@ -10,7 +10,7 @@ public class MetadataSecurityService
     private const int NonceSize = 12;
     private const int TagSize = 16;
 
-    public MetadataSecurityService(IConfiguration configuration)
+    public MetadataSecurityService()
     {
         var encKeyString = Environment.GetEnvironmentVariable("METADATA_ENC_KEY")!;
 
@@ -43,7 +43,7 @@ public class MetadataSecurityService
         }
 
         using var aesGcm = new AesGcm(_encryptionKey, TagSize);
-        
+
         try
         {
             aesGcm.Encrypt(nonce, plainBytes, ciphertext, tag);

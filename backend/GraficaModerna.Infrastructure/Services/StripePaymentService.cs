@@ -29,7 +29,11 @@ public class StripePaymentService : IPaymentService
     {
         try
         {
-            var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")!;
+            var corsOrigins = Environment.GetEnvironmentVariable("CorsOrigins")!;
+
+            var frontendUrl = corsOrigins
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault()!;
 
             frontendUrl = frontendUrl.TrimEnd('/');
 

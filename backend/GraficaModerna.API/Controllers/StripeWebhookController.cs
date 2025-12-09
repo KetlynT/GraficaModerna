@@ -14,24 +14,16 @@ namespace GraficaModerna.API.Controllers;
 [ApiController]
 [AllowAnonymous]
 [EnableRateLimiting("WebhookPolicy")]
-public class StripeWebhookController : ControllerBase
+public class StripeWebhookController(
+    IConfiguration configuration,
+    IOrderService orderService,
+    ILogger<StripeWebhookController> logger,
+    MetadataSecurityService securityService) : ControllerBase
 {
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<StripeWebhookController> _logger;
-    private readonly IOrderService _orderService;
-    private readonly MetadataSecurityService _securityService;
-
-    public StripeWebhookController(
-        IConfiguration configuration,
-        IOrderService orderService,
-        ILogger<StripeWebhookController> logger,
-        MetadataSecurityService securityService)
-    {
-        _configuration = configuration;
-        _orderService = orderService;
-        _logger = logger;
-        _securityService = securityService;
-    }
+    private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<StripeWebhookController> _logger = logger;
+    private readonly IOrderService _orderService = orderService;
+    private readonly MetadataSecurityService _securityService = securityService;
 
     [HttpPost("stripe")]
     public async Task<IActionResult> HandleStripeEvent()
@@ -87,8 +79,8 @@ public class StripeWebhookController : ControllerBase
                             }
                             catch (Exception ex) when (ex.Message.Contains("FATAL"))
                             {
-                                _logger.LogCritical(ex, 
-                                    "[SECURITY ALERT] Tentativa de fraude detectada. Order: {OrderId}, Transaction: {TransactionId}", 
+                                _logger.LogCritical(ex,
+                                    "[SECURITY ALERT] Tentativa de fraude detectada. Order: {OrderId}, Transaction: {TransactionId}",
                                     orderId, transactionId);
 
                                 return BadRequest("Payment validation failed - security violation");

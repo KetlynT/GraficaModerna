@@ -297,7 +297,7 @@ public class AuthService(
         return Convert.ToBase64String(randomNumber);
     }
 
-    private ClaimsPrincipal? GetPrincipalFromExpiredToken(string? token)
+    private static ClaimsPrincipal? GetPrincipalFromExpiredToken(string? token)
     {
         var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")!;
         var tokenValidationParameters = new TokenValidationParameters

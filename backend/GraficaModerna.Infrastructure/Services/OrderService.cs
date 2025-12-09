@@ -10,33 +10,22 @@ using Microsoft.Extensions.Logging;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class OrderService : IOrderService
+public class OrderService(
+    AppDbContext context,
+    IEmailService emailService,
+    UserManager<ApplicationUser> userManager,
+    IHttpContextAccessor httpContextAccessor,
+    IEnumerable<IShippingService> shippingServices,
+    IPaymentService paymentService,
+    ILogger<OrderService> logger) : IOrderService
 {
-    private readonly AppDbContext _context;
-    private readonly IEmailService _emailService;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly IPaymentService _paymentService;
-    private readonly IEnumerable<IShippingService> _shippingServices;
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ILogger<OrderService> _logger;
-
-    public OrderService(
-        AppDbContext context,
-        IEmailService emailService,
-        UserManager<ApplicationUser> userManager,
-        IHttpContextAccessor httpContextAccessor,
-        IEnumerable<IShippingService> shippingServices,
-        IPaymentService paymentService,
-        ILogger<OrderService> logger)
-    {
-        _context = context;
-        _emailService = emailService;
-        _userManager = userManager;
-        _httpContextAccessor = httpContextAccessor;
-        _shippingServices = shippingServices;
-        _paymentService = paymentService;
-        _logger = logger;
-    }
+    private readonly AppDbContext _context = context;
+    private readonly IEmailService _emailService = emailService;
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+    private readonly IPaymentService _paymentService = paymentService;
+    private readonly IEnumerable<IShippingService> _shippingServices = shippingServices;
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
+    private readonly ILogger<OrderService> _logger = logger;
 
     public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode,
         string shippingMethod)
@@ -194,7 +183,7 @@ public class OrderService : IOrderService
             .OrderByDescending(o => o.OrderDate)
             .ToListAsync();
 
-        return orders.Select(o => MapToDto(o)).ToList();
+        return [.. orders.Select(o => MapToDto(o))];
     }
 
     public async Task<List<AdminOrderDto>> GetAllOrdersAsync()
@@ -206,7 +195,7 @@ public class OrderService : IOrderService
             .OrderByDescending(o => o.OrderDate)
             .ToListAsync();
 
-        return orders.Select(MapToAdminDto).ToList();
+        return [.. orders.Select(MapToAdminDto)];
     }
 
     public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents)
@@ -217,7 +206,7 @@ public class OrderService : IOrderService
         if (isAlreadyProcessed)
         {
             _logger.LogWarning(
-                "[Webhook] Tentativa de reprocessamento detectada. Transaction: {TransactionId}", 
+                "[Webhook] Tentativa de reprocessamento detectada. Transaction: {TransactionId}",
                 transactionId);
             return;
         }
@@ -231,7 +220,7 @@ public class OrderService : IOrderService
         if (order == null)
         {
             _logger.LogError(
-                "[Webhook] Pedido não encontrado. OrderId: {OrderId}, Transaction: {TransactionId}", 
+                "[Webhook] Pedido não encontrado. OrderId: {OrderId}, Transaction: {TransactionId}",
                 orderId, transactionId);
             return;
         }
@@ -242,8 +231,8 @@ public class OrderService : IOrderService
         if (Math.Abs(amountPaidInCents - expectedAmountInCents) > tolerance)
         {
             var divergence = amountPaidInCents - expectedAmountInCents;
-            
-            AddAuditLog(order, "⚠️ FRAUDE DETECTADA", 
+
+            AddAuditLog(order, "⚠️ FRAUDE DETECTADA",
                 $"CRITICAL SECURITY VIOLATION - Divergência de valor: Esperado {expectedAmountInCents}, " +
                 $"Recebido {amountPaidInCents}, Diferença {divergence} centavos. " +
                 $"Transaction: {transactionId}. PAGAMENTO REJEITADO.",
@@ -302,7 +291,7 @@ public class OrderService : IOrderService
         await _context.SaveChangesAsync();
 
         _logger.LogInformation(
-            "[Webhook] Pagamento confirmado com sucesso. OrderId: {OrderId}, Amount: {Amount}", 
+            "[Webhook] Pagamento confirmado com sucesso. OrderId: {OrderId}, Amount: {Amount}",
             orderId, amountPaidInCents);
 
         _ = SendOrderUpdateEmailAsync(order.UserId, order, "Pago");
@@ -345,15 +334,15 @@ public class OrderService : IOrderService
         if ((dto.Status == "Reembolsado" || dto.Status == "Cancelado")
             && order.Status != "Reembolsado"
             && !string.IsNullOrEmpty(order.StripePaymentIntentId))
-                try
-                {
-                    await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId);
-                    auditMessage += ". Reembolso processado no Stripe.";
-                }
-                catch (Exception ex)
-                {
-                    throw new Exception($"Erro no reembolso Stripe: {ex.Message}");
-                }
+            try
+            {
+                await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId);
+                auditMessage += ". Reembolso processado no Stripe.";
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Erro no reembolso Stripe: {ex.Message}");
+            }
 
         if (dto.Status == "Entregue" && order.Status != "Entregue")
             order.DeliveryDate = DateTime.UtcNow;
@@ -422,9 +411,9 @@ public class OrderService : IOrderService
     }
 
     private async Task NotifySecurityTeamAsync(
-        Order order, 
-        string transactionId, 
-        long expectedAmount, 
+        Order order,
+        string transactionId,
+        long expectedAmount,
         long receivedAmount)
     {
         try
@@ -465,12 +454,12 @@ public class OrderService : IOrderService
             await _emailService.SendEmailAsync(securityEmail, subject, body);
 
             _logger.LogCritical(
-                "[SECURITY] Alerta enviado para time de segurança. OrderId: {OrderId}, User: {UserId}", 
+                "[SECURITY] Alerta enviado para time de segurança. OrderId: {OrderId}, User: {UserId}",
                 order.Id, order.UserId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, 
+            _logger.LogError(ex,
                 "[SECURITY] Falha ao enviar alerta de segurança. OrderId: {OrderId}", order.Id);
         }
     }
@@ -563,9 +552,9 @@ public class OrderService : IOrderService
             order.RefundRejectionProof,
             order.ShippingAddress,
             order.User?.FullName ?? "Cliente",
-            order.Items.Select(i =>
+            [.. order.Items.Select(i =>
                 new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
-            ).ToList(),
+            )],
             paymentWarning
         );
     }
@@ -591,12 +580,12 @@ public class OrderService : IOrderService
             DataMaskingExtensions.MaskCpfCnpj(order.User?.CpfCnpj ?? ""),
             order.User?.Email ?? "N/A",
             DataMaskingExtensions.MaskIpAddress(order.CustomerIp),
-            order.Items.Select(i =>
+            [.. order.Items.Select(i =>
                 new OrderItemDto(i.ProductName, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice)
-            ).ToList(),
-            order.History.Select(h =>
+            )],
+            [.. order.History.Select(h =>
                 new OrderHistoryDto(h.Status, h.Message, h.ChangedBy, h.Timestamp)
-            ).OrderByDescending(h => h.Timestamp).ToList()
+            ).OrderByDescending(h => h.Timestamp)]
         );
     }
 }
