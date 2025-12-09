@@ -101,9 +101,3 @@ public class CartController(ICartService cartService, IOrderService orderService
         }
     }
 }
-
-public record CheckoutRequest(
-    CreateAddressDto Address,
-    string? CouponCode,
-    decimal ShippingCost,
-    string ShippingMethod);
