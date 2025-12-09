@@ -72,7 +72,6 @@ public class CartService : ICartService
             using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
-                // **CORREÇÃO CRÍTICA**: Row-level locking com FOR UPDATE
                 var product = await _context.Products
                     .FromSqlRaw(@"
                         SELECT * FROM ""Products"" 
@@ -100,7 +99,6 @@ public class CartService : ICartService
                     if (newTotal > int.MaxValue)
                         throw new InvalidOperationException("Quantidade inválida (Excesso de itens).");
 
-                    // Re-verifica estoque com o novo total
                     if (product.StockQuantity < newTotal)
                         throw new InvalidOperationException(
                             "Não é possível adicionar mais itens: estoque insuficiente.");
@@ -138,7 +136,7 @@ public class CartService : ICartService
                     throw new InvalidOperationException(
                         "Não foi possível processar a operação devido a alta concorrência. Tente novamente.");
                 
-                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt)); // Exponential backoff
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt));
             }
             catch
             {
@@ -174,7 +172,6 @@ public class CartService : ICartService
                 var item = cart.Items.FirstOrDefault(i => i.Id == cartItemId) 
                     ?? throw new InvalidOperationException("Item não encontrado no carrinho.");
 
-                // **CORREÇÃO**: Lock no produto
                 var product = await _context.Products
                     .FromSqlRaw(@"
                         SELECT * FROM ""Products"" 

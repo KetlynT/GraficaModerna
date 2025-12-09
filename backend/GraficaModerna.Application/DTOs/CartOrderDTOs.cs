@@ -27,7 +27,6 @@ public record CartItemDto(
 
 public record CartDto(Guid Id, List<CartItemDto> Items, decimal GrandTotal);
 
-// **CORREÇÃO**: DTO público sem dados sensíveis
 public record OrderDto(
     Guid Id,
     DateTime OrderDate,
@@ -43,13 +42,10 @@ public record OrderDto(
     string? RefundRejectionReason,
     string? RefundRejectionProof,
     string ShippingAddress,
-    string CustomerName, // Mantém apenas nome
-    // REMOVIDO: CustomerCpf - viola LGPD
-    // REMOVIDO: CustomerEmail - expõe PII desnecessariamente
+    string CustomerName, 
     List<OrderItemDto> Items
 );
 
-// **NOVO DTO**: Para uso APENAS no painel administrativo
 public record AdminOrderDto(
     Guid Id,
     DateTime OrderDate,
@@ -66,14 +62,13 @@ public record AdminOrderDto(
     string? RefundRejectionProof,
     string ShippingAddress,
     string CustomerName,
-    string CustomerCpfMasked, // Exibe apenas XXX.XXX.XXX-12
+    string CustomerCpfMasked,
     string CustomerEmail,
-    string? CustomerIpMasked, // Exibe apenas 192.168.1.XXX
+    string? CustomerIpMasked,
     List<OrderItemDto> Items,
-    List<OrderHistoryDto> AuditTrail // Histórico completo
+    List<OrderHistoryDto> AuditTrail
 );
 
-// **NOVO DTO**: Para histórico de auditoria
 public record OrderHistoryDto(
     string Status,
     string? Message,
@@ -92,7 +87,6 @@ public record UpdateOrderStatusDto(
     string? RefundRejectionProof
 );
 
-// **UTILITÁRIO**: Máscaras para dados sensíveis
 public static class DataMaskingExtensions
 {
     public static string MaskCpfCnpj(string document)
@@ -102,10 +96,10 @@ public static class DataMaskingExtensions
 
         var clean = new string(document.Where(char.IsDigit).ToArray());
 
-        if (clean.Length == 11) // CPF
+        if (clean.Length == 11) 
             return $"XXX.XXX.XXX-{clean[^2..]}";
         
-        if (clean.Length == 14) // CNPJ
+        if (clean.Length == 14) 
             return $"XX.XXX.XXX/XXXX-{clean[^2..]}";
 
         return "***";
@@ -136,7 +130,6 @@ public static class DataMaskingExtensions
         if (parts.Length == 4)
             return $"{parts[0]}.{parts[1]}.{parts[2]}.XXX";
 
-        // IPv6
         var ipv6Parts = ip.Split(':');
         if (ipv6Parts.Length >= 4)
             return $"{string.Join(":", ipv6Parts.Take(3))}:XXXX";

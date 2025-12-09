@@ -8,10 +8,8 @@ public interface IOrderService
         string shippingMethod);
 
     Task<List<OrderDto>> GetUserOrdersAsync(string userId);
-    Task<List<OrderDto>> GetAllOrdersAsync();
+    Task<List<AdminOrderDto>> GetAllOrdersAsync();
     Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto);
-
     Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents);
-
     Task RequestRefundAsync(Guid orderId, string userId);
 }

@@ -4,15 +4,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace GraficaModerna.Infrastructure.Security;
 
-/// <summary>
-/// Serviço de criptografia autenticada usando AES-GCM para metadados do Stripe.
-/// AES-GCM fornece confidencialidade E integridade em uma única operação.
-/// </summary>
 public class MetadataSecurityService
 {
     private readonly byte[] _encryptionKey;
-    private const int NonceSize = 12; // 96 bits recomendado para AES-GCM
-    private const int TagSize = 16; // 128 bits para autenticação
+    private const int NonceSize = 12;
+    private const int TagSize = 16;
 
     public MetadataSecurityService(IConfiguration configuration)
     {
@@ -31,15 +27,10 @@ public class MetadataSecurityService
             throw new Exception("METADATA_ENC_KEY deve estar em formato Base64 válido.");
         }
 
-        // AES-GCM requer chave de 128, 192 ou 256 bits
         if (_encryptionKey.Length != 16 && _encryptionKey.Length != 24 && _encryptionKey.Length != 32)
             throw new Exception("METADATA_ENC_KEY deve ter 128, 192 ou 256 bits (16, 24 ou 32 bytes).");
     }
 
-    /// <summary>
-    /// Criptografa dados com AES-GCM (Autenticação Embutida).
-    /// Retorna: Base64(Nonce || Ciphertext || Tag)
-    /// </summary>
     public string Protect(string plainText)
     {
         if (string.IsNullOrEmpty(plainText))
@@ -50,7 +41,6 @@ public class MetadataSecurityService
         var ciphertext = new byte[plainBytes.Length];
         var tag = new byte[TagSize];
 
-        // Gera nonce aleatório (crucial: nunca reusar nonce com mesma chave!)
         using (var rng = RandomNumberGenerator.Create())
         {
             rng.GetBytes(nonce);
@@ -60,7 +50,6 @@ public class MetadataSecurityService
         
         try
         {
-            // Encrypt-and-Authenticate em uma única operação
             aesGcm.Encrypt(nonce, plainBytes, ciphertext, tag);
         }
         catch (CryptographicException ex)
@@ -68,7 +57,6 @@ public class MetadataSecurityService
             throw new Exception("Falha na criptografia dos metadados.", ex);
         }
 
-        // Combina: Nonce + Ciphertext + Tag
         var result = new byte[NonceSize + ciphertext.Length + TagSize];
         Buffer.BlockCopy(nonce, 0, result, 0, NonceSize);
         Buffer.BlockCopy(ciphertext, 0, result, NonceSize, ciphertext.Length);
@@ -77,10 +65,6 @@ public class MetadataSecurityService
         return Convert.ToBase64String(result);
     }
 
-    /// <summary>
-    /// Descriptografa e valida integridade em uma única operação.
-    /// Lança SecurityException se a autenticação falhar.
-    /// </summary>
     public string Unprotect(string encryptedData)
     {
         if (string.IsNullOrEmpty(encryptedData))
@@ -96,11 +80,9 @@ public class MetadataSecurityService
             throw new System.Security.SecurityException("Formato de dados inválido.");
         }
 
-        // Valida tamanho mínimo
         if (fullCipher.Length < NonceSize + TagSize)
             throw new System.Security.SecurityException("Dados corrompidos ou inválidos.");
 
-        // Extrai componentes
         var nonce = new byte[NonceSize];
         var tag = new byte[TagSize];
         var ciphertext = new byte[fullCipher.Length - NonceSize - TagSize];
@@ -115,12 +97,10 @@ public class MetadataSecurityService
 
         try
         {
-            // Decrypt-and-Verify em uma única operação atômica
             aesGcm.Decrypt(nonce, ciphertext, tag, plainBytes);
         }
         catch (CryptographicException)
         {
-            // Falha na autenticação = dados foram modificados
             throw new System.Security.SecurityException(
                 "Falha na verificação de integridade: dados foram modificados ou corrompidos.");
         }
@@ -128,13 +108,9 @@ public class MetadataSecurityService
         return Encoding.UTF8.GetString(plainBytes);
     }
 
-    /// <summary>
-    /// Gera uma chave segura de 256 bits para usar no .env
-    /// Executar uma vez e salvar no METADATA_ENC_KEY
-    /// </summary>
     public static string GenerateNewKey()
     {
-        var key = new byte[32]; // 256 bits
+        var key = new byte[32];
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(key);
         return Convert.ToBase64String(key);

@@ -8,7 +8,6 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-
 [Authorize(Roles = "Admin")]
 [EnableRateLimiting("AdminPolicy")]
 public class AdminController(IOrderService orderService, IProductService productService) : ControllerBase
@@ -28,7 +27,6 @@ public class AdminController(IOrderService orderService, IProductService product
     {
         try
         {
-
             await _orderService.UpdateAdminOrderAsync(id, dto);
             return Ok(new { message = "Status atualizado com sucesso." });
         }

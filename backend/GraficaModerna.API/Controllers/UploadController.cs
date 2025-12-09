@@ -14,13 +14,12 @@ public class UploadController : ControllerBase
     private const long MaxFileSize = 50 * 1024 * 1024;
     private const int MaxImageDimension = 2048;
 
-    // Assinaturas corrigidas e completas
     private static readonly Dictionary<string, List<byte[]>> _fileSignatures = new()
     {
         { ".jpg", [new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE1 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE2 }] },
         { ".jpeg", [new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE1 }, new byte[] { 0xFF, 0xD8, 0xFF, 0xE2 }] },
         { ".png", [new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }] },
-        { ".webp", [new byte[] { 0x52, 0x49, 0x46, 0x46 }] }, // Apenas verifica RIFF, WEBP vem depois
+        { ".webp", [new byte[] { 0x52, 0x49, 0x46, 0x46 }] },
         { ".mp4", [new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 }, new byte[] { 0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70 }] },
         { ".webm", [new byte[] { 0x1A, 0x45, 0xDF, 0xA3 }] },
         { ".mov", [new byte[] { 0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70 }] }
@@ -58,7 +57,6 @@ public class UploadController : ControllerBase
             await file.CopyToAsync(memoryStream);
             memoryStream.Position = 0;
 
-            // Validação de assinatura melhorada
             var headerBytes = new byte[12];
             var bytesRead = await memoryStream.ReadAsync(headerBytes.AsMemory(0, 12));
             
@@ -73,7 +71,6 @@ public class UploadController : ControllerBase
                 }
             }
 
-            // Validação extra para WEBP (precisa ter WEBP nos bytes 8-11)
             if (ext == ".webp" && isValid)
             {
                 if (bytesRead < 12 || 
@@ -89,7 +86,6 @@ public class UploadController : ControllerBase
 
             memoryStream.Position = 0;
 
-            // Processa imagem ou apenas salva vídeo
             if (ext == ".mp4" || ext == ".webm" || ext == ".mov")
             {
                 using var stream = new FileStream(filePath, FileMode.Create);

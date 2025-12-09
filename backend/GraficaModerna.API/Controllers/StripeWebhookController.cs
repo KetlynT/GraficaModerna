@@ -81,7 +81,6 @@ public class StripeWebhookController : ControllerBase
                     {
                         try
                         {
-                            // **CORREÇÃO 1**: Usa AES-GCM (sem necessidade de signature separada)
                             var plainOrderId = _securityService.Unprotect(encryptedOrder);
 
                             if (!Guid.TryParse(plainOrderId, out var orderId))
@@ -110,19 +109,16 @@ public class StripeWebhookController : ControllerBase
                                 "[Webhook] Processando pagamento para Order {OrderId}. Transaction: {TransactionId}. Amount: {Amount} cents",
                                 orderId, transactionId, amountPaid);
 
-                            // **CORREÇÃO 2**: Validação BLOQUEANTE antes de confirmar
                             try
                             {
                                 await _orderService.ConfirmPaymentViaWebhookAsync(orderId, transactionId, amountPaid);
                             }
                             catch (Exception ex) when (ex.Message.Contains("FATAL"))
                             {
-                                // **CRÍTICO**: Se houver divergência de valor, BLOQUEIA imediatamente
                                 _logger.LogCritical(ex, 
                                     "[SECURITY ALERT] Tentativa de fraude detectada. Order: {OrderId}, Transaction: {TransactionId}", 
                                     orderId, transactionId);
 
-                                // Retorna 400 para que o Stripe marque como falha
                                 return BadRequest("Payment validation failed - security violation");
                             }
 

@@ -43,7 +43,7 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
             {
                 _logger.LogWarning(
                     "Tentativa de ordenação por coluna não permitida: {Column}", sortColumn);
-                safeSortColumn = null; // Usa ordenação padrão
+                safeSortColumn = null; 
             }
 
             query = safeSortColumn switch
