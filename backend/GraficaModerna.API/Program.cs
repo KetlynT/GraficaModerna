@@ -280,6 +280,12 @@ builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>();
 
 builder.Services.AddFluentValidationAutoValidation();
 
+builder.Services.AddScoped<IHtmlSanitizer, HtmlSanitizer>(x =>
+{
+    var sanitizer = new HtmlSanitizer();
+    return sanitizer;
+});
+
 builder.Services.AddSwaggerGen(o =>
 {
     o.SwaggerDoc("v1", new OpenApiInfo { Title = "Grafica API", Version = "v1" });

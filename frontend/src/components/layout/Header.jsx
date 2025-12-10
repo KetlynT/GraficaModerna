@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MessageSquare, ShoppingCart, User, LogOut, LayoutDashboard, Package } from 'lucide-react';
 import { ContentService } from '../../services/contentService';

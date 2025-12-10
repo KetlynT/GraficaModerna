@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AddressService } from '../services/addressService';
 import { Button } from './ui/Button';
 import { Plus, Edit, Trash2, MapPin, Star, X, Save } from 'lucide-react';

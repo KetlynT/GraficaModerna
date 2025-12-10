@@ -1,7 +1,5 @@
 import api from './api';
 
-// Não armazenamos mais tokens no localStorage
-
 const authService = {
   login: async (credentials, isAdmin = false) => {
     const url = isAdmin ? '/auth/admin/login' : '/auth/login';

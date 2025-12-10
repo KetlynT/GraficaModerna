@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ShippingService } from '../services/shippingService';
 import { Button } from './ui/Button';
 import { Truck, AlertCircle, Loader2 } from 'lucide-react';

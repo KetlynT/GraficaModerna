@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { CouponService } from '../services/couponService';
 import { Button } from './ui/Button';
 import { Tag, X, Loader2 } from 'lucide-react';
