@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import orderService from '../services/orderService';
+import { OrderService } from '../services/orderService';
 import { PaymentService } from '../services/paymentService'; 
 import { Package, Calendar, MapPin, ChevronDown, ChevronUp, CreditCard, Truck, RefreshCcw, AlertTriangle, Clock, Box, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,7 +22,7 @@ export const MyOrders = () => {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const data = await orderService.getMyOrders(page);
+      const data = await OrderService.getMyOrders(page);
       setOrders(data.items || []);
       setTotalPages(data.totalPages || 1);
     } catch (error) {
@@ -56,7 +56,7 @@ export const MyOrders = () => {
     setIsRefundLoading(true);
 
     try {
-        await orderService.requestRefund(selectedOrderForRefund.id, payload);
+        await OrderService.requestRefund(selectedOrderForRefund.id, payload);
         toast.success("Solicitação enviada com sucesso!", { id: loadingToast });
         await loadOrders();
         setSelectedOrderForRefund(null);

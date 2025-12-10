@@ -45,7 +45,7 @@ export const ShippingCalculator = ({ items = [], productId = null, onSelectOptio
       console.error(err);
       const msg = err.response?.data?.message || "Erro ao calcular frete. Verifique o CEP.";
       setError(msg);
-      toast.error("Falha no cálculo de frete.");
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

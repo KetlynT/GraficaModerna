@@ -34,19 +34,15 @@ public class MelhorEnvioShippingService(
 
         if (items == null || items.Count == 0) return [];
 
-        var originCep = EnvHelper.Required("CEP_ORIGEM");
-        try
-        {
-            var originCepSetting = await _context.SiteSettings
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.Key == "sender_cep");
+        var originCepSetting = await _context.SiteSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == "sender_cep");
 
-            if (!string.IsNullOrEmpty(originCepSetting?.Value))
-                originCep = originCepSetting.Value.Replace("-", "").Trim();
-        }
-        catch (Exception ex)
+        var originCep = originCepSetting?.Value?.Replace("-", "").Trim();
+
+        if (string.IsNullOrEmpty(originCep))
         {
-            _logger.LogWarning(ex, "Erro ao buscar CEP de origem no banco. Usando fallback.");
+            throw new Exception("Ah não, momentaneamente não estamos enviando. Verifique diretamente conosco");
         }
 
         var requestPayload = new

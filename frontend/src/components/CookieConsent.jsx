@@ -1,30 +1,47 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button } from './ui/Button';
-import { ShieldCheck, X } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 export const CookieConsent = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
-    // Verifica se já aceitou
-    const consent = localStorage.getItem('lgpd_consent');
-    if (!consent) {
-      setTimeout(() => setIsVisible(true), 1000); // Delay para não assustar
+    const showBanner = () => {
+      const consent = localStorage.getItem('lgpd_consent');
+      if (!consent) {
+        setIsVisible(true);
+      }
+    };
+
+    const delayedShow = () => {
+      setTimeout(showBanner, 500);
+    };
+
+    if (document.readyState === 'complete') {
+      delayedShow();
+    } else {
+      window.addEventListener('load', showBanner);
+      return () => window.removeEventListener('load', showBanner);
     }
   }, []);
 
   const handleAccept = () => {
-    // Salva a data e hora do aceite para auditoria
     const consentData = {
       accepted: true,
       timestamp: new Date().toISOString(),
-      ipParams: 'captured_on_server' // O IP real é logado pelo servidor (Nginx/IIS/API)
+      ipParams: 'captured_on_server'
     };
     localStorage.setItem('lgpd_consent', JSON.stringify(consentData));
     setIsVisible(false);
   };
 
-  if (!isVisible) return null;
+  const isBlockedRoute = ['/error', '/login', '/putiroski', '/cadastro', '/esqueci-senha', '/reset-password', '/confirm-email'].some(path => 
+    location.pathname.startsWith(path)
+  );
+
+  if (!isVisible || isBlockedRoute) return null;
 
   return (
     <div className="fixed bottom-0 left-0 w-full bg-gray-900/95 backdrop-blur text-white p-6 z-[100] border-t border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-500">
@@ -44,7 +61,7 @@ export const CookieConsent = () => {
           <Button 
             variant="ghost" 
             className="text-gray-400 hover:text-white hover:bg-white/10"
-            onClick={() => setIsVisible(false)} // Apenas fecha, reaparece na próxima sessão
+            onClick={() => setIsVisible(false)}
           >
             Agora não
           </Button>

@@ -52,7 +52,7 @@ public class ShippingController(
 
         if (request.Items.Count > MaxItemsPerCalculation)
             return BadRequest(new
-                { message = $"O cálculo é limitado a {MaxItemsPerCalculation} itens distintos por vez." });
+            { message = $"O cálculo é limitado a {MaxItemsPerCalculation} itens distintos por vez." });
 
         List<ShippingItemDto> validatedItems = [];
 
@@ -60,7 +60,7 @@ public class ShippingController(
         {
             if (item.Quantity <= 0)
                 return BadRequest(new
-                    { message = $"Item {item.ProductId} possui quantidade inválida ({item.Quantity})." });
+                { message = $"Item {item.ProductId} possui quantidade inválida ({item.Quantity})." });
 
             if (item.Quantity > 1000)
                 return BadRequest(new
@@ -102,8 +102,7 @@ public class ShippingController(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro crítico ao calcular frete para CEP {Cep}", cleanCep);
-            return StatusCode(500,
-                new { message = "Não foi possível calcular o frete no momento. Tente novamente mais tarde." });
+            return StatusCode(500, new { message = ex.Message });
         }
     }
 
@@ -155,7 +154,7 @@ public class ShippingController(
         {
             _logger.LogError(ex, "Erro ao calcular frete único para Produto {ProductId} e CEP {Cep}", productId,
                 cleanCep);
-            return StatusCode(500, new { message = "Serviço de cálculo de frete indisponível temporariamente." });
+            return StatusCode(500, new { message = ex.Message });
         }
     }
 }

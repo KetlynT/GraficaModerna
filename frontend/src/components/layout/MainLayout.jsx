@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { Footer } from './Footer';
+import { WhatsAppButton } from '../WhatsAppButton';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export const MainLayout = () => {
@@ -8,10 +9,8 @@ export const MainLayout = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Componente Header Isolado */}
       <Header />
 
-      {/* Conteúdo Dinâmico das Páginas com Animação */}
       <main className="flex-grow">
         <AnimatePresence mode="wait">
           <motion.div
@@ -26,8 +25,8 @@ export const MainLayout = () => {
         </AnimatePresence>
       </main>
 
-      {/* Componente Footer Isolado */}
       <Footer />
+      <WhatsAppButton />
     </div>
   );
 };

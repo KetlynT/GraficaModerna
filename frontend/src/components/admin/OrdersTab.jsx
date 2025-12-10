@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import dashboardService from '../../services/dashboardService';
+import { DashboardService } from '../../services/dashboardService';
 import { ProductService } from '../../services/productService';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
@@ -47,7 +47,7 @@ const OrdersTab = () => {
     const loadOrders = async () => {
         try {
             setLoading(true);
-            const data = await dashboardService.getOrders(page);
+            const data = await DashboardService.getOrders(page);
             setOrders(data.items || []);
             setTotalPages(data.totalPages || 1);
         } catch (e) {
@@ -109,7 +109,7 @@ const OrdersTab = () => {
                 payload.refundAmount = parseFloat(refundAmountInput);
             }
 
-            await dashboardService.updateOrderStatus(selectedOrder.id, payload);
+            await DashboardService.updateOrderStatus(selectedOrder.id, payload);
             
             const updatedList = orders.map(o => o.id === selectedOrder.id ? {
                 ...o, 
