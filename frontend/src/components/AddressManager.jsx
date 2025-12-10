@@ -3,6 +3,7 @@ import { AddressService } from '../services/addressService';
 import { Button } from './ui/Button';
 import { Plus, Edit, Trash2, MapPin, Star, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PropTypes from 'prop-types';
 
 export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) => {
   const [addresses, setAddresses] = useState([]);
@@ -46,7 +47,6 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
     };
   }
 
-  // MÁSCARAS
   const formatCEP = (value) => {
     return value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
   };
@@ -123,7 +123,6 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-bold text-gray-700 flex items-center gap-2"><MapPin size={18}/> Endereços Cadastrados</h3>
-        {/* Botão Novo: usa cores primárias dinâmicas */}
         <Button size="sm" onClick={() => handleOpenForm()} variant="outline" className="text-primary border-primary/30 hover:bg-primary/5">
           <Plus size={16} /> Novo
         </Button>
@@ -131,13 +130,11 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
 
       <div className="grid gap-3 max-h-[60vh] overflow-y-auto pr-1">
         {addresses.map(addr => (
-          // Borda dinâmica para item selecionado/padrão
           <div key={addr.id} className={`bg-white p-4 rounded-lg border transition-all ${addr.isDefault ? 'border-primary/50 bg-primary/5' : 'border-gray-200'}`}>
             <div className="flex justify-between items-start">
               <div className="cursor-pointer flex-grow" onClick={() => allowSelection && onSelect && onSelect(addr)}>
                 <div className="flex items-center gap-2 mb-1">
                     <span className="font-bold text-gray-800">{addr.name}</span>
-                    {/* Badge Padrão dinâmico */}
                     {addr.isDefault && <span className="bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><Star size={10} fill="currentColor"/> Padrão</span>}
                 </div>
                 <p className="text-gray-600 text-xs">
@@ -150,7 +147,6 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
               </div>
               
               <div className="flex gap-1 ml-2">
-                {/* Ícones de ação dinâmicos */}
                 <button onClick={() => handleOpenForm(addr)} className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded"><Edit size={16}/></button>
                 <button onClick={() => handleDeleteAddress(addr.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
               </div>
@@ -160,7 +156,6 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
         {addresses.length === 0 && <div className="text-center py-6 text-gray-400 text-sm border-2 border-dashed rounded-lg">Nenhum endereço encontrado.</div>}
       </div>
 
-      {/* Modal Interno de Edição/Criação */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
@@ -174,7 +169,6 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
                 <div className="col-span-2"><label className="text-xs font-bold text-gray-500">Nome (Ex: Casa)</label><input className="input-base" required value={addressForm.name} onChange={e => setAddressForm({...addressForm, name: e.target.value})} /></div>
                 <div className="col-span-2"><label className="text-xs font-bold text-gray-500">Quem recebe?</label><input className="input-base" required value={addressForm.receiverName} onChange={e => setAddressForm({...addressForm, receiverName: e.target.value})} /></div>
                 
-                {/* Campos com Máscara */}
                 <div>
                     <label className="text-xs font-bold text-gray-500">CEP</label>
                     <input className="input-base" required value={addressForm.zipCode} 
@@ -217,8 +211,13 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
         </div>
       )}
       
-      {/* CSS Dinâmico para Inputs */}
       <style>{`.input-base { width: 100%; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.5rem; font-size: 0.875rem; outline: none; transition: border-color 0.2s; } .input-base:focus { border-color: var(--color-primary); ring: 2px solid var(--color-primary); }`}</style>
     </div>
   );
+};
+
+AddressManager.propTypes = {
+  onUpdate: PropTypes.func,
+  allowSelection: PropTypes.bool,
+  onSelect: PropTypes.func
 };

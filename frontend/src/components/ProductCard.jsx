@@ -4,18 +4,18 @@ import { motion } from 'framer-motion';
 import { ShoppingCart, Search, Edit } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useCart } from '../context/CartContext';
-import { useAuth } from '../context/AuthContext'; // CORREÇÃO: Importar useAuth
+import { useAuth } from '../context/AuthContext';
+import PropTypes from 'prop-types';
 
 export const ProductCard = ({ product, purchaseEnabled = true }) => {
   const { addToCart } = useCart();
-  const { user } = useAuth(); // CORREÇÃO: Usar o usuário do contexto
+  const { user } = useAuth();
   const [imgSrc, setImgSrc] = useState(product.imageUrl);
 
   useEffect(() => {
     setImgSrc(product.imageUrl);
   }, [product.imageUrl]);
 
-  // CORREÇÃO: Validação segura de role
   const isAdmin = user?.role === 'Admin';
 
   const formattedPrice = new Intl.NumberFormat('pt-BR', {
@@ -55,7 +55,6 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
                     <Search size={20} />
                 </Button>
             </Link>
-            {/* Se for admin, mostra botão de editar */}
             {isAdmin && (
                <Link to={`/putiroski/produtos/${product.id}`}>
                   <Button variant="ghost" className="bg-white text-blue-600 hover:bg-blue-50 rounded-full p-3 shadow-lg">
@@ -83,7 +82,6 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
             <span className="text-xl font-bold text-primary">{formattedPrice}</span>
           </div>
           
-          {/* Admin não compra, vê apenas detalhes. Cliente vê carrinho se compra ativa */}
           {!isAdmin && purchaseEnabled && (
             <Button 
                 size="sm"
@@ -98,4 +96,16 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
       </div>
     </motion.div>
   );
+};
+
+ProductCard.propTypes = {
+  product: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    name: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    price: PropTypes.number.isRequired,
+    imageUrl: PropTypes.string,
+    stockQuantity: PropTypes.number
+  }).isRequired,
+  purchaseEnabled: PropTypes.bool
 };

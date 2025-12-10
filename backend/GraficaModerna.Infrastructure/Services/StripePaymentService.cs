@@ -1,5 +1,6 @@
 ﻿using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
+using GraficaModerna.Infrastructure.Helpers;
 using GraficaModerna.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,7 @@ public class StripePaymentService : IPaymentService
         _logger = logger;
         _securityService = securityService;
 
-        var apiKey = Environment.GetEnvironmentVariable("STRIPE_SECRET_KEY")!;
+        var apiKey = EnvHelper.Required("STRIPE_SECRET_KEY");
 
         StripeConfiguration.ApiKey = apiKey;
     }
@@ -29,7 +30,7 @@ public class StripePaymentService : IPaymentService
     {
         try
         {
-            var corsOrigins = Environment.GetEnvironmentVariable("CorsOrigins")!;
+            var corsOrigins = EnvHelper.Required("CorsOrigins");
 
             var frontendUrl = corsOrigins
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

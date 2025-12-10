@@ -3,17 +3,17 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using Ganss.Xss;
 using GraficaModerna.API.Middlewares;
+using GraficaModerna.Application.Constants;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Application.Services;
 using GraficaModerna.Application.Validators;
-using GraficaModerna.Application.Constants;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
 using GraficaModerna.Infrastructure.Context;
+using GraficaModerna.Infrastructure.Helpers;
 using GraficaModerna.Infrastructure.Repositories;
 using GraficaModerna.Infrastructure.Security;
 using GraficaModerna.Infrastructure.Services;
-using GraficaModerna.Infrastructure.Helpers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -80,14 +80,13 @@ builder.Services.AddHttpClient("MelhorEnvio", client =>
     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", melhorEnvioToken);
 })
 .AddStandardResilienceHandler(options =>
- {
-
-     options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(10);
-     options.Retry.MaxRetryAttempts = 3;
-     options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(20);
-     options.CircuitBreaker.FailureRatio = 0.5;
-     options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
- });
+{
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(10);
+    options.Retry.MaxRetryAttempts = 3;
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(20);
+    options.CircuitBreaker.FailureRatio = 0.5;
+    options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(30);
+});
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -147,6 +146,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 Window = TimeSpan.FromMinutes(1)
             }));
+
     options.AddPolicy(PolicyConstants.AdminPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -168,6 +168,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 2,
                 Window = TimeSpan.FromMinutes(1)
             }));
+
     options.AddPolicy(PolicyConstants.WebhookPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -178,6 +179,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 Window = TimeSpan.FromMinutes(1)
             }));
+
     options.AddPolicy(PolicyConstants.StrictPaymentPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -322,6 +324,25 @@ app.Use(async (context, next) =>
 });
 
 app.UseMiddleware<ExceptionMiddleware>();
+
+// ATIVADO: Servir arquivos estáticos (wwwroot) com segurança aprimorada
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var path = ctx.File.PhysicalPath;
+        if (!string.IsNullOrEmpty(path))
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+
+            // Segurança: Forçar download para arquivos de vídeo para evitar execução/XSS no navegador
+            if (ext is ".mp4" or ".webm" or ".mov")
+            {
+                ctx.Context.Response.Headers.Append("Content-Disposition", "attachment");
+            }
+        }
+    }
+});
 
 app.UseCors("CorsPolicy");
 app.UseResponseCompression();

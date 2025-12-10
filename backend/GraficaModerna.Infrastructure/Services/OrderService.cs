@@ -3,11 +3,13 @@ using System.ComponentModel;
 using GraficaModerna.Application.Constants;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Constants;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Enums;
 using GraficaModerna.Domain.Extensions;
 using GraficaModerna.Domain.Models;
 using GraficaModerna.Infrastructure.Context;
+using GraficaModerna.Infrastructure.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -32,12 +34,9 @@ public class OrderService(
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly ILogger<OrderService> _logger = logger;
 
-    // ... [CreateOrderFromCartAsync e GetUserOrdersAsync mantidos iguais] ...
-
     public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode,
         string shippingMethod)
     {
-        // (Código mantido igual ao original para brevidade, se precisar repito aqui)
         var cart = await _context.Carts
             .Include(c => c.Items)
             .ThenInclude(i => i.Product)
@@ -256,15 +255,12 @@ public class OrderService(
                 return;
             }
 
-            // --- USO DO MÉTODO NotifySecurityTeamAsync ---
-            // Validar se o valor pago corresponde ao valor do pedido
             var expectedAmount = (long)(order.TotalAmount * 100);
             if (expectedAmount != amountPaidInCents)
             {
                 await NotifySecurityTeamAsync(order, transactionId, expectedAmount, amountPaidInCents);
                 throw new Exception($"Divergência de valores de segurança. Esperado: {expectedAmount}, Recebido: {amountPaidInCents}");
             }
-            // ---------------------------------------------
 
             if (order.Status == OrderStatus.Pago)
             {
@@ -362,11 +358,10 @@ public class OrderService(
 
     public async Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto)
     {
-        // (Lógica mantida igual, omitindo para brevidade)
         var user = _httpContextAccessor.HttpContext?.User;
         var adminUserId = _userManager.GetUserId(user!) ?? "AdminUnknown";
 
-        if (user == null || !user.IsInRole("Admin"))
+        if (user == null || !user.IsInRole(Roles.Admin))
             throw new UnauthorizedAccessException("Apenas administradores podem alterar pedidos.");
 
         using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -478,10 +473,7 @@ public class OrderService(
 
     public async Task RequestRefundAsync(Guid orderId, string userId, RequestRefundDto dto)
     {
-        // --- USO DO MÉTODO GetUserOrderOrFail ---
-        // Substitui a lógica manual de busca e validação
         var order = await GetUserOrderOrFail(orderId, userId);
-        // ----------------------------------------
 
         if (order.Status != OrderStatus.Entregue && order.Status != OrderStatus.Pago)
             throw new Exception("Status do pedido não permite solicitação de reembolso.");
@@ -534,14 +526,9 @@ public class OrderService(
         await _context.SaveChangesAsync();
     }
 
-    // --- MÉTODOS NOVOS ADICIONADOS NA REFATORAÇÃO ---
-
     public async Task<Order> GetOrderForPaymentAsync(Guid orderId, string userId)
     {
-        // --- USO DO MÉTODO GetUserOrderOrFail ---
-        // Reutiliza a busca centralizada
         var order = await GetUserOrderOrFail(orderId, userId);
-        // ----------------------------------------
 
         if (order.Status == OrderStatus.Pago)
             throw new InvalidOperationException("Este pedido já está pago.");
@@ -569,8 +556,6 @@ public class OrderService(
         return order;
     }
 
-    // --- MÉTODOS PRIVADOS AUXILIARES ---
-
     private string GetIpAddress()
     {
         return _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "0.0.0.0";
@@ -597,7 +582,6 @@ public class OrderService(
         });
     }
 
-    // Método centralizado para buscar pedido com validação de usuário
     private async Task<Order> GetUserOrderOrFail(Guid orderId, string userId)
     {
         var order = await _context.Orders
@@ -620,7 +604,8 @@ public class OrderService(
     {
         try
         {
-            var securityEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL")!;
+            // Alterado para usar EnvHelper e garantir que a configuração existe
+            var securityEmail = EnvHelper.Required("ADMIN_EMAIL");
 
             var subject = $"🚨 ALERTA DE SEGURANÇA CRÍTICO - Tentativa de Fraude";
             var body = $@"
@@ -666,7 +651,6 @@ public class OrderService(
         }
     }
 
-    // ... [Métodos de Email e MapToDto mantidos iguais] ...
     private async Task SendOrderReceivedEmailAsync(string userId, Guid orderId)
     {
         try

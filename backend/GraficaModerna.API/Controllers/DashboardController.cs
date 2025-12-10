@@ -1,4 +1,5 @@
 ﻿using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,7 +7,7 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = Roles.Admin)]
 public class DashboardController(IDashboardService dashboardService) : ControllerBase
 {
     private readonly IDashboardService _dashboardService = dashboardService;

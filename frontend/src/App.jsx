@@ -1,6 +1,7 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import PropTypes from 'prop-types';
 
 import { MainLayout } from './components/layout/MainLayout';
 import { ContentService } from './services/contentService';
@@ -9,7 +10,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ScrollToTop from './components/ScrollToTop';
 import { CookieConsent } from './components/CookieConsent';
 
-// Lazy load pages
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
 const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
@@ -47,6 +47,10 @@ const PrivateRoute = ({ children }) => {
   return children;
 };
 
+PrivateRoute.propTypes = {
+  children: PropTypes.node.isRequired
+};
+
 const PublicOnlyRoute = ({ children }) => {
   const { user, loading } = useAuth();
   
@@ -57,6 +61,10 @@ const PublicOnlyRoute = ({ children }) => {
     return <Navigate to="/" replace />;
   }
   return children;
+};
+
+PublicOnlyRoute.propTypes = {
+  children: PropTypes.node.isRequired
 };
 
 const PurchaseGuard = ({ children }) => {
@@ -78,6 +86,10 @@ const PurchaseGuard = ({ children }) => {
     if (!enabled) return <Navigate to="/" replace />;
     
     return children;
+};
+
+PurchaseGuard.propTypes = {
+  children: PropTypes.node.isRequired
 };
 
 const setFallbackFavicon = () => {

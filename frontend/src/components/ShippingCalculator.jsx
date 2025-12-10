@@ -3,6 +3,7 @@ import { ShippingService } from '../services/shippingService';
 import { Button } from './ui/Button';
 import { Truck, AlertCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PropTypes from 'prop-types';
 
 export const ShippingCalculator = ({ items = [], productId = null, onSelectOption, className }) => {
   const [cep, setCep] = useState('');
@@ -30,10 +31,8 @@ export const ShippingCalculator = ({ items = [], productId = null, onSelectOptio
       let result = [];
       
       if (productId) {
-        // Cálculo para produto único (Página de Detalhes)
         result = await ShippingService.calculateForProduct(productId, cleanCep);
       } else if (items.length > 0) {
-        // Cálculo para carrinho
         result = await ShippingService.calculate(cleanCep, items);
       } else {
         setError("Nenhum item para calcular.");
@@ -117,4 +116,14 @@ export const ShippingCalculator = ({ items = [], productId = null, onSelectOptio
       )}
     </div>
   );
+};
+
+ShippingCalculator.propTypes = {
+  items: PropTypes.arrayOf(PropTypes.shape({
+    productId: PropTypes.string.isRequired,
+    quantity: PropTypes.number.isRequired
+  })),
+  productId: PropTypes.string,
+  onSelectOption: PropTypes.func,
+  className: PropTypes.string
 };

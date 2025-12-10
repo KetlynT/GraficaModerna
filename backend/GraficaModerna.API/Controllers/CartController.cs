@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +9,7 @@ namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize(Roles = "User")]
+[Authorize(Roles = Roles.User)]
 public class CartController(ICartService cartService, IOrderService orderService, IContentService contentService) : ControllerBase
 {
     private readonly ICartService _cartService = cartService;
@@ -30,7 +31,7 @@ public class CartController(ICartService cartService, IOrderService orderService
     [HttpGet]
     public async Task<ActionResult<CartDto>> GetCart()
     {
-        try 
+        try
         {
             await CheckPurchaseEnabled();
             return Ok(await _cartService.GetCartAsync(GetUserId()));

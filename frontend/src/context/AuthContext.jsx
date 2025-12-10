@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import authService from '../services/authService';
-import api from '../services/api';
+import PropTypes from 'prop-types';
 
 const AuthContext = createContext({});
 
@@ -11,22 +11,17 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            setUser(null);
-            setLoading(false);
-            return;
-        }
+        // Agora verificamos a sessão diretamente com o backend (cookie)
+        // em vez de procurar token no localStorage
         const status = await authService.checkAuth();
+        
         if (status.isAuthenticated) {
           const userProfile = await authService.getProfile();
           setUser({ ...userProfile, role: status.role });
         } else {
-          localStorage.removeItem('access_token');
           setUser(null);
         }
       } catch (error) {
-        localStorage.removeItem('access_token');
         setUser(null);
       } finally {
         setLoading(false);
@@ -38,9 +33,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials, isAdmin = false) => {
     const data = await authService.login(credentials, isAdmin);
-    if (data.token) {
-        localStorage.setItem('access_token', data.token);
-    }
+    // Não precisamos mais salvar token manualmente
     const userProfile = await authService.getProfile(); 
     setUser({ ...userProfile, role: data.role });
     return data;
@@ -48,9 +41,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     const data = await authService.register(userData);
-    if (data.token) {
-        localStorage.setItem('access_token', data.token);
-    }
+    // Login automático após registro
     const userProfile = await authService.getProfile();
     setUser({ ...userProfile, role: data.role });
     return data;
@@ -63,7 +54,6 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       console.error(e);
     } finally {
-      localStorage.removeItem('access_token');
       setUser(null);
     }
   };
@@ -73,6 +63,10 @@ export const AuthProvider = ({ children }) => {
       {!loading && children}
     </AuthContext.Provider>
   );
+};
+
+AuthProvider.propTypes = {
+  children: PropTypes.node.isRequired
 };
 
 export const useAuth = () => useContext(AuthContext);

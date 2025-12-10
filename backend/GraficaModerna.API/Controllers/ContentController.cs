@@ -1,6 +1,7 @@
 ﻿using Ganss.Xss;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -12,7 +13,7 @@ namespace GraficaModerna.API.Controllers;
 public class ContentController(IContentService service, IHtmlSanitizer sanitizer) : ControllerBase
 {
     private readonly IHtmlSanitizer _sanitizer = sanitizer;
-    private readonly IContentService _service = service; 
+    private readonly IContentService _service = service;
 
     [HttpGet("pages")]
     public async Task<IActionResult> GetAllPages()
@@ -30,7 +31,7 @@ public class ContentController(IContentService service, IHtmlSanitizer sanitizer
     }
 
     [HttpPost("settings")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdateSettings([FromBody] Dictionary<string, string> settings)
     {
         await _service.UpdateSettingsAsync(settings);
@@ -38,7 +39,7 @@ public class ContentController(IContentService service, IHtmlSanitizer sanitizer
     }
 
     [HttpPut("pages/{slug}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> UpdatePage(string slug, [FromBody] UpdateContentDto dto)
     {
         dto.Content = _sanitizer.Sanitize(dto.Content);
@@ -49,7 +50,6 @@ public class ContentController(IContentService service, IHtmlSanitizer sanitizer
     [HttpGet("pages/{slug}")]
     public async Task<IActionResult> GetPage(string slug)
     {
-        
         var page = await _service.GetBySlugAsync(slug);
 
         if (page == null)
@@ -59,7 +59,7 @@ public class ContentController(IContentService service, IHtmlSanitizer sanitizer
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [EnableRateLimiting("AdminPolicy")]
     public async Task<IActionResult> Create([FromBody] CreateContentDto dto)
     {

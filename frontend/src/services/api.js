@@ -1,4 +1,5 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://localhost:7255/api';
 
@@ -7,6 +8,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Essencial para enviar cookies
 });
 
 let isRefreshing = false;
@@ -23,13 +25,7 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`;
-  }
-  return config;
-});
+// Não há mais interceptor de request para injetar token (cookies são automáticos)
 
 api.interceptors.response.use(
   (response) => response,
@@ -46,8 +42,7 @@ api.interceptors.response.use(
         return new Promise(function(resolve, reject) {
           failedQueue.push({ resolve, reject });
         })
-        .then(token => {
-          originalRequest.headers['Authorization'] = 'Bearer ' + token;
+        .then(() => {
           return api(originalRequest);
         })
         .catch(err => Promise.reject(err));
@@ -57,29 +52,14 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        const accessToken = localStorage.getItem('access_token');
-        
-        const response = await axios.post(`${API_URL}/auth/refresh-token`, {
-            accessToken,
-            refreshToken
-        });
+        // Tenta refresh via cookie (endpoint sem body)
+        await api.post('/auth/refresh-token');
 
-        const { token, refreshToken: newRefreshToken } = response.data;
-
-        localStorage.setItem('access_token', token);
-        if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
-
-        api.defaults.headers.common['Authorization'] = 'Bearer ' + token;
-        originalRequest.headers['Authorization'] = 'Bearer ' + token;
-
-        processQueue(null, token);
+        processQueue(null);
         return api(originalRequest);
 
       } catch (refreshError) {
         processQueue(refreshError, null);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {
@@ -94,9 +74,6 @@ api.interceptors.response.use(
         : 'Muitas tentativas consecutivas. Aguarde um momento antes de tentar novamente.';
       toast.error(message);
       return Promise.reject(error);
-    }
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
     }
 
     return Promise.reject(error);

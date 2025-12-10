@@ -1,5 +1,6 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,14 +26,14 @@ public class CouponsController(ICouponService service, IContentService contentSe
     }
 
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<List<CouponResponseDto>>> GetAll()
     {
         return Ok(await _service.GetAllAsync());
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<CouponResponseDto>> Create(CreateCouponDto dto)
     {
         try
@@ -46,7 +47,7 @@ public class CouponsController(ICouponService service, IContentService contentSe
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Delete(Guid id)
     {
         await _service.DeleteAsync(id);

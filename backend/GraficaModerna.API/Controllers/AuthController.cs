@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -32,12 +33,10 @@ public class AuthController(
         }
 
         var result = await _authService.RegisterAsync(dto);
+        SetTokenCookies(result.AccessToken, result.RefreshToken);
 
-        // CORREÇÃO: refreshToken incluído na resposta
         return Ok(new
         {
-            token = result.AccessToken,
-            refreshToken = result.RefreshToken,
             result.Email,
             result.Role,
             message = "Cadastro realizado com sucesso."
@@ -54,18 +53,17 @@ public class AuthController(
         var settings = await _contentService.GetSettingsAsync();
         if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
         {
-            if (result.Role != "Admin")
+            if (result.Role != Roles.Admin)
             {
                 await _blacklistService.BlacklistTokenAsync(result.AccessToken, DateTime.UtcNow.AddDays(1));
                 return StatusCode(403, new { message = "Loja em modo orçamento. Login restrito a administradores." });
             }
         }
 
-        // CORREÇÃO: refreshToken incluído na resposta
+        SetTokenCookies(result.AccessToken, result.RefreshToken);
+
         return Ok(new
         {
-            token = result.AccessToken,
-            refreshToken = result.RefreshToken,
             result.Email,
             result.Role,
             message = "Login realizado com sucesso."
@@ -79,11 +77,10 @@ public class AuthController(
         var adminLoginDto = dto with { IsAdminLogin = true };
         var result = await _authService.LoginAsync(adminLoginDto);
 
-        // CORREÇÃO: refreshToken incluído na resposta (útil se o admin também tiver sessão expirável)
+        SetTokenCookies(result.AccessToken, result.RefreshToken);
+
         return Ok(new
         {
-            token = result.AccessToken,
-            refreshToken = result.RefreshToken,
             result.Email,
             result.Role,
             message = "Login administrativo realizado com sucesso."
@@ -94,9 +91,11 @@ public class AuthController(
     [Authorize]
     public async Task<IActionResult> Logout()
     {
+        // Tenta obter token do cookie primeiro, depois do header
         string? token = null;
-
-        if (Request.Headers.TryGetValue("Authorization", out var authHeader))
+        if (Request.Cookies.TryGetValue("jwt", out var cookieToken))
+            token = cookieToken;
+        else if (Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
             var header = authHeader.ToString();
             if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
@@ -107,14 +106,20 @@ public class AuthController(
             try
             {
                 var handler = new JwtSecurityTokenHandler();
-                var jwtToken = handler.ReadJwtToken(token);
-
-                await _blacklistService.BlacklistTokenAsync(token, jwtToken.ValidTo);
+                if (handler.CanReadToken(token))
+                {
+                    var jwtToken = handler.ReadJwtToken(token);
+                    await _blacklistService.BlacklistTokenAsync(token, jwtToken.ValidTo);
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning("Erro ao processar blacklist no logout: {Message}", ex.Message);
             }
+
+        // Remove cookies
+        Response.Cookies.Delete("jwt");
+        Response.Cookies.Delete("refreshToken");
 
         return Ok(new { message = "Deslogado com sucesso" });
     }
@@ -128,7 +133,7 @@ public class AuthController(
     }
 
     [HttpGet("profile")]
-    [Authorize(Roles = "User,Admin")]
+    [Authorize(Roles = Roles.User + "," + Roles.Admin)]
     public async Task<ActionResult<UserProfileDto>> GetProfile()
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -139,14 +144,14 @@ public class AuthController(
     }
 
     [HttpPut("profile")]
-    [Authorize(Roles = "User,Admin")]
+    [Authorize(Roles = Roles.User + "," + Roles.Admin)]
     public async Task<IActionResult> UpdateProfile(UpdateProfileDto dto)
     {
         var settings = await _contentService.GetSettingsAsync();
         if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
         {
             var role = User.FindFirstValue(ClaimTypes.Role);
-            if (role != "Admin")
+            if (role != Roles.Admin)
             {
                 return StatusCode(403, new { message = "Edição de perfil desativada temporariamente." });
             }
@@ -161,15 +166,23 @@ public class AuthController(
 
     [HttpPost("refresh-token")]
     [AllowAnonymous]
-    public async Task<IActionResult> RefreshToken([FromBody] TokenModel tokenModel)
+    public async Task<IActionResult> RefreshToken()
     {
-        if (tokenModel is null) return BadRequest("Requisição inválida");
+        // Ler tokens dos cookies
+        var accessToken = Request.Cookies["jwt"];
+        var refreshToken = Request.Cookies["refreshToken"];
+
+        if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
+            return BadRequest("Tokens não encontrados nos cookies.");
+
+        var tokenModel = new TokenModel(accessToken, refreshToken);
 
         try
         {
             var result = await _authService.RefreshTokenAsync(tokenModel);
-            // Este método já estava correto, mantivemos igual
-            return Ok(new { token = result.AccessToken, refreshToken = result.RefreshToken, result.Email, result.Role });
+            SetTokenCookies(result.AccessToken, result.RefreshToken);
+
+            return Ok(new { result.Email, result.Role });
         }
         catch (Exception ex)
         {
@@ -199,5 +212,27 @@ public class AuthController(
     {
         await _authService.ResetPasswordAsync(dto);
         return Ok(new { Message = "Senha redefinida com sucesso. Faça login com a nova senha." });
+    }
+
+    private void SetTokenCookies(string accessToken, string refreshToken)
+    {
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true, // Requer HTTPS
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddMinutes(15) // Tempo do Access Token
+        };
+
+        var refreshCookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(7) // Tempo do Refresh Token
+        };
+
+        Response.Cookies.Append("jwt", accessToken, cookieOptions);
+        Response.Cookies.Append("refreshToken", refreshToken, refreshCookieOptions);
     }
 }

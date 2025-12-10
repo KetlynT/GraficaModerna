@@ -3,11 +3,11 @@ import { CouponService } from '../services/couponService';
 import { Button } from './ui/Button';
 import { Tag, X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PropTypes from 'prop-types';
 
 export const CouponInput = ({ onApply, initialCoupon = null }) => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
-  // Estado local para mostrar o cupom aplicado visualmente
   const [activeCoupon, setActiveCoupon] = useState(initialCoupon);
 
   const handleApply = async () => {
@@ -16,7 +16,7 @@ export const CouponInput = ({ onApply, initialCoupon = null }) => {
     try {
       const data = await CouponService.validate(code);
       setActiveCoupon(data);
-      onApply(data); // Passa o objeto do cupom para o pai
+      onApply(data);
       toast.success(`Cupom ${data.code} aplicado!`);
       setCode('');
     } catch (error) {
@@ -53,7 +53,6 @@ export const CouponInput = ({ onApply, initialCoupon = null }) => {
       <div className="relative flex-grow">
         <Tag size={18} className="absolute left-3 top-3 text-gray-400" />
         <input 
-          // Focus ring dinâmico (focus:ring-primary)
           className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary uppercase transition-all"
           placeholder="CÓDIGO" 
           value={code} 
@@ -66,4 +65,12 @@ export const CouponInput = ({ onApply, initialCoupon = null }) => {
       </Button>
     </div>
   );
+};
+
+CouponInput.propTypes = {
+  onApply: PropTypes.func.isRequired,
+  initialCoupon: PropTypes.shape({
+    code: PropTypes.string,
+    discountPercentage: PropTypes.number
+  })
 };

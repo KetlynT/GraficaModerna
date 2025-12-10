@@ -6,15 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-
 public class CouponService(AppDbContext context) : ICouponService
 {
     private readonly AppDbContext _context = context;
 
     public async Task<CouponResponseDto> CreateAsync(CreateCouponDto dto)
     {
-        if (await _context.Coupons.AnyAsync(c => c.Code.Equals(dto.Code, StringComparison.CurrentCultureIgnoreCase)))
-            throw new Exception("Cupom j� existe.");
+        if (await _context.Coupons.AnyAsync(c => c.Code.Equals(dto.Code, StringComparison.OrdinalIgnoreCase)))
+            throw new Exception("Cupom já existe.");
 
         var coupon = new Coupon(dto.Code, dto.DiscountPercentage, dto.ValidityDays);
         _context.Coupons.Add(coupon);
@@ -44,15 +43,9 @@ public class CouponService(AppDbContext context) : ICouponService
 
     public async Task<Coupon?> GetValidCouponAsync(string code)
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
         var coupon = await _context.Coupons
-            .FirstOrDefaultAsync(c => c.Code.ToUpper() == code.ToUpper());
-        sw.Stop();
-        var elapsed = sw.ElapsedMilliseconds;
-        if (elapsed < 300) 
-        {
-            await Task.Delay((int)(300 - elapsed));
-        }
+            .FirstOrDefaultAsync(c => c.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
+
         if (coupon == null || !coupon.IsValid()) return null;
         return coupon;
     }

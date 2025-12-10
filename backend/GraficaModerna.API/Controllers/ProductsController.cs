@@ -1,8 +1,10 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Constants;
+using GraficaModerna.Domain.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using GraficaModerna.Domain.Models;
+
 namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
@@ -36,7 +38,7 @@ public class ProductsController(IProductService service) : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<ProductResponseDto>> Create([FromBody] CreateProductDto dto)
     {
         var result = await _service.CreateAsync(dto);
@@ -44,7 +46,7 @@ public class ProductsController(IProductService service) : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult> Update(Guid id, [FromBody] UpdateProductDto dto)
     {
         try
@@ -59,7 +61,7 @@ public class ProductsController(IProductService service) : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult> Delete(Guid id)
     {
         try

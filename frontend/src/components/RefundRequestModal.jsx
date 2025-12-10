@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import Button from './ui/Button';
-import { formatCurrency } from '../utils/formatters';
+import { Button } from './ui/Button';
+import { formatCurrency } from '../utils/formatters'; // Ensure this utility exists
+import PropTypes from 'prop-types';
 
 export default function RefundRequestModal({ order, onClose, onSubmit, isLoading }) {
   const [refundType, setRefundType] = useState('Total'); // 'Total' ou 'Parcial'
@@ -10,9 +11,9 @@ export default function RefundRequestModal({ order, onClose, onSubmit, isLoading
     setSelectedItems(prev => {
       const newState = { ...prev };
       if (newState[productId]) {
-        delete newState[productId]; // Remove se já estiver selecionado
+        delete newState[productId];
       } else {
-        newState[productId] = maxQuantity; // Adiciona com quantidade máxima inicial
+        newState[productId] = maxQuantity;
       }
       return newState;
     });
@@ -33,15 +34,8 @@ export default function RefundRequestModal({ order, onClose, onSubmit, isLoading
     onSubmit(payload);
   };
 
-  // Calcula valor estimado (visual)
-  const estimatedRefund = refundType === 'Total' 
-    ? order.totalAmount 
-    : Object.entries(selectedItems).reduce((acc, [pId, qty]) => {
-        const item = order.items.find(i => i.productName === pId || i.productId === pId); // Ajuste conforme seu DTO de item traz o ID
-        // Nota: Se o DTO de OrderItem não tiver o ID do produto, você precisará garantir que o backend envie.
-        // Assumindo que você ajustou o DTO para enviar ProductId ou conseguimos mapear pelo nome temporariamente:
-        return acc + (item ? item.unitPrice * qty : 0);
-      }, 0);
+  // Helper for currency format
+  const currencyFormatter = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -72,8 +66,6 @@ export default function RefundRequestModal({ order, onClose, onSubmit, isLoading
         {refundType === 'Parcial' && (
           <div className="mb-4 max-h-60 overflow-y-auto border p-2 rounded">
             {order.items.map((item, idx) => {
-                // Precisamos de um ID único. Se item.productId não existir no DTO, use o índice com cuidado ou peça para adicionar no backend.
-                // Vou assumir que o backend envia ProductId dentro de Items, ou usaremos uma chave composta.
                 const key = item.productId || idx; 
                 const isSelected = !!selectedItems[key];
 
@@ -109,7 +101,7 @@ export default function RefundRequestModal({ order, onClose, onSubmit, isLoading
         <div className="bg-gray-100 p-3 rounded mb-4 text-right">
           <span className="text-gray-600 text-sm">Valor Estimado do Estorno:</span>
           <p className="text-lg font-bold text-green-600">
-            {refundType === 'Total' ? formatCurrency(order.totalAmount) : 'R$ A calcular pelo admin'}
+            {refundType === 'Total' ? currencyFormatter(order.totalAmount) : 'R$ A calcular pelo admin'}
           </p>
           <p className="text-xs text-gray-500 mt-1">
             * O valor final será analisado e confirmado pelo administrador.
@@ -130,3 +122,18 @@ export default function RefundRequestModal({ order, onClose, onSubmit, isLoading
     </div>
   );
 }
+
+RefundRequestModal.propTypes = {
+  order: PropTypes.shape({
+    totalAmount: PropTypes.number.isRequired,
+    items: PropTypes.arrayOf(PropTypes.shape({
+      productId: PropTypes.string,
+      productName: PropTypes.string,
+      quantity: PropTypes.number,
+      unitPrice: PropTypes.number
+    })).isRequired
+  }).isRequired,
+  onClose: PropTypes.func.isRequired,
+  onSubmit: PropTypes.func.isRequired,
+  isLoading: PropTypes.bool
+};
