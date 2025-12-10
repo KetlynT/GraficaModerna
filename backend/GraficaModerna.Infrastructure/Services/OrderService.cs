@@ -90,8 +90,8 @@ public class OrderService(
             if (!string.IsNullOrWhiteSpace(couponCode))
             {
                 var coupon = await _context.Coupons.FirstOrDefaultAsync(c =>
-                    c.Code.ToUpper() == couponCode.ToUpper());
-                
+                    c.Code.Equals(couponCode, StringComparison.OrdinalIgnoreCase));
+
                 if (coupon != null && coupon.IsValid())
                 {
                     var alreadyUsed =

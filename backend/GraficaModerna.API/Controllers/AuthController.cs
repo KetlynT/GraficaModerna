@@ -33,8 +33,15 @@ public class AuthController(
 
         var result = await _authService.RegisterAsync(dto);
 
+        // CORREÇÃO: refreshToken incluído na resposta
         return Ok(new
-        { token = result.AccessToken, result.Email, result.Role, message = "Cadastro realizado com sucesso." });
+        {
+            token = result.AccessToken,
+            refreshToken = result.RefreshToken,
+            result.Email,
+            result.Role,
+            message = "Cadastro realizado com sucesso."
+        });
     }
 
     [EnableRateLimiting("AuthPolicy")]
@@ -54,8 +61,15 @@ public class AuthController(
             }
         }
 
+        // CORREÇÃO: refreshToken incluído na resposta
         return Ok(new
-        { token = result.AccessToken, result.Email, result.Role, message = "Login realizado com sucesso." });
+        {
+            token = result.AccessToken,
+            refreshToken = result.RefreshToken,
+            result.Email,
+            result.Role,
+            message = "Login realizado com sucesso."
+        });
     }
 
     [EnableRateLimiting("AuthPolicy")]
@@ -65,8 +79,15 @@ public class AuthController(
         var adminLoginDto = dto with { IsAdminLogin = true };
         var result = await _authService.LoginAsync(adminLoginDto);
 
+        // CORREÇÃO: refreshToken incluído na resposta (útil se o admin também tiver sessão expirável)
         return Ok(new
-        { token = result.AccessToken, result.Email, result.Role, message = "Login administrativo realizado com sucesso." });
+        {
+            token = result.AccessToken,
+            refreshToken = result.RefreshToken,
+            result.Email,
+            result.Role,
+            message = "Login administrativo realizado com sucesso."
+        });
     }
 
     [HttpPost("logout")]
@@ -147,6 +168,7 @@ public class AuthController(
         try
         {
             var result = await _authService.RefreshTokenAsync(tokenModel);
+            // Este método já estava correto, mantivemos igual
             return Ok(new { token = result.AccessToken, refreshToken = result.RefreshToken, result.Email, result.Role });
         }
         catch (Exception ex)
