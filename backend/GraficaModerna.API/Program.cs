@@ -268,6 +268,7 @@ builder.Services.AddScoped<ICouponService, CouponService>();
 builder.Services.AddScoped<IAddressService, AddressService>();
 builder.Services.AddScoped<IPaymentService, StripePaymentService>();
 builder.Services.AddScoped<IContentService, ContentService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 builder.Services.AddScoped<IShippingService, MelhorEnvioShippingService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();

@@ -32,9 +32,12 @@ public class OrderService(
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly ILogger<OrderService> _logger = logger;
 
+    // ... [CreateOrderFromCartAsync e GetUserOrdersAsync mantidos iguais] ...
+
     public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode,
         string shippingMethod)
     {
+        // (Código mantido igual ao original para brevidade, se precisar repito aqui)
         var cart = await _context.Carts
             .Include(c => c.Items)
             .ThenInclude(i => i.Product)
@@ -125,7 +128,7 @@ public class OrderService(
                 ShippingZipCode = addressDto.ZipCode,
                 ShippingCost = verifiedShippingCost,
                 ShippingMethod = selectedOption.Name,
-                Status = OrderStatus.Pendente, // Alterado para Enum
+                Status = OrderStatus.Pendente,
                 OrderDate = DateTime.UtcNow,
                 SubTotal = subTotal,
                 Discount = discount,
@@ -138,7 +141,7 @@ public class OrderService(
 
             order.History.Add(new OrderHistory
             {
-                Status = OrderStatus.Pendente.GetDescription(), // Converte para string para o histórico
+                Status = OrderStatus.Pendente.GetDescription(),
                 Message = "Pedido criado via Checkout",
                 ChangedBy = userId,
                 Timestamp = DateTime.UtcNow,
@@ -253,6 +256,16 @@ public class OrderService(
                 return;
             }
 
+            // --- USO DO MÉTODO NotifySecurityTeamAsync ---
+            // Validar se o valor pago corresponde ao valor do pedido
+            var expectedAmount = (long)(order.TotalAmount * 100);
+            if (expectedAmount != amountPaidInCents)
+            {
+                await NotifySecurityTeamAsync(order, transactionId, expectedAmount, amountPaidInCents);
+                throw new Exception($"Divergência de valores de segurança. Esperado: {expectedAmount}, Recebido: {amountPaidInCents}");
+            }
+            // ---------------------------------------------
+
             if (order.Status == OrderStatus.Pago)
             {
                 await transaction.RollbackAsync();
@@ -284,7 +297,6 @@ public class OrderService(
                     await _paymentService.RefundPaymentAsync(transactionId);
 
                     order.StripePaymentIntentId = transactionId;
-                    // Alterado para Enum
                     order.Status = OrderStatus.Cancelado;
 
                     AddAuditLog(order, OrderStatus.Cancelado,
@@ -328,7 +340,7 @@ public class OrderService(
             }
 
             order.StripePaymentIntentId = transactionId;
-            order.Status = OrderStatus.Pago; // Alterado para Enum
+            order.Status = OrderStatus.Pago;
 
             AddAuditLog(order, OrderStatus.Pago,
                 $"✅ Pagamento confirmado e Estoque debitado. Transaction: {transactionId}",
@@ -350,6 +362,7 @@ public class OrderService(
 
     public async Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto)
     {
+        // (Lógica mantida igual, omitindo para brevidade)
         var user = _httpContextAccessor.HttpContext?.User;
         var adminUserId = _userManager.GetUserId(user!) ?? "AdminUnknown";
 
@@ -365,13 +378,9 @@ public class OrderService(
                 .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado");
 
             var oldStatus = order.Status;
-
-            // CONVERSÃO: String (DTO) -> Enum
             var newStatusEnum = ParseStatus(dto.Status);
-
             var auditMessage = $"Status alterado manualmente para {dto.Status}";
 
-            // --- 1. Lógica de Logística Reversa ---
             if (newStatusEnum == OrderStatus.AguardandoDevolucao)
             {
                 if (!string.IsNullOrEmpty(dto.ReverseLogisticsCode))
@@ -384,7 +393,6 @@ public class OrderService(
                 auditMessage += ". Instruções geradas.";
             }
 
-            // --- 2. Lógica de Motivo e Prova (Unificada) ---
             if (newStatusEnum == OrderStatus.ReembolsoReprovado ||
                 newStatusEnum == OrderStatus.Reembolsado ||
                 newStatusEnum == OrderStatus.ReembolsadoParcialmente ||
@@ -400,7 +408,6 @@ public class OrderService(
                     auditMessage += ". Justificativa e provas anexadas.";
             }
 
-            // --- 3. Lógica Principal de Reembolso (Total ou Parcial) ---
             if ((newStatusEnum == OrderStatus.Reembolsado ||
                  newStatusEnum == OrderStatus.ReembolsadoParcialmente ||
                  newStatusEnum == OrderStatus.Cancelado)
@@ -433,7 +440,6 @@ public class OrderService(
 
                     if (newStatusEnum == OrderStatus.Reembolsado && amountToRefund < order.TotalAmount)
                     {
-                        // Se o reembolso foi menor que o total, forçar status Parcial
                         newStatusEnum = OrderStatus.ReembolsadoParcialmente;
                         dto = dto with { Status = newStatusEnum.GetDescription() };
                     }
@@ -444,18 +450,15 @@ public class OrderService(
                 }
             }
 
-            // --- 4. Atualização de Data de Entrega ---
             if (newStatusEnum == OrderStatus.Entregue && order.Status != OrderStatus.Entregue)
                 order.DeliveryDate = DateTime.UtcNow;
 
-            // --- 5. Atualização de Rastreio ---
             if (!string.IsNullOrEmpty(dto.TrackingCode))
             {
                 order.TrackingCode = dto.TrackingCode;
                 auditMessage += $" (Rastreio: {dto.TrackingCode})";
             }
 
-            // --- Finalização ---
             AddAuditLog(order, newStatusEnum, auditMessage, $"Admin:{adminUserId}");
 
             await _context.SaveChangesAsync();
@@ -475,13 +478,10 @@ public class OrderService(
 
     public async Task RequestRefundAsync(Guid orderId, string userId, RequestRefundDto dto)
     {
-        var order = await _context.Orders
-            .Include(o => o.Items)
-            .Include(o => o.History)
-            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado.");
-
-        if (order.UserId != userId)
-            throw new UnauthorizedAccessException("Sem permissão.");
+        // --- USO DO MÉTODO GetUserOrderOrFail ---
+        // Substitui a lógica manual de busca e validação
+        var order = await GetUserOrderOrFail(orderId, userId);
+        // ----------------------------------------
 
         if (order.Status != OrderStatus.Entregue && order.Status != OrderStatus.Pago)
             throw new Exception("Status do pedido não permite solicitação de reembolso.");
@@ -517,7 +517,7 @@ public class OrderService(
             order.RefundType = "Parcial";
             order.RefundRequestedAmount = calculatedRefundAmount;
 
-            AddAuditLog(order, order.Status, // Mantém o status, só adiciona log
+            AddAuditLog(order, order.Status,
                 $"Cliente solicitou reembolso PARCIAL de R$ {calculatedRefundAmount:F2}.", userId);
         }
         else
@@ -527,12 +527,49 @@ public class OrderService(
 
             foreach (var item in order.Items) item.RefundQuantity = item.Quantity;
 
-            AddAuditLog(order, order.Status, // Mantém o status
+            AddAuditLog(order, order.Status,
                 "Cliente solicitou reembolso TOTAL.", userId);
         }
 
         await _context.SaveChangesAsync();
     }
+
+    // --- MÉTODOS NOVOS ADICIONADOS NA REFATORAÇÃO ---
+
+    public async Task<Order> GetOrderForPaymentAsync(Guid orderId, string userId)
+    {
+        // --- USO DO MÉTODO GetUserOrderOrFail ---
+        // Reutiliza a busca centralizada
+        var order = await GetUserOrderOrFail(orderId, userId);
+        // ----------------------------------------
+
+        if (order.Status == OrderStatus.Pago)
+            throw new InvalidOperationException("Este pedido já está pago.");
+
+        if (order.Status == OrderStatus.Cancelado || order.Status == OrderStatus.Reembolsado)
+            throw new InvalidOperationException("Este pedido foi cancelado e não pode ser pago.");
+
+        if (order.Items.Count == 0)
+            throw new InvalidOperationException("Pedido inválido: sem itens.");
+
+        if (order.TotalAmount <= 0)
+            throw new InvalidOperationException("Pedido com valor inválido.");
+
+        return order;
+    }
+
+    public async Task<PaymentStatusDto> GetPaymentStatusAsync(Guid orderId, string userId)
+    {
+        var order = await _context.Orders
+            .Where(o => o.Id == orderId && o.UserId == userId)
+            .Select(o => new PaymentStatusDto(o.Id, o.Status, o.TotalAmount))
+            .FirstOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Pedido não encontrado.");
+
+        return order;
+    }
+
+    // --- MÉTODOS PRIVADOS AUXILIARES ---
 
     private string GetIpAddress()
     {
@@ -544,7 +581,6 @@ public class OrderService(
         return _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString() ?? "Unknown";
     }
 
-    // Alterado para receber OrderStatus
     private void AddAuditLog(Order order, OrderStatus newStatus, string message, string changedBy)
     {
         order.Status = newStatus;
@@ -552,7 +588,7 @@ public class OrderService(
         order.History.Add(new OrderHistory
         {
             OrderId = order.Id,
-            Status = newStatus.GetDescription(), // Converte para string
+            Status = newStatus.GetDescription(),
             Message = message,
             ChangedBy = changedBy,
             Timestamp = DateTime.UtcNow,
@@ -561,12 +597,15 @@ public class OrderService(
         });
     }
 
+    // Método centralizado para buscar pedido com validação de usuário
     private async Task<Order> GetUserOrderOrFail(Guid orderId, string userId)
     {
         var order = await _context.Orders
             .Include(o => o.Items)
             .Include(o => o.History)
-            .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado.");
+            .FirstOrDefaultAsync(o => o.Id == orderId)
+            ?? throw new KeyNotFoundException("Pedido não encontrado.");
+
         if (order.UserId != userId)
             throw new UnauthorizedAccessException("Você não tem permissão para acessar este pedido.");
 
@@ -627,6 +666,7 @@ public class OrderService(
         }
     }
 
+    // ... [Métodos de Email e MapToDto mantidos iguais] ...
     private async Task SendOrderReceivedEmailAsync(string userId, Guid orderId)
     {
         try
@@ -719,7 +759,7 @@ public class OrderService(
             order.Discount,
             order.ShippingCost,
             order.TotalAmount,
-            order.Status.GetDescription(), // Enum -> String
+            order.Status.GetDescription(),
             order.TrackingCode,
             order.ReverseLogisticsCode,
             order.ReturnInstructions,
@@ -744,7 +784,7 @@ public class OrderService(
             order.Discount,
             order.ShippingCost,
             order.TotalAmount,
-            order.Status.GetDescription(), // Enum -> String
+            order.Status.GetDescription(),
             order.TrackingCode,
             order.ReverseLogisticsCode,
             order.ReturnInstructions,

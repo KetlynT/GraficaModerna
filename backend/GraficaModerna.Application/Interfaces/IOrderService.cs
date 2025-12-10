@@ -1,5 +1,6 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Domain.Models;
+using GraficaModerna.Domain.Entities;
 
 namespace GraficaModerna.Application.Interfaces;
 
@@ -16,4 +17,6 @@ public interface IOrderService
     Task UpdateAdminOrderAsync(Guid orderId, UpdateOrderStatusDto dto);
     Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents);
     Task RequestRefundAsync(Guid orderId, string userId, RequestRefundDto dto);
+    Task<Order> GetOrderForPaymentAsync(Guid orderId, string userId);
+    Task<PaymentStatusDto> GetPaymentStatusAsync(Guid orderId, string userId);
 }
