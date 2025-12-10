@@ -1,6 +1,5 @@
 ﻿using DotNetEnv;
 using FluentValidation;
-using FluentValidation.AspNetCore;
 using Ganss.Xss;
 using GraficaModerna.API.Middlewares;
 using GraficaModerna.Application.Constants;
@@ -21,6 +20,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Text;
@@ -277,6 +277,7 @@ builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<MetadataSecurityService>();
 
 builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>();
+
 builder.Services.AddFluentValidationAutoValidation();
 
 builder.Services.AddSwaggerGen(o =>

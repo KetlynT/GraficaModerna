@@ -48,7 +48,7 @@ public class OrderServiceAdminTests
             _emailServiceMock.Object,
             _userManagerMock.Object,
             _httpContextAccessorMock.Object,
-            new List<IShippingService> { _shippingServiceMock.Object },
+            [_shippingServiceMock.Object],
             _paymentServiceMock.Object,
             _loggerMock.Object
         );
