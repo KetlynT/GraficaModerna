@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.1.11304.174 d18.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GraficaModerna.API", "GraficaModerna.API\GraficaModerna.API.csproj", "{674BA229-2B1E-4D19-8D6E-45C5ED6B09D9}"
 EndProject
@@ -10,6 +10,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GraficaModerna.Domain", "GraficaModerna.Domain\GraficaModerna.Domain.csproj", "{F1B5A2E2-A768-4087-A5EA-5A13D8D0CC7C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GraficaModerna.Infrastructure", "GraficaModerna.Infrastructure\GraficaModerna.Infrastructure.csproj", "{57C6E858-6394-498E-8E5F-47C271A7B17F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraficaModerna.Tests", "GraficaModerna.Tests\GraficaModerna.Tests.csproj", "{60B8707A-3753-49C2-8814-190EFA04D997}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,8 +35,15 @@ Global
 		{57C6E858-6394-498E-8E5F-47C271A7B17F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{57C6E858-6394-498E-8E5F-47C271A7B17F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{57C6E858-6394-498E-8E5F-47C271A7B17F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60B8707A-3753-49C2-8814-190EFA04D997}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60B8707A-3753-49C2-8814-190EFA04D997}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60B8707A-3753-49C2-8814-190EFA04D997}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60B8707A-3753-49C2-8814-190EFA04D997}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D6535506-0AD0-40F7-9881-FD9E4D1F967A}
 	EndGlobalSection
 EndGlobal
