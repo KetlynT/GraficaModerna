@@ -2,6 +2,7 @@
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
+using GraficaModerna.Domain.Models;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace GraficaModerna.Application.Services;

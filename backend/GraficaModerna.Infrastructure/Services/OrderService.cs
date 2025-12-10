@@ -1,7 +1,11 @@
 ﻿using System.Data;
+using System.ComponentModel;
+using GraficaModerna.Application.Constants;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
+using GraficaModerna.Domain.Enums;
+using GraficaModerna.Domain.Extensions;
 using GraficaModerna.Domain.Models;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.AspNetCore.Http;
@@ -121,7 +125,7 @@ public class OrderService(
                 ShippingZipCode = addressDto.ZipCode,
                 ShippingCost = verifiedShippingCost,
                 ShippingMethod = selectedOption.Name,
-                Status = "Pendente",
+                Status = OrderStatus.Pendente, // Alterado para Enum
                 OrderDate = DateTime.UtcNow,
                 SubTotal = subTotal,
                 Discount = discount,
@@ -134,7 +138,7 @@ public class OrderService(
 
             order.History.Add(new OrderHistory
             {
-                Status = "Pendente",
+                Status = OrderStatus.Pendente.GetDescription(), // Converte para string para o histórico
                 Message = "Pedido criado via Checkout",
                 ChangedBy = userId,
                 Timestamp = DateTime.UtcNow,
@@ -225,7 +229,7 @@ public class OrderService(
     public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents)
     {
         var isAlreadyProcessed = await _context.Orders
-            .AnyAsync(o => o.StripePaymentIntentId == transactionId && o.Status == "Pago");
+            .AnyAsync(o => o.StripePaymentIntentId == transactionId && o.Status == OrderStatus.Pago);
 
         if (isAlreadyProcessed)
         {
@@ -249,7 +253,7 @@ public class OrderService(
                 return;
             }
 
-            if (order.Status == "Pago")
+            if (order.Status == OrderStatus.Pago)
             {
                 await transaction.RollbackAsync();
                 return;
@@ -280,9 +284,10 @@ public class OrderService(
                     await _paymentService.RefundPaymentAsync(transactionId);
 
                     order.StripePaymentIntentId = transactionId;
-                    order.Status = "Cancelado";
+                    // Alterado para Enum
+                    order.Status = OrderStatus.Cancelado;
 
-                    AddAuditLog(order, "Cancelado",
+                    AddAuditLog(order, OrderStatus.Cancelado,
                         $"⚠️ Cancelamento Automático: Estoque insuficiente ({string.Join(", ", outOfStockItems)}). Valor estornado.",
                         "SYSTEM-STOCK-CHECK");
 
@@ -323,9 +328,9 @@ public class OrderService(
             }
 
             order.StripePaymentIntentId = transactionId;
-            order.Status = "Pago";
+            order.Status = OrderStatus.Pago; // Alterado para Enum
 
-            AddAuditLog(order, "Pago",
+            AddAuditLog(order, OrderStatus.Pago,
                 $"✅ Pagamento confirmado e Estoque debitado. Transaction: {transactionId}",
                 "STRIPE-WEBHOOK");
 
@@ -360,10 +365,14 @@ public class OrderService(
                 .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado");
 
             var oldStatus = order.Status;
+
+            // CONVERSÃO: String (DTO) -> Enum
+            var newStatusEnum = ParseStatus(dto.Status);
+
             var auditMessage = $"Status alterado manualmente para {dto.Status}";
 
             // --- 1. Lógica de Logística Reversa ---
-            if (dto.Status == "Aguardando Devolução")
+            if (newStatusEnum == OrderStatus.AguardandoDevolucao)
             {
                 if (!string.IsNullOrEmpty(dto.ReverseLogisticsCode))
                     order.ReverseLogisticsCode = dto.ReverseLogisticsCode;
@@ -376,10 +385,10 @@ public class OrderService(
             }
 
             // --- 2. Lógica de Motivo e Prova (Unificada) ---
-            if (dto.Status == "Reembolso Reprovado" || 
-                dto.Status == "Reembolsado" || 
-                dto.Status == "Reembolsado Parcialmente" ||
-                dto.Status == "Cancelado")
+            if (newStatusEnum == OrderStatus.ReembolsoReprovado ||
+                newStatusEnum == OrderStatus.Reembolsado ||
+                newStatusEnum == OrderStatus.ReembolsadoParcialmente ||
+                newStatusEnum == OrderStatus.Cancelado)
             {
                 if (!string.IsNullOrEmpty(dto.RefundRejectionReason))
                     order.RefundRejectionReason = dto.RefundRejectionReason;
@@ -387,17 +396,17 @@ public class OrderService(
                 if (!string.IsNullOrEmpty(dto.RefundRejectionProof))
                     order.RefundRejectionProof = dto.RefundRejectionProof;
 
-                if (dto.Status == "Reembolso Reprovado") 
+                if (newStatusEnum == OrderStatus.ReembolsoReprovado)
                     auditMessage += ". Justificativa e provas anexadas.";
             }
 
             // --- 3. Lógica Principal de Reembolso (Total ou Parcial) ---
-            if ((dto.Status == "Reembolsado" || 
-                 dto.Status == "Reembolsado Parcialmente" || 
-                 dto.Status == "Cancelado")
-                && order.Status != "Reembolsado"
-                && order.Status != "Reembolsado Parcialmente"
-                && order.Status != "Cancelado"
+            if ((newStatusEnum == OrderStatus.Reembolsado ||
+                 newStatusEnum == OrderStatus.ReembolsadoParcialmente ||
+                 newStatusEnum == OrderStatus.Cancelado)
+                && order.Status != OrderStatus.Reembolsado
+                && order.Status != OrderStatus.ReembolsadoParcialmente
+                && order.Status != OrderStatus.Cancelado
                 && !string.IsNullOrEmpty(order.StripePaymentIntentId))
             {
                 try
@@ -422,9 +431,11 @@ public class OrderService(
 
                     auditMessage += $". Reembolso de R$ {amountToRefund:N2} processado no Stripe.";
 
-                    if (dto.Status == "Reembolsado" && amountToRefund < order.TotalAmount)
+                    if (newStatusEnum == OrderStatus.Reembolsado && amountToRefund < order.TotalAmount)
                     {
-                        dto = dto with { Status = "Reembolsado Parcialmente" };
+                        // Se o reembolso foi menor que o total, forçar status Parcial
+                        newStatusEnum = OrderStatus.ReembolsadoParcialmente;
+                        dto = dto with { Status = newStatusEnum.GetDescription() };
                     }
                 }
                 catch (Exception ex)
@@ -434,7 +445,7 @@ public class OrderService(
             }
 
             // --- 4. Atualização de Data de Entrega ---
-            if (dto.Status == "Entregue" && order.Status != "Entregue")
+            if (newStatusEnum == OrderStatus.Entregue && order.Status != OrderStatus.Entregue)
                 order.DeliveryDate = DateTime.UtcNow;
 
             // --- 5. Atualização de Rastreio ---
@@ -445,12 +456,12 @@ public class OrderService(
             }
 
             // --- Finalização ---
-            AddAuditLog(order, dto.Status, auditMessage, $"Admin:{adminUserId}");
+            AddAuditLog(order, newStatusEnum, auditMessage, $"Admin:{adminUserId}");
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            if (oldStatus != dto.Status)
+            if (oldStatus != newStatusEnum)
             {
                 _ = SendOrderUpdateEmailAsync(order.UserId, order, dto.Status);
             }
@@ -472,7 +483,7 @@ public class OrderService(
         if (order.UserId != userId)
             throw new UnauthorizedAccessException("Sem permissão.");
 
-        if (order.Status != "Entregue" && order.Status != "Pago")
+        if (order.Status != OrderStatus.Entregue && order.Status != OrderStatus.Pago)
             throw new Exception("Status do pedido não permite solicitação de reembolso.");
 
         if (!string.IsNullOrEmpty(order.RefundType))
@@ -506,7 +517,7 @@ public class OrderService(
             order.RefundType = "Parcial";
             order.RefundRequestedAmount = calculatedRefundAmount;
 
-            AddAuditLog(order, "Solicitação de Reembolso",
+            AddAuditLog(order, order.Status, // Mantém o status, só adiciona log
                 $"Cliente solicitou reembolso PARCIAL de R$ {calculatedRefundAmount:F2}.", userId);
         }
         else
@@ -516,7 +527,7 @@ public class OrderService(
 
             foreach (var item in order.Items) item.RefundQuantity = item.Quantity;
 
-            AddAuditLog(order, "Solicitação de Reembolso",
+            AddAuditLog(order, order.Status, // Mantém o status
                 "Cliente solicitou reembolso TOTAL.", userId);
         }
 
@@ -533,14 +544,15 @@ public class OrderService(
         return _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString() ?? "Unknown";
     }
 
-    private void AddAuditLog(Order order, string newStatus, string message, string changedBy)
+    // Alterado para receber OrderStatus
+    private void AddAuditLog(Order order, OrderStatus newStatus, string message, string changedBy)
     {
         order.Status = newStatus;
 
         order.History.Add(new OrderHistory
         {
             OrderId = order.Id,
-            Status = newStatus,
+            Status = newStatus.GetDescription(), // Converte para string
             Message = message,
             ChangedBy = changedBy,
             Timestamp = DateTime.UtcNow,
@@ -707,7 +719,7 @@ public class OrderService(
             order.Discount,
             order.ShippingCost,
             order.TotalAmount,
-            order.Status,
+            order.Status.GetDescription(), // Enum -> String
             order.TrackingCode,
             order.ReverseLogisticsCode,
             order.ReturnInstructions,
@@ -732,7 +744,7 @@ public class OrderService(
             order.Discount,
             order.ShippingCost,
             order.TotalAmount,
-            order.Status,
+            order.Status.GetDescription(), // Enum -> String
             order.TrackingCode,
             order.ReverseLogisticsCode,
             order.ReturnInstructions,
@@ -750,5 +762,19 @@ public class OrderService(
                 new OrderHistoryDto(h.Status, h.Message, h.ChangedBy, h.Timestamp)
             ).OrderByDescending(h => h.Timestamp)]
         );
+    }
+
+    private static OrderStatus ParseStatus(string status)
+    {
+        foreach (var field in typeof(OrderStatus).GetFields())
+        {
+            var attribute = (DescriptionAttribute?)Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute));
+            if (attribute != null && attribute.Description.Equals(status, StringComparison.OrdinalIgnoreCase))
+                return (OrderStatus)field.GetValue(null)!;
+
+            if (field.Name.Equals(status, StringComparison.OrdinalIgnoreCase))
+                return (OrderStatus)field.GetValue(null)!;
+        }
+        return OrderStatus.Pendente;
     }
 }

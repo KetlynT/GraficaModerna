@@ -1,28 +1,22 @@
-﻿using System.Data;
-using GraficaModerna.Application.DTOs;
+﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Data;
 
 namespace GraficaModerna.Infrastructure.Services;
 
-public class CartService : ICartService
+public class CartService(IUnitOfWork uow, AppDbContext context, ILogger<CartService> logger) : ICartService
 {
     private const int MaxConcurrencyRetries = 3;
     private const int MaxQuantityPerItem = 5000;
-    private readonly AppDbContext _context;
-    private readonly IUnitOfWork _uow;
-    private readonly ILogger<CartService> _logger;
-
-    public CartService(IUnitOfWork uow, AppDbContext context, ILogger<CartService> logger)
-    {
-        _uow = uow;
-        _context = context;
-        _logger = logger;
-    }
+    private readonly AppDbContext _context = context;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly ILogger<CartService> _logger = logger;
 
     public async Task<CartDto> GetCartAsync(string userId)
     {
@@ -77,10 +71,8 @@ public class CartService : ICartService
                         SELECT * FROM ""Products"" 
                         WHERE ""Id"" = {0} AND ""IsActive"" = true 
                         FOR UPDATE", dto.ProductId)
-                    .SingleOrDefaultAsync();
-
-                if (product == null)
-                    throw new InvalidOperationException("Produto indisponível ou removido.");
+                    .SingleOrDefaultAsync()
+                    ?? throw new InvalidOperationException("Produto indisponível ou removido.");
 
                 if (product.StockQuantity < dto.Quantity)
                     throw new InvalidOperationException("Estoque insuficiente para a quantidade solicitada.");
@@ -169,7 +161,7 @@ public class CartService : ICartService
             try
             {
                 var cart = await GetOrCreateCart(userId);
-                var item = cart.Items.FirstOrDefault(i => i.Id == cartItemId && i.Cart.UserId == userId);
+                var item = cart.Items.FirstOrDefault(i => i.Id == cartItemId)
                     ?? throw new InvalidOperationException("Item não encontrado no carrinho.");
 
                 var product = await _context.Products
@@ -177,10 +169,8 @@ public class CartService : ICartService
                         SELECT * FROM ""Products"" 
                         WHERE ""Id"" = {0} AND ""IsActive"" = true 
                         FOR UPDATE", item.ProductId)
-                    .SingleOrDefaultAsync();
-
-                if (product == null)
-                    throw new InvalidOperationException("Produto indisponível.");
+                    .SingleOrDefaultAsync()
+                    ?? throw new InvalidOperationException("Produto indisponível.");
 
                 if (product.StockQuantity < quantity) 
                     throw new InvalidOperationException("Estoque insuficiente.");

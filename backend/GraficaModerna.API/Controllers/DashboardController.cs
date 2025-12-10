@@ -1,4 +1,6 @@
 ﻿using GraficaModerna.Infrastructure.Context;
+using GraficaModerna.Domain.Extensions;
+using GraficaModerna.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,14 +20,14 @@ public class DashboardController(AppDbContext context) : ControllerBase
         var totalOrders = await _context.Orders.CountAsync();
 
         var totalRevenue = await _context.Orders
-            .Where(o => o.Status != "Cancelado" && o.Status != "Reembolsado")
+            .Where(o => o.Status != OrderStatus.Cancelado && o.Status != OrderStatus.Reembolsado)
             .SumAsync(o => o.TotalAmount);
 
         var totalRefunded = await _context.Orders
-            .Where(o => o.Status == "Reembolsado")
+            .Where(o => o.Status == OrderStatus.Reembolsado)
             .SumAsync(o => o.TotalAmount);
 
-        var pendingOrders = await _context.Orders.CountAsync(o => o.Status == "Pendente");
+        var pendingOrders = await _context.Orders.CountAsync(o => o.Status == OrderStatus.Pendente);
 
         var lowStockProducts = await _context.Products
             .Where(p => p.IsActive && p.StockQuantity < 10)

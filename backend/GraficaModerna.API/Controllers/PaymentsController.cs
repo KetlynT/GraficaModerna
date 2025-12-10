@@ -1,6 +1,8 @@
 ﻿using System.Security.Claims;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Infrastructure.Context;
+using GraficaModerna.Domain.Extensions;
+using GraficaModerna.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -57,9 +59,9 @@ public class PaymentsController(
             return NotFound("Pedido não encontrado ou você não tem permissão para acessá-lo.");
         }
 
-        if (order.Status == "Pago") return BadRequest(new { message = "Este pedido já está pago." });
+        if (order.Status == OrderStatus.Pago) return BadRequest(new { message = "Este pedido já está pago." });
 
-        if (order.Status == "Cancelado" || order.Status == "Reembolsado")
+        if (order.Status == OrderStatus.Cancelado || order.Status == OrderStatus.Reembolsado)
             return BadRequest(new { message = "Este pedido foi cancelado e não pode ser pago." });
 
         if (order.Items.Count == 0)

@@ -1,4 +1,5 @@
 ﻿using GraficaModerna.Application.DTOs;
+using GraficaModerna.Domain.Models;
 
 namespace GraficaModerna.Application.Interfaces;
 

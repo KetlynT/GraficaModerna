@@ -6,12 +6,14 @@ using GraficaModerna.API.Middlewares;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Application.Services;
 using GraficaModerna.Application.Validators;
+using GraficaModerna.Application.Constants;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
 using GraficaModerna.Infrastructure.Context;
 using GraficaModerna.Infrastructure.Repositories;
 using GraficaModerna.Infrastructure.Security;
 using GraficaModerna.Infrastructure.Services;
+using GraficaModerna.Infrastructure.Helpers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -31,27 +33,26 @@ if (builder.Environment.IsDevelopment())
 
 builder.Configuration.AddEnvironmentVariables();
 
-var jwtKey = Env.Required("JWT_SECRET_KEY", 64);
-var melhorEnvioUrl = Env.Required("MELHOR_ENVIO_URL");
-var melhorEnvioToken = Env.Required("MELHOR_ENVIO_TOKEN");
-var melhorEnvioUserAgent = Env.Required("MELHOR_ENVIO_USER_AGENT");
-var defaultConnection = Env.Required("ConnectionStrings__DefaultConnection");
-var stripeSecretKey = Env.Required("Stripe__SecretKey");
-var stripeWebhookSecret = Env.Required("Stripe__WebhookSecret");
-var adminEmail = Env.Required("ADMIN_EMAIL");
-var adminPassword = Env.Required("ADMIN_PASSWORD");
-var pepperActiveVersion = Env.Required("Security_PepperRotation_ActiveVersion");
-var pepperV1 = Env.Required("Security_PepperRotationPeppers_v1");
-var corsOriginsRaw = Env.Required("CorsOrigins");
-var metadataEncKey = Env.Required("METADATA_ENC_KEY");
-var metadataHmacKey = Env.Required("METADATA_HMAC_KEY");
-var smtpHost = Env.Required("SMTP_HOST");
-var smtpPort = Env.RequiredInt("SMTP_PORT");
-var smtpUsername = Env.Required("SMTP_USERNAME");
-var smtpPassword = Env.Required("SMTP_PASSWORD");
-var smtpFromEmail = Env.Required("SMTP_FROM_EMAIL");
-var smtpFromName = Env.Required("SMTP_FROM_NAME");
-var frontendUrl = Env.Required("FRONTEND_URL");
+var jwtKey = EnvHelper.Required("JWT_SECRET_KEY", 64);
+var melhorEnvioUrl = EnvHelper.Required("MELHOR_ENVIO_URL");
+var melhorEnvioToken = EnvHelper.Required("MELHOR_ENVIO_TOKEN");
+var melhorEnvioUserAgent = EnvHelper.Required("MELHOR_ENVIO_USER_AGENT");
+var defaultConnection = EnvHelper.Required("ConnectionStrings__DefaultConnection");
+var stripeSecretKey = EnvHelper.Required("Stripe__SecretKey");
+var stripeWebhookSecret = EnvHelper.Required("Stripe__WebhookSecret");
+var adminEmail = EnvHelper.Required("ADMIN_EMAIL");
+var adminPassword = EnvHelper.Required("ADMIN_PASSWORD");
+var pepperActiveVersion = EnvHelper.Required("Security_PepperRotation_ActiveVersion");
+var pepperV1 = EnvHelper.Required("Security_PepperRotationPeppers_v1");
+var corsOriginsRaw = EnvHelper.Required("CorsOrigins");
+var metadataEncKey = EnvHelper.Required("METADATA_ENC_KEY");
+var metadataHmacKey = EnvHelper.Required("METADATA_HMAC_KEY");
+var smtpHost = EnvHelper.Required("SMTP_HOST");
+var smtpPort = EnvHelper.RequiredInt("SMTP_PORT");
+var smtpUsername = EnvHelper.Required("SMTP_USERNAME");
+var smtpPassword = EnvHelper.Required("SMTP_PASSWORD");
+var smtpFromEmail = EnvHelper.Required("SMTP_FROM_EMAIL");
+var smtpFromName = EnvHelper.Required("SMTP_FROM_NAME");
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -103,7 +104,7 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1)
             }));
 
-    options.AddPolicy("AuthPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.AuthPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -114,7 +115,7 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(5)
             }));
 
-    options.AddPolicy("UploadPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.UploadPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -125,7 +126,7 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1)
             }));
 
-    options.AddPolicy("ShippingPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.ShippingPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -136,7 +137,7 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1)
             }));
 
-    options.AddPolicy("PaymentPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.PaymentPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -146,7 +147,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 Window = TimeSpan.FromMinutes(1)
             }));
-    options.AddPolicy("AdminPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.AdminPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -157,7 +158,7 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1)
             }));
 
-    options.AddPolicy("UserActionPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.UserActionPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -167,7 +168,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 2,
                 Window = TimeSpan.FromMinutes(1)
             }));
-    options.AddPolicy("WebhookPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.WebhookPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -177,7 +178,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 Window = TimeSpan.FromMinutes(1)
             }));
-    options.AddPolicy("StrictPaymentPolicy", httpContext =>
+    options.AddPolicy(PolicyConstants.StrictPaymentPolicy, httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -327,50 +328,3 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();
-
-internal static class SanitizerRules
-{
-    public static readonly string[] AllowedTags =
-    [
-        "p", "h1", "h2", "h3", "h4", "h5", "h6", "br", "hr",
-        "b", "strong", "i", "em", "u", "s", "strike", "sub", "sup",
-        "div", "span", "blockquote", "pre", "code",
-        "ul", "ol", "li", "dl", "dt", "dd",
-        "table", "thead", "tbody", "tfoot", "tr", "th", "td",
-        "a", "img"
-    ];
-
-    public static readonly string[] AllowedAttributes =
-    [
-        "class", "id", "style", "title", "alt",
-        "href", "target", "rel",
-        "src", "width", "height",
-        "colspan", "rowspan", "align", "valign"
-    ];
-
-    public static readonly string[] AllowedCssProperties =
-    [
-        "text-align", "padding", "margin", "color", "background-color",
-        "font-size", "font-weight", "text-decoration", "width", "height"
-    ];
-}
-static class Env
-{
-    public static string Required(string name, int? minLength = null)
-    {
-        var value = Environment.GetEnvironmentVariable(name);
-        if (string.IsNullOrWhiteSpace(value))
-            throw new Exception($"FATAL: {name} não configurada.");
-        if (minLength.HasValue && value.Length < minLength.Value)
-            throw new Exception($"FATAL: {name} insegura.");
-        return value;
-    }
-
-    public static int RequiredInt(string name)
-    {
-        var value = Required(name);
-        if (!int.TryParse(value, out var n))
-            throw new Exception($"FATAL: {name} inválida.");
-        return n;
-    }
-}

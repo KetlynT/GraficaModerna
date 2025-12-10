@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using GraficaModerna.Domain.Enums;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace GraficaModerna.Domain.Entities;
 
@@ -24,7 +25,7 @@ public class Order
     public decimal TotalAmount { get; set; }
 
     public string? AppliedCoupon { get; set; }
-    public string Status { get; set; } = "Pendente";
+    public OrderStatus Status { get; set; } = OrderStatus.Pendente;
     public string? TrackingCode { get; set; }
 
     public string? StripeSessionId { get; set; }

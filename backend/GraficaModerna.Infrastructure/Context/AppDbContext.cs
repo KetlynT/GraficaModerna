@@ -1,5 +1,8 @@
-﻿using System.Globalization;
+﻿using System.ComponentModel;
+using System.Globalization;
 using GraficaModerna.Domain.Entities;
+using GraficaModerna.Domain.Enums;
+using GraficaModerna.Domain.Extensions;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,9 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             .HasMaxLength(20)
             .IsRequired(false);
 
-        // Configurações de Produto
         builder.Entity<Product>().Property(p => p.Price).HasColumnType("decimal(18,2)");
-        // Índice composto para o catálogo (filtro de ativos + ordenação/filtro por preço)
         builder.Entity<Product>()
             .HasIndex(p => new { p.IsActive, p.Price })
             .HasDatabaseName("IX_Product_IsActive_Price");
@@ -39,27 +40,30 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         builder.Entity<Order>().Property(o => o.SubTotal).HasColumnType("decimal(18,2)");
         builder.Entity<Order>().Property(o => o.Discount).HasColumnType("decimal(18,2)");
         builder.Entity<Order>().Property(o => o.ShippingCost).HasColumnType("decimal(18,2)");
-        
+
         builder.Entity<Order>()
             .Property(o => o.TotalAmount)
             .HasColumnType("decimal(18,2)");
 
         builder.Entity<Order>()
-            .ToTable(t => t.HasCheckConstraint("CK_Order_TotalAmount", 
+            .ToTable(t => t.HasCheckConstraint("CK_Order_TotalAmount",
                 $"\"TotalAmount\" >= {Order.MinOrderAmount.ToString(CultureInfo.InvariantCulture)} AND \"TotalAmount\" <= {Order.MaxOrderAmount.ToString(CultureInfo.InvariantCulture)}"));
 
-        // Índices para Orders
-        // 1. Filtros de Admin (busca por status)
         builder.Entity<Order>()
             .HasIndex(o => o.Status)
             .HasDatabaseName("IX_Order_Status");
 
-        // 2. Queries de Usuário (Meus Pedidos: busca por UserId ordenado por Data)
         builder.Entity<Order>()
             .HasIndex(o => new { o.UserId, o.OrderDate })
             .HasDatabaseName("IX_Order_UserId_OrderDate");
 
-        // Configurações de Coupon
+        builder.Entity<Order>()
+            .Property(o => o.Status)
+            .HasConversion(
+                v => v.GetDescription(),
+                v => ParseStatus(v)
+            );
+
         builder.Entity<Coupon>().Property(c => c.DiscountPercentage).HasColumnType("decimal(5,2)");
 
         builder.Entity<Coupon>()
@@ -82,7 +86,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             .WithOne()
             .HasForeignKey(h => h.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
-            
+
         builder.Entity<SiteSetting>().HasKey(s => s.Key);
+    }
+
+    private static OrderStatus ParseStatus(string status)
+    {
+        foreach (var field in typeof(OrderStatus).GetFields())
+        {
+            var attribute = (DescriptionAttribute?)Attribute.GetCustomAttribute(field, typeof(DescriptionAttribute));
+            if (attribute != null && attribute.Description == status)
+                return (OrderStatus)field.GetValue(null)!;
+
+            if (field.Name == status)
+                return (OrderStatus)field.GetValue(null)!;
+        }
+        return OrderStatus.Pendente;
     }
 }
