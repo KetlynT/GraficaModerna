@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Search, Edit } from 'lucide-react';
-import { Button } from './ui/Button';
-import { useCart } from '../context/CartContext';
-import { useAuth } from '../context/AuthContext';
+import { Button } from '@/components/ui/Button';
+import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext';
 import PropTypes from 'prop-types';
 
 export const ProductCard = ({ product, purchaseEnabled = true }) => {

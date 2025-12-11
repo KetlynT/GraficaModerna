@@ -10,18 +10,9 @@ export const ContentService = {
     }
   },
 
-  createPage: async (data) => {
-    const response = await api.post('/content', data);
-    return response.data;
-  },
-
   getAllPages: async () => {
     const response = await api.get('/content/pages');
     return response.data;
-  },
-
-  updatePage: async (slug, data) => {
-    await api.put(`/content/pages/${slug}`, data);
   },
 
   getSettings: async () => {
@@ -32,9 +23,6 @@ export const ContentService = {
       console.error("Erro ao carregar configurações", error);
       throw error; 
     }
-},
+  },
 
-  saveSettings: async (settingsDict) => {
-    await api.post('/content/settings', settingsDict);
-  }
 };

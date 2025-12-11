@@ -1,8 +1,8 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect } from 'react';
-import { CartService } from '../services/cartService';
-import { useAuth } from './AuthContext';
+import { CartService } from '@/app/(shop)/services/cartService';
+import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
 
 const CartContext = createContext({});

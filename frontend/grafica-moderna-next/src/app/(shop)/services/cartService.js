@@ -1,4 +1,4 @@
-import api from '../modules/api/api';
+import api from '@/services/api';
 
 export const CartService = {
   getCart: async () => {

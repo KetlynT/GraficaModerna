@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react';
-import { ProductService } from '../services/productService';
-import { ContentService } from '../services/contentService';
-import { ProductCard } from './(shop)/produto/components/ProductCard';
+import { ProductService } from '@/app/(shop)/services/productService';
+import { ContentService } from '@/services/contentService';
+import { ProductCard } from '@/app/(shop)/produto/components/ProductCard';
 import { Button } from '../components/ui/Button';
 import { Search, Printer, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -41,9 +41,9 @@ export default function Home () {
       if (data) setSettings(prev => ({...prev, ...data}));
     }).catch(err => {
         console.error(err);
-        navigate('/error', { replace: true }); 
+        router.replace('/error');
       });
-  }, [navigate]);
+  }, [router]);
 
   const loadProducts = async (page) => {
     setLoading(true);
@@ -92,7 +92,8 @@ export default function Home () {
   };
 
   return (
-    <>
+    <html>
+      <body>
       <div className="relative bg-secondary text-white overflow-hidden transition-all duration-500">
         <div 
             className="absolute inset-0 bg-cover bg-center opacity-20 transform scale-105"
@@ -231,6 +232,7 @@ export default function Home () {
           </div>
         )}
       </section>
-    </>
+      </body>
+    </html>
   );
 };

@@ -27,6 +27,8 @@ export default function ErrorPage() {
   }, []);
 
   return (
+    <html>
+      <body>
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">
         <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -52,5 +54,7 @@ export default function ErrorPage() {
         </div>
       </div>
     </div>
+    </body>
+    </html>
   );
 }

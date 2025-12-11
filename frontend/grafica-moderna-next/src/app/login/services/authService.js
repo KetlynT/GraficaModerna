@@ -1,4 +1,4 @@
-import api from './api';
+import api from '@/services/api';
 
 const authService = {
   login: async (credentials, isAdmin = false) => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useState, useEffect, useContext } from 'react';
-import authService from '../services/authService';
+import authService from '@/app/login/services/authService';
 import PropTypes from 'prop-types';
 import { useRouter } from 'next/navigation';
 

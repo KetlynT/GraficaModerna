@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom'; 
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { LogIn, AlertTriangle } from 'lucide-react';
@@ -10,8 +11,7 @@ export const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
   const { login, logout } = useAuth(); 
   const { syncGuestCart } = useCart();
 
@@ -24,9 +24,6 @@ export const Login = () => {
       
       if (data.role === 'Admin') {
           await logout();
-          toast.error("Acesso administrativo deve ser feito pela rota /putiroski", {
-              icon: <AlertTriangle className="text-red-500" />
-          });
           setLoading(false);
           return;
       }
