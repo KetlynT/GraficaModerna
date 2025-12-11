@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Phone, MapPin, Send, Mail } from 'lucide-react';
-import { Button } from '../components/ui/Button';
-import { ContentService } from '../services/contentService';
+import { Button } from '../../components/ui/Button';
+import { ContentService } from '../../services/contentService';
 import toast from 'react-hot-toast';
 
 export const Contact = () => {
