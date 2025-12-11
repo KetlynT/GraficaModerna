@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../modules/api/api';
 
 export const DashboardService = {
   getStats: async () => {
@@ -12,5 +12,14 @@ export const DashboardService = {
   updateOrderStatus: async (id, statusData) => {
     const response = await api.patch(`/admin/orders/${id}/status`, statusData);
     return response.data;
+  },
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+  const response = await api.post('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data.url;
   }
 };

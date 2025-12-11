@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../modules/api/api';
 
 export const ProductService = {
   getAll: async (page = 1, pageSize = 8, search = '', sort = '', order = '') => {
@@ -28,14 +28,4 @@ export const ProductService = {
   delete: async (id) => {
     await api.delete(`/products/${id}`);
   },
-
-  uploadImage: async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await api.post('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    return response.data.url;
-  }
 };

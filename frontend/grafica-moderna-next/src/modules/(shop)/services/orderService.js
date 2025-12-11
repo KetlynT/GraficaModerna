@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../modules/api/api';
 
 export const OrderService = {
   checkout: async (checkoutData) => {
