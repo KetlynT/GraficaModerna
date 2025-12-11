@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import { HashRouter } from 'react-router-dom';
 
 class GlobalErrorBoundary extends React.Component {
   constructor(props) {
@@ -48,7 +49,9 @@ class GlobalErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <GlobalErrorBoundary>
+      <HashRouter>
       <App />
+      </HashRouter>
     </GlobalErrorBoundary>
   </React.StrictMode>,
 )

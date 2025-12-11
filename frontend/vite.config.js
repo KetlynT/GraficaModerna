@@ -41,6 +41,7 @@ export default defineConfig({
     port: 5173,
     host: true,
     strictPort: true,
+    base: '/GraficaModerna',
     proxy: {
       '/api': {
         target: 'https://localhost:7255',
