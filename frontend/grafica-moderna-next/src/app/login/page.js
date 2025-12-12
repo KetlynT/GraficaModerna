@@ -1,12 +1,14 @@
+'use client'
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '../context/AuthContext';
-import { useCart } from '../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
 import { LogIn, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export const Login = () => {
+export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,7 +33,7 @@ export const Login = () => {
       await syncGuestCart();
       
       const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      router.replace(from);
       
     } catch (err) {
       console.error(err);
