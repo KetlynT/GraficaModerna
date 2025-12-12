@@ -6,7 +6,6 @@ import { Button } from "@/app/(website)/components/ui/Button";
 
 export default function ErrorPage() {
   const handleRetry = () => {
-    // Limpa storages mas mantém consentimento
     const savedConsent = localStorage.getItem("lgpd_consent");
     localStorage.clear();
     sessionStorage.clear();
@@ -14,7 +13,6 @@ export default function ErrorPage() {
       localStorage.setItem("lgpd_consent", savedConsent);
     }
     
-    // Força recarregamento total
     window.location.href = "/";
   };
 

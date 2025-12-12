@@ -61,13 +61,11 @@ public class PaymentsController(
         }
         catch (KeyNotFoundException ex)
         {
-            // CORREÇÃO CA2254: Uso de template estruturado em vez de passar a variável diretamente
             _logger.LogWarning("Erro de busca de pedido: {Message}", ex.Message);
             return NotFound(ex.Message);
         }
         catch (InvalidOperationException ex)
         {
-            // CORREÇÃO CA2254: Uso de template estruturado
             _logger.LogWarning("Erro de validação de pedido: {Message}", ex.Message);
             return BadRequest(new { message = ex.Message });
         }

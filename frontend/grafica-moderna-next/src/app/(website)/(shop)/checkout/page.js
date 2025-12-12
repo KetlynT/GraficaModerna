@@ -51,7 +51,6 @@ function CheckoutContent() {
       const data = await AddressService.getAll();
       setAddresses(data);
       if (!selectedAddress && data.length > 0) {
-          // Lógica simplificada para evitar loop se selectedAddress já estiver setado
           setSelectedAddress(prev => prev || data.find(a => a.isDefault) || data[0]);
       }
     } catch (error) { 

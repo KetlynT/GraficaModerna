@@ -20,7 +20,6 @@ public class PepperedPasswordHasher(IOptions<PepperSettings> options, ILogger<Pe
     {
         var activeVersion = _settings.ActiveVersion;
 
-        // PROTEÇÃO ESTRUTURAL 1: Validação de Configuração
         if (string.IsNullOrEmpty(activeVersion))
         {
             _logger.LogError("CRÍTICO: A configuração 'PepperSettings.ActiveVersion' está vazia.");
@@ -45,29 +44,25 @@ public class PepperedPasswordHasher(IOptions<PepperSettings> options, ILogger<Pe
         string version;
         string actualHash;
 
-        // Lógica de Parsing do Hash ($v1$HASH...)
         if (hashedPassword.StartsWith("$v"))
         {
             var parts = hashedPassword.Split('$', 3, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2) return PasswordVerificationResult.Failed;
-            version = parts[0]; // Extrai "v1"
+            version = parts[0];
             actualHash = parts[1];
         }
         else
         {
-            // Suporte para versões antigas (Legado)
             version = "v1";
             actualHash = hashedPassword;
         }
 
-        // Tenta buscar a chave (Pepper) histórica
         if (!_settings.Peppers.TryGetValue(version, out var pepper))
         {
             _logger.LogWarning("Falha no Login: Pepper da versão '{Version}' não encontrado na configuração.", version);
             return PasswordVerificationResult.Failed;
         }
 
-        // Verifica a senha
         var result = base.VerifyHashedPassword(user, actualHash, providedPassword + pepper);
 
         if (result == PasswordVerificationResult.Success)

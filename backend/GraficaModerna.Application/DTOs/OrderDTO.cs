@@ -53,10 +53,11 @@ public record OrderHistoryDto(
 );
 
 public record OrderItemDto(
-    string ProductName, 
+    Guid ProductId,
+    string ProductName,
     int Quantity,
     int RefundQuantity,
-    decimal UnitPrice, 
+    decimal UnitPrice,
     decimal Total);
 
 public record UpdateOrderStatusDto(
@@ -86,7 +87,7 @@ public static class DataMaskingExtensions
         if (string.IsNullOrWhiteSpace(document))
             return "N/A";
 
-        var clean = new string(document.Where(char.IsDigit).ToArray());
+        var clean = new string([.. document.Where(char.IsDigit)]);
 
         if (clean.Length == 11)
             return $"XXX.XXX.XXX-{clean[^2..]}";

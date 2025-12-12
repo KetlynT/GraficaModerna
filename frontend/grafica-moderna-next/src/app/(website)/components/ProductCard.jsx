@@ -14,8 +14,6 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
   const { addToCart } = useCart();
   const { user } = useAuth();
   
-  // Inicializa o estado com a imagem do produto.
-  // Ao alterar o 'key' do componente pai ou se o componente for remontado, o estado reseta.
   const [imgSrc, setImgSrc] = useState(product.imageUrl);
 
   const isAdmin = user?.role === 'Admin';

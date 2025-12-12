@@ -1,10 +1,12 @@
 ﻿using System.Globalization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Domain.Entities;
 using GraficaModerna.Infrastructure.Context;
 using GraficaModerna.Infrastructure.Helpers;
 using Microsoft.AspNetCore.Hosting;
@@ -28,10 +30,13 @@ public class MelhorEnvioShippingService(
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly ILogger<MelhorEnvioShippingService> _logger = logger;
 
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+    };
+
     public async Task<List<ShippingOptionDto>> CalculateAsync(string destinationCep, List<ShippingItemDto> items)
     {
-        var token = EnvHelper.Required("MELHOR_ENVIO_TOKEN");
-
         if (items == null || items.Count == 0) return [];
 
         var originCepSetting = await _context.SiteSettings
@@ -42,7 +47,7 @@ public class MelhorEnvioShippingService(
 
         if (string.IsNullOrEmpty(originCep))
         {
-            throw new Exception("Ah não, momentaneamente não estamos enviando. Verifique diretamente conosco");
+            throw new Exception("CEP de origem não configurado. Entre em contato com a administração.");
         }
 
         var requestPayload = new
@@ -62,32 +67,32 @@ public class MelhorEnvioShippingService(
 
         try
         {
+            var token = await GetAccessTokenAsync();
             var client = _httpClientFactory.CreateClient("MelhorEnvio");
-            var requestMessage = new HttpRequestMessage(HttpMethod.Post, "me/shipment/calculate");
 
-            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            var response = await SendCalculateRequestAsync(client, token, requestPayload);
 
-            var userAgent = _configuration["MelhorEnvio:UserAgent"] ?? "GraficaModernaAPI/1.0";
-            requestMessage.Headers.TryAddWithoutValidation("User-Agent", userAgent);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _logger.LogWarning("Token Melhor Envio expirado (401). Tentando renovação...");
 
-            var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
-            var jsonContent = JsonSerializer.Serialize(requestPayload, jsonOptions);
-            requestMessage.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-
-            var response = await client.SendAsync(requestMessage, cts.Token);
+                var newToken = await RefreshAccessTokenAsync();
+                if (!string.IsNullOrEmpty(newToken))
+                {
+                    response = await SendCalculateRequestAsync(client, newToken, requestPayload);
+                }
+            }
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync(cts.Token);
+                var errorBody = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Erro API Melhor Envio ({StatusCode}): {Body}", response.StatusCode, errorBody);
                 return [];
             }
 
-            var responseBody = await response.Content.ReadAsStringAsync(cts.Token);
-            var meOptions = JsonSerializer.Deserialize<List<MelhorEnvioResponse>>(responseBody, jsonOptions);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            var meOptions = JsonSerializer.Deserialize<List<MelhorEnvioResponse>>(responseBody, _jsonOptions);
 
             if (meOptions == null) return [];
 
@@ -115,16 +120,117 @@ public class MelhorEnvioShippingService(
 
             return validOptions;
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogError("Timeout na comunicação com Melhor Envio.");
-            return [];
-        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro crítico ao calcular frete Melhor Envio.");
             return [];
         }
+    }
+
+    private async Task<HttpResponseMessage> SendCalculateRequestAsync(HttpClient client, string token, object payload)
+    {
+        var requestMessage = new HttpRequestMessage(HttpMethod.Post, "me/shipment/calculate");
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var userAgent = _configuration["MELHOR_ENVIO_USER_AGENT"] ?? "GraficaModernaAPI/1.0 (suporte@graficamoderna.com.br)";
+        requestMessage.Headers.TryAddWithoutValidation("User-Agent", userAgent);
+
+        var jsonContent = JsonSerializer.Serialize(payload, _jsonOptions);
+        requestMessage.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        return await client.SendAsync(requestMessage);
+    }
+
+    private async Task<string> GetAccessTokenAsync()
+    {
+        var dbToken = await _context.SiteSettings.FindAsync("melhor_envio_access_token");
+        if (dbToken != null && !string.IsNullOrWhiteSpace(dbToken.Value))
+        {
+            return dbToken.Value;
+        }
+
+        return _configuration["MELHOR_ENVIO_TOKEN"] ?? "";
+    }
+
+    private async Task<string?> RefreshAccessTokenAsync()
+    {
+        try
+        {
+            var clientId = _configuration["MELHOR_ENVIO_CLIENT_ID"];
+            var clientSecret = _configuration["MELHOR_ENVIO_CLIENT_SECRET"];
+
+            var dbRefreshToken = await _context.SiteSettings.FindAsync("melhor_envio_refresh_token");
+            var refreshToken = dbRefreshToken?.Value ?? _configuration["MELHOR_ENVIO_REFRESH_TOKEN"];
+
+            if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret) || string.IsNullOrEmpty(refreshToken))
+            {
+                _logger.LogError("Credenciais para refresh do Melhor Envio incompletas.");
+                return null;
+            }
+
+            var client = _httpClientFactory.CreateClient("MelhorEnvio");
+
+            var requestContent = new FormUrlEncodedContent(
+            [
+                new KeyValuePair<string, string>("grant_type", "refresh_token"),
+                new KeyValuePair<string, string>("client_id", clientId),
+                new KeyValuePair<string, string>("client_secret", clientSecret),
+                new KeyValuePair<string, string>("refresh_token", refreshToken)
+            ]);
+
+            var response = await client.PostAsync("/oauth/token", requestContent);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogCritical("Falha ao renovar token Melhor Envio: {Error}", error);
+                return null;
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(responseJson);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("access_token", out var accessTokenElem) &&
+                root.TryGetProperty("refresh_token", out var refreshTokenElem))
+            {
+                var newAccessToken = accessTokenElem.GetString();
+                var newRefreshToken = refreshTokenElem.GetString();
+
+                await UpdateTokenInDbAsync("melhor_envio_access_token", newAccessToken);
+                await UpdateTokenInDbAsync("melhor_envio_refresh_token", newRefreshToken);
+
+                _logger.LogInformation("Token Melhor Envio renovado com sucesso.");
+                return newAccessToken;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar refresh token do Melhor Envio.");
+            return null;
+        }
+    }
+
+    private async Task UpdateTokenInDbAsync(string key, string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+
+        var setting = await _context.SiteSettings.FindAsync(key);
+        if (setting == null)
+        {
+            setting = new SiteSetting(key, value);
+            _context.SiteSettings.Add(setting);
+        }
+        else
+        {
+            setting.UpdateValue(value);
+            _context.Entry(setting).State = EntityState.Modified;
+        }
+
+        await _context.SaveChangesAsync();
     }
 
     private class MelhorEnvioResponse

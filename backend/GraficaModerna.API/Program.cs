@@ -37,6 +37,8 @@ var jwtKey = EnvHelper.Required("JWT_SECRET_KEY", 64);
 var melhorEnvioUrl = EnvHelper.Required("MELHOR_ENVIO_URL");
 var melhorEnvioToken = EnvHelper.Required("MELHOR_ENVIO_TOKEN");
 var melhorEnvioUserAgent = EnvHelper.Required("MELHOR_ENVIO_USER_AGENT");
+var melhorEnvioClientId = EnvHelper.Required("MELHOR_ENVIO_CLIENT_ID");
+var melhorEnvioClientSecret = EnvHelper.Required("MELHOR_ENVIO_CLIENT_SECRET");
 var defaultConnection = EnvHelper.Required("ConnectionStrings__DefaultConnection");
 var stripeSecretKey = EnvHelper.Required("Stripe__SecretKey");
 var stripeWebhookSecret = EnvHelper.Required("Stripe__WebhookSecret");
@@ -296,7 +298,10 @@ var allowedOrigins = corsOriginsRaw.Split(',', StringSplitOptions.RemoveEmptyEnt
 builder.Services.AddCors(o =>
 {
     o.AddPolicy("CorsPolicy", p =>
-        p.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader().AllowCredentials());
+        p.WithOrigins(allowedOrigins)
+         .AllowAnyMethod()
+         .AllowAnyHeader()
+         .AllowCredentials());
 });
 
 var app = builder.Build();
@@ -332,7 +337,6 @@ app.Use(async (context, next) =>
 
 app.UseMiddleware<ExceptionMiddleware>();
 
-// ATIVADO: Servir arquivos estáticos (wwwroot) com segurança aprimorada
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
@@ -342,7 +346,6 @@ app.UseStaticFiles(new StaticFileOptions
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
 
-            // Segurança: Forçar download para arquivos de vídeo para evitar execução/XSS no navegador
             if (ext is ".mp4" or ".webm" or ".mov")
             {
                 ctx.Context.Response.Headers.Append("Content-Disposition", "attachment");

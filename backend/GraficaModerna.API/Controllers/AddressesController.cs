@@ -31,7 +31,6 @@ public class AddressesController(IAddressService service, IContentService conten
     [HttpGet]
     public async Task<ActionResult<List<AddressDto>>> GetAll()
     {
-        // Leitura permitida (ou poderia ser bloqueada também se desejar esconder tudo)
         return Ok(await _service.GetUserAddressesAsync(GetUserId()));
     }
 

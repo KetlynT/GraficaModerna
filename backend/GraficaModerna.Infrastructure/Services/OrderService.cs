@@ -34,10 +34,6 @@ public class OrderService(
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly ILogger<OrderService> _logger = logger;
 
-    // ... (Métodos CreateOrderFromCartAsync, GetUserOrdersAsync, GetAllOrdersAsync mantidos iguais) ...
-    // Vou omitir os métodos que não precisam de correção de log para economizar espaço,
-    // mas o arquivo completo deve conter tudo. Abaixo segue o método ConfirmPaymentViaWebhookAsync corrigido e estruturado.
-
     public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode,
         string shippingMethod)
     {
@@ -755,7 +751,7 @@ public class OrderService(
             order.ShippingAddress,
             order.User?.FullName ?? "Cliente",
             [.. order.Items.Select(i =>
-                new OrderItemDto(i.ProductName, i.Quantity, i.RefundQuantity, i.UnitPrice, i.Quantity * i.UnitPrice)
+                new OrderItemDto(i.ProductId, i.ProductName, i.Quantity, i.RefundQuantity, i.UnitPrice, i.Quantity * i.UnitPrice)
             )],
             paymentWarning
         );
@@ -783,7 +779,7 @@ public class OrderService(
             order.User?.Email ?? "N/A",
             DataMaskingExtensions.MaskIpAddress(order.CustomerIp),
             [.. order.Items.Select(i =>
-                new OrderItemDto(i.ProductName, i.Quantity, i.RefundQuantity, i.UnitPrice, i.Quantity * i.UnitPrice)
+                new OrderItemDto(i.ProductId, i.ProductName, i.Quantity, i.RefundQuantity, i.UnitPrice, i.Quantity * i.UnitPrice)
             )],
             [.. order.History.Select(h =>
                 new OrderHistoryDto(h.Status, h.Message, h.ChangedBy, h.Timestamp)

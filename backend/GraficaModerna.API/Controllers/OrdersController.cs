@@ -48,13 +48,11 @@ public class OrdersController(IOrderService orderService, IContentService conten
     }
 
 [HttpGet]
-    // Método atualizado para suportar paginação
     public async Task<IActionResult> GetMyOrders([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
 
-        // Agora o controller reconhece o retorno PagedResultDto graças ao using
         var pagedOrders = await _orderService.GetUserOrdersAsync(userId, page, pageSize);
         return Ok(pagedOrders);
     }

@@ -19,7 +19,7 @@ public class OrderRepository(AppDbContext context) : IOrderRepository
     {
         return await _context.Orders
             .Include(o => o.Items)
-            .Include(o => o.User) // Inclui dados do usuário
+            .Include(o => o.User)
             .FirstOrDefaultAsync(o => o.Id == id);
     }
 
