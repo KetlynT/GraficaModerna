@@ -91,7 +91,6 @@ public class AuthController(
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-        // Tenta obter token do cookie primeiro, depois do header
         string? token = null;
         if (Request.Cookies.TryGetValue("jwt", out var cookieToken))
             token = cookieToken;
@@ -117,7 +116,6 @@ public class AuthController(
                 _logger.LogWarning("Erro ao processar blacklist no logout: {Message}", ex.Message);
             }
 
-        // Remove cookies
         Response.Cookies.Delete("jwt");
         Response.Cookies.Delete("refreshToken");
 
@@ -125,9 +123,13 @@ public class AuthController(
     }
 
     [HttpGet("check-auth")]
-    [Authorize]
+    [AllowAnonymous]
     public IActionResult CheckAuth()
     {
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Ok(new { isAuthenticated = false, role = (string?)null });
+        }
         var role = User.FindFirstValue(ClaimTypes.Role);
         return Ok(new { isAuthenticated = true, role });
     }
@@ -168,7 +170,6 @@ public class AuthController(
     [AllowAnonymous]
     public async Task<IActionResult> RefreshToken()
     {
-        // Ler tokens dos cookies
         var accessToken = Request.Cookies["jwt"];
         var refreshToken = Request.Cookies["refreshToken"];
 
@@ -219,9 +220,9 @@ public class AuthController(
         var cookieOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = true, // Requer HTTPS
+            Secure = true,
             SameSite = SameSiteMode.Strict,
-            Expires = DateTime.UtcNow.AddMinutes(15) // Tempo do Access Token
+            Expires = DateTime.UtcNow.AddMinutes(15)
         };
 
         var refreshCookieOptions = new CookieOptions
@@ -229,7 +230,7 @@ public class AuthController(
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Expires = DateTime.UtcNow.AddDays(7) // Tempo do Refresh Token
+            Expires = DateTime.UtcNow.AddDays(7)
         };
 
         Response.Cookies.Append("jwt", accessToken, cookieOptions);
