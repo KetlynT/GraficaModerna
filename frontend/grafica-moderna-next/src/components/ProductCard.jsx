@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'next/link';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Search, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
