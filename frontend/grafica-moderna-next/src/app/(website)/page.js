@@ -1,7 +1,7 @@
 'use client'
 
 import '../globals.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Search, Printer, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -10,7 +10,7 @@ import { ContentService } from '@/app/(website)/services/contentService';
 import { ProductCard } from '@/app/(website)/components/ProductCard';
 import { Button } from '@/app/(website)/components/ui/Button';
 
-export default function Home () {
+export default function Home() {
   const router = useRouter();
   const [products, setProducts] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalItems: 0 });
@@ -31,23 +31,7 @@ export default function Home () {
     purchase_enabled: 'true'
   });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadProducts(1);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, sortOption]);
-
-  useEffect(() => {
-    ContentService.getSettings().then(data => {
-      if (data) setSettings(prev => ({...prev, ...data}));
-    }).catch(err => {
-        console.error(err);
-        router.replace('@/error');
-      });
-  }, [router]);
-
-  const loadProducts = async (page) => {
+  const loadProducts = useCallback(async (page) => {
     setLoading(true);
     try {
       let sort = '', order = '';
@@ -71,7 +55,23 @@ export default function Home () {
       setLoading(false);
       setIsFirstLoad(false); 
     }
-  };
+  }, [searchTerm, sortOption, router]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadProducts(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, sortOption, loadProducts]);
+
+  useEffect(() => {
+    ContentService.getSettings().then(data => {
+      if (data) setSettings(prev => ({...prev, ...data}));
+    }).catch(err => {
+        console.error(err);
+        router.replace('/error');
+      });
+  }, [router]);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {

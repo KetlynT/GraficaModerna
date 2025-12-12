@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
+'use client'
+
+import { useState, useEffect, Suspense, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MapPin, Truck, CheckCircle, Settings, Plus, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -8,12 +9,13 @@ import { CartService } from '@/app/(website)/(shop)/services/cartService';
 import { AddressService } from '@/app/(website)/(shop)/services/addressService';
 import { ShippingService } from '@/app/(website)/(shop)/services/shippingService';
 import { PaymentService } from '@/app/(website)/(shop)/services/paymentService';
+import { CouponService } from '@/app/(website)/(shop)/services/couponService';
 import { useCart } from '@/app/(website)/context/CartContext';
 import { Button } from '@/app/(website)/components/ui/Button';
 import { AddressManager } from '@/app/(website)/(shop)/components/AddressManager';
 import { CouponInput } from '@/app/(website)/(shop)/carrinho/components/CouponInput';
 
-export const Checkout = () => {
+function CheckoutContent() {
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [shippingOptions, setShippingOptions] = useState([]);
@@ -25,24 +27,41 @@ export const Checkout = () => {
 
   const { cartItems, refreshCart } = useCart();
   const router = useRouter();
-  const link = useLink();
-  const [coupon, setCoupon] = useState(router.state?.coupon || null);
+  const searchParams = useSearchParams();
+  const couponCode = searchParams.get('coupon');
+  
+  const [coupon, setCoupon] = useState(null);
+
+  useEffect(() => {
+    if (couponCode) {
+      CouponService.validate(couponCode)
+        .then(data => setCoupon(data))
+        .catch(() => toast.error("Cupom inválido."));
+    }
+  }, [couponCode]);
 
   useEffect(() => {
     if (!loadingData && cartItems.length === 0) {
-       navigate('/carrinho', { replace: true });
+       router.replace('/carrinho');
     }
-  }, [cartItems, loadingData, navigate]);
+  }, [cartItems, loadingData, router]);
 
-  const loadAddresses = async () => {
+  const loadAddresses = useCallback(async () => {
     try {
       const data = await AddressService.getAll();
       setAddresses(data);
-      if (!selectedAddress && data.length > 0) handleSelectAddress(data.find(a => a.isDefault) || data[0]);
-    } catch (error) { toast.error("Erro ao carregar endereços."); } finally { setLoadingData(false); }
-  };
+      if (!selectedAddress && data.length > 0) {
+          // Lógica simplificada para evitar loop se selectedAddress já estiver setado
+          setSelectedAddress(prev => prev || data.find(a => a.isDefault) || data[0]);
+      }
+    } catch (error) { 
+        toast.error("Erro ao carregar endereços."); 
+    } finally { 
+        setLoadingData(false); 
+    }
+  }, [selectedAddress]);
 
-  useEffect(() => { loadAddresses(); }, []);
+  useEffect(() => { loadAddresses(); }, [loadAddresses]);
 
   const handleSelectAddress = async (address) => {
     setSelectedAddress(address);
@@ -71,7 +90,7 @@ export const Checkout = () => {
       toast.loading("Redirecionando para pagamento...", { id: toastId });
       const { url } = await PaymentService.createCheckoutSession(order.id);
       await refreshCart();
-      window.router.href = url;
+      window.location.href = url;
     } catch (error) {
       toast.error(error.response?.data?.message || "Erro ao processar.", { id: toastId });
       setIsRedirecting(false);
@@ -164,3 +183,11 @@ export const Checkout = () => {
     </div>
   );
 };
+
+export default function Checkout() {
+    return (
+        <Suspense fallback={<div>Carregando...</div>}>
+            <CheckoutContent />
+        </Suspense>
+    );
+}

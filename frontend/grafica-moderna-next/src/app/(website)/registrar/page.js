@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { UserPlus, User, Mail, Lock, Phone, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { maskCpfCnpj, maskPhone, cleanString, validateDocument } from '@/app/(website)/utils/formatters';
 import { useAuth } from '@/app/(website)/context/AuthContext';
 
-export const Register = () => {
+export default function Register() {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',

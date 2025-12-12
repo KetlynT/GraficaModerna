@@ -1,5 +1,7 @@
+'use client'
+
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import DOMPurify from 'dompurify';
 import { ContentService } from '@/app/(website)/services/contentService';
@@ -8,7 +10,7 @@ export const GenericPage = () => {
   const { slug } = useParams();
   const [page, setPage] = useState(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     const loadContent = async () => {
@@ -17,21 +19,21 @@ export const GenericPage = () => {
         const data = await ContentService.getPage(slug);
         
         if (!data) {
-          navigate('/', { replace: true });
+          router.replace('/');
           return;
         }
         
         setPage(data);
       } catch (error) {
         console.error("Erro ao carregar página:", error);
-        navigate('/', { replace: true });
+        router.replace('/');
       } finally {
         setLoading(false);
       }
     };
     
     loadContent();
-  }, [slug, navigate]);
+  }, [slug, router]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">

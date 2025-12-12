@@ -6,25 +6,17 @@ import { Button } from "@/app/(website)/components/ui/Button";
 
 export default function ErrorPage() {
   const handleRetry = () => {
-    const lastRoute = sessionStorage.getItem("last_valid_route") || "/";
+    // Limpa storages mas mantém consentimento
     const savedConsent = localStorage.getItem("lgpd_consent");
-
     localStorage.clear();
     sessionStorage.clear();
-
     if (savedConsent) {
       localStorage.setItem("lgpd_consent", savedConsent);
     }
-
-    window.location.href = lastRoute;
+    
+    // Força recarregamento total
+    window.location.href = "/";
   };
-
-  useEffect(() => {
-    const navEntry = performance.getEntriesByType("navigation")[0];
-    if (navEntry && navEntry.type === "reload") {
-      handleRetry();
-    }
-  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">

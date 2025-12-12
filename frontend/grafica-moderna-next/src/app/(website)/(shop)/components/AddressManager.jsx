@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit, Trash2, MapPin, Star, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PropTypes from 'prop-types';
@@ -13,11 +13,7 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
   const [editingAddress, setEditingAddress] = useState(null);
   const [addressForm, setAddressForm] = useState(initialAddressState());
 
-  useEffect(() => {
-    loadAddresses();
-  }, []);
-
-  const loadAddresses = async () => {
+  const loadAddresses = useCallback(async () => {
     try {
       setLoading(true);
       const data = await AddressService.getAll();
@@ -28,7 +24,11 @@ export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) =
     } finally {
       setLoading(false);
     }
-  };
+  }, [onUpdate]);
+
+  useEffect(() => {
+    loadAddresses();
+  }, [loadAddresses]);
 
   function initialAddressState() {
     return {

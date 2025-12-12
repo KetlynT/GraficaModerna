@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'next/link';
+'use client'
+
+import { useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Search, Edit } from 'lucide-react';
 import { Button } from '@/app/(website)/components/ui/Button';
@@ -10,11 +13,10 @@ import PropTypes from 'prop-types';
 export const ProductCard = ({ product, purchaseEnabled = true }) => {
   const { addToCart } = useCart();
   const { user } = useAuth();
+  
+  // Inicializa o estado com a imagem do produto.
+  // Ao alterar o 'key' do componente pai ou se o componente for remontado, o estado reseta.
   const [imgSrc, setImgSrc] = useState(product.imageUrl);
-
-  useEffect(() => {
-    setImgSrc(product.imageUrl);
-  }, [product.imageUrl]);
 
   const isAdmin = user?.role === 'Admin';
 
@@ -42,21 +44,23 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
       transition={{ duration: 0.4 }}
       className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col h-full overflow-hidden"
     >
-      <div className="relative h-64 overflow-hidden bg-gray-50">
-        <img 
-          src={imgSrc} 
+      <div className="relative h-64 w-full overflow-hidden bg-gray-50">
+        <Image 
+          src={imgSrc || 'https://placehold.co/400x300?text=Sem+Imagem'}
           alt={product.name} 
+          fill
+          className="object-cover transform group-hover:scale-110 transition-transform duration-700" 
           onError={handleImageError}
-          className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" 
+          unoptimized
         />
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
-            <Link to={`/produto/${product.id}`}>
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2 z-10">
+            <Link href={`/produto/${product.id}`}>
                 <Button variant="ghost" className="bg-white text-gray-900 hover:bg-gray-100 rounded-full p-3 shadow-lg">
                     <Search size={20} />
                 </Button>
             </Link>
             {isAdmin && (
-               <Link to={`/putiroski/produtos/${product.id}`}>
+               <Link href={`/putiroski/produtos/${product.id}`}>
                   <Button variant="ghost" className="bg-white text-blue-600 hover:bg-blue-50 rounded-full p-3 shadow-lg">
                       <Edit size={20} />
                   </Button>
@@ -68,7 +72,7 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
       <div className="p-6 flex flex-col grow">
         <div className="flex justify-between items-start mb-2">
             <h3 className="text-lg font-bold text-gray-800 line-clamp-1 group-hover:text-primary transition-colors">
-                <Link to={`/produto/${product.id}`}>{product.name}</Link>
+                <Link href={`/produto/${product.id}`}>{product.name}</Link>
             </h3>
         </div>
         

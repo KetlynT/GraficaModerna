@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { User, Phone, FileText, Save, Loader } from 'lucide-react';
@@ -5,7 +7,7 @@ import { useAuth } from '@/app/(website)/context/AuthContext';
 import authService from '@/app/(website)/login/services/authService';
 import { maskCpfCnpj, maskPhone, cleanString } from '@/app/(website)/utils/formatters';
 
-export const Profile = () => {
+export default function Profile() {
   const { user, logout } = useAuth();
   const [formData, setFormData] = useState({
     fullName: '',

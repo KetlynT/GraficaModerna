@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+'use client'
+
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 import authService from '@/app/(website)/login/services/authService';
 
-export const ConfirmEmail = () => {
-  const [searchParams] = useSearchParams();
+function ConfirmEmailContent() {
+  const searchParams = useSearchParams();
   const [status, setStatus] = useState('loading');
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     const confirm = async () => {
@@ -21,7 +23,7 @@ export const ConfirmEmail = () => {
       try {
         await authService.confirmEmail(userId, token);
         setStatus('success');
-        setTimeout(() => navigate('/login', { replace: true }), 5000);
+        setTimeout(() => router.replace('/login'), 5000);
       } catch (error) {
         console.error(error);
         setStatus('error');
@@ -29,7 +31,7 @@ export const ConfirmEmail = () => {
     };
 
     confirm();
-  }, [searchParams, navigate]);
+  }, [searchParams, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -56,7 +58,7 @@ export const ConfirmEmail = () => {
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Falha na Confirmação</h2>
             <p className="text-gray-600">O link é inválido ou já expirou.</p>
             <button 
-              onClick={() => navigate('/', { replace: true })}
+              onClick={() => router.replace('/')}
               className="mt-6 px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-bold text-gray-700 transition-colors"
             >
               Voltar ao Início
@@ -67,3 +69,11 @@ export const ConfirmEmail = () => {
     </div>
   );
 };
+
+export default function ConfirmEmail() {
+    return (
+        <Suspense fallback={<div>Carregando...</div>}>
+            <ConfirmEmailContent />
+        </Suspense>
+    );
+}

@@ -1,6 +1,8 @@
 'use client'
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { MessageSquare, ShoppingCart, User, LogOut, LayoutDashboard, Package } from 'lucide-react';
 import { ContentService } from '@/app/(website)/services/contentService';
@@ -40,7 +42,7 @@ export const Header = () => {
 
   const handleLogout = async () => {
     await logout();
-    router.replace('/', { replace: true });
+    router.replace('/');
   };
 
   return (
@@ -56,7 +58,15 @@ export const Header = () => {
           ) : (
             <>
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain transition-transform group-hover:scale-105"/>
+                <div className="relative h-10 w-32">
+                    <Image 
+                        src={logoUrl} 
+                        alt="Logo" 
+                        fill
+                        className="object-contain transition-transform group-hover:scale-105"
+                        unoptimized
+                    />
+                </div>
               ) : (
                 <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition-all">
                     {siteName.charAt(0) || 'G'}
@@ -95,7 +105,7 @@ export const Header = () => {
                 <div className="flex items-center gap-4 border-l pl-6 border-gray-200">
                     {isAdmin ? (
                         <Link 
-                            to="/putiroski/dashboard" 
+                            href="/putiroski/dashboard" 
                             className="flex items-center gap-2 text-sm font-bold text-primary bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-all" 
                         >
                             <LayoutDashboard size={18} />

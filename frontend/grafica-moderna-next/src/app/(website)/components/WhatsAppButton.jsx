@@ -24,9 +24,14 @@ export const WhatsAppButton = () => {
     loadSettings();
   }, []);
 
-  const isBlockedRoute = ['/login', '/putiroski', '/cadastro', '/esqueci-senha', '/reset-password', '/confirm-email'].some(
-    path => pathname.startsWith(path));
-
+  const isBlockedRoute = [
+    '/login', 
+    '/putiroski', 
+    '/cadastro', 
+    '/esqueci-senha', 
+    '/reset-password', 
+    '/confirm-email'
+  ].some(path => pathname?.startsWith(path));
   if (!isVisible || !number || isBlockedRoute) return null;
 
   return (

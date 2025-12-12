@@ -1,7 +1,10 @@
+'use client'
+
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { LogOut, Package, Settings, FileText, Truck, BarChart2, Tag } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import 'react-quill/dist/quill.snow.css';
 import { useAuth } from '@/app/(website)/context/AuthContext';
 import { ContentService } from '@/app/(website)/services/contentService';
@@ -12,23 +15,20 @@ import CouponsTab from '@/app/(admin)/putiroski/components/CouponsTab';
 import SettingsTab from '@/app/(admin)/putiroski/components/SettingsTab';
 import PagesTab from '@/app/(admin)/putiroski/components/PagesTab';
 
-export const AdminDashboard = () => {
+export default function AdminDashboard() {
   const [logoUrl, setLogoUrl] = useState('');
   const { user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview'); 
-  const [isAuthorized, setIsAuthorized] = useState(false);
   
   useEffect(() => {
     if (authLoading) return;
 
     if (!user || user.role !== 'Admin') {
       toast.error("Acesso não autorizado.");
-      router.replace('/', { replace: true });
+      router.replace('/');
       return;
     }
-
-    setIsAuthorized(true);
 
     const loadSettings = async () => {
           try {
@@ -41,9 +41,9 @@ export const AdminDashboard = () => {
           }
         };
     loadSettings();
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, router]);
 
-  if (authLoading || !isAuthorized) {
+  if (authLoading || (!user || user.role !== 'Admin')) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="animate-pulse flex flex-col items-center">
@@ -59,7 +59,15 @@ export const AdminDashboard = () => {
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-2">
             {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
+                <div className="relative h-10 w-32">
+                    <Image 
+                        src={logoUrl} 
+                        alt="Logo" 
+                        fill
+                        className="object-contain"
+                        unoptimized
+                    />
+                </div>
             ) : (
                 <div className="h-10 w-24 flex items-center justify-center text-xs font-medium text-gray-600 border rounded bg-gray-50">
                     LOGO

@@ -1,69 +1,66 @@
-import { useEffect, useState, useRef } from 'react';
+'use client'
+
+import { useEffect, useState, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, Package, ArrowRight, AlertTriangle, Loader } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Button } from '../../../../components/ui/Button';
-import { PaymentService } from '../../../../services/paymentService';
+import { Button } from '@/app/(website)/components/ui/Button';
+import { PaymentService } from '@/app/(website)/(shop)/services/paymentService';
 
-export const Success = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const sessionId = searchParams.get('session_id');
+function SuccessContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const orderId = searchParams.get('order_id'); 
 
-  const [status, setStatus] = useState('verifying');
-  const [attempts, setAttempts] = useState(0);
-  const maxAttempts = 5; 
-
+  const [status, setStatus] = useState(orderId ? 'verifying' : 'issue');
   const processingRef = useRef(false);
-
-  useEffect(() => {
-    if (processingRef.current) return;
-    
-    if (!orderId) {
-      setStatus('issue');
-      return;
-    }
-
-    processingRef.current = true;
-    checkPaymentStatus();
-  }, [orderId, navigate]);
 
   const triggerConfetti = () => {
       confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
   };
 
-  const checkPaymentStatus = async () => {
-    try {
-      const orderData = await PaymentService.getPaymentStatus(orderId);
-      
-      if (orderData.status === 'Pago' || orderData.status === 'Paid') {
-        setStatus('success');
-        triggerConfetti();
-      } 
-      else if (orderData.status === 'Cancelado' || orderData.status === 'Falha') {
-        setStatus('issue'); 
-      } 
-      else {
-        handleRetry();
-      }
-    } catch (error) {
-      console.error("Erro na verificação:", error);
-      handleRetry();
-    }
-  };
+  useEffect(() => {
+    if (processingRef.current || !orderId) return;
+    processingRef.current = true;
 
-  const handleRetry = () => {
-    setAttempts(prev => {
-      const nextAttempt = prev + 1;
-      if (nextAttempt < maxAttempts) {
-        setTimeout(() => checkPaymentStatus(), 3000);
-        return nextAttempt;
-      } else {
-        setStatus('processing');
-        return nextAttempt;
+    let attempts = 0;
+    const maxAttempts = 5;
+    let timeoutId;
+
+    const checkStatus = async () => {
+      try {
+        const orderData = await PaymentService.getPaymentStatus(orderId);
+        
+        if (orderData.status === 'Pago' || orderData.status === 'Paid') {
+          setStatus('success');
+          triggerConfetti();
+        } 
+        else if (orderData.status === 'Cancelado' || orderData.status === 'Falha') {
+          setStatus('issue'); 
+        } 
+        else {
+          if (attempts < maxAttempts) {
+            attempts++;
+            timeoutId = setTimeout(checkStatus, 3000);
+          } else {
+            setStatus('processing');
+          }
+        }
+      } catch (error) {
+        console.error("Erro na verificação:", error);
+        if (attempts < maxAttempts) {
+            attempts++;
+            timeoutId = setTimeout(checkStatus, 3000);
+        } else {
+            setStatus('processing');
+        }
       }
-    });
-  };
+    };
+
+    checkStatus();
+
+    return () => clearTimeout(timeoutId);
+  }, [orderId]);
 
   const renderContent = () => {
     switch (status) {
@@ -127,12 +124,12 @@ export const Success = () => {
         {renderContent()}
 
         <div className="space-y-3 pt-4">
-          <Button className="w-full py-3" variant="primary" onClick={() => navigate('/meus-pedidos', { replace: true })}>
+          <Button className="w-full py-3" variant="primary" onClick={() => router.replace('/perfil/orders')}>
             <Package size={18} className="mr-2" /> 
             {status === 'success' ? 'Acompanhar Meus Pedidos' : 'Ver Status do Pedido'}
           </Button>
           
-          <Button className="w-full py-3" variant="ghost" onClick={() => navigate('/', { replace: true })}>
+          <Button className="w-full py-3" variant="ghost" onClick={() => router.replace('/')}>
             Voltar para a Loja <ArrowRight size={18} className="ml-2" />
           </Button>
         </div>
@@ -140,3 +137,11 @@ export const Success = () => {
     </div>
   );
 };
+
+export default function SuccessPage() {
+    return (
+        <Suspense fallback={<div>Processando...</div>}>
+            <SuccessContent />
+        </Suspense>
+    )
+}

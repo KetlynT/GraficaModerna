@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+'use client'
+
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Lock } from 'lucide-react';
 
 import authService from '@/app/(website)/login/services/authService';
 
-export const ResetPassword = () => {
-  const [searchParams] = useSearchParams();
+function ResetPasswordContent() {
+  const searchParams = useSearchParams();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,7 +32,7 @@ export const ResetPassword = () => {
     try {
       await authService.resetPassword({ email, token, newPassword });
       toast.success("Senha alterada com sucesso!");
-      router.replace('/login', { replace: true });
+      router.replace('/login');
     } catch (error) {
       toast.error(error.response?.data?.message || "Erro ao redefinir senha.");
     } finally {
@@ -90,3 +92,11 @@ export const ResetPassword = () => {
     </div>
   );
 };
+
+export default function ResetPassword() {
+    return (
+        <Suspense fallback={<div>Carregando...</div>}>
+            <ResetPasswordContent />
+        </Suspense>
+    );
+}

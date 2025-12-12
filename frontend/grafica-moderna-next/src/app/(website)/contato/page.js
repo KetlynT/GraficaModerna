@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { Button } from '../components/ui/Button';
 import { ContentService } from '../services/contentService';
 
-export default function Contact () {
+export default function Contact() {
   const [settings, setSettings] = useState({
     whatsapp_display: 'Carregando...',
     contact_email: 'Carregando...',

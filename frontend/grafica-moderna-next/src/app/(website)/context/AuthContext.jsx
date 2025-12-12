@@ -1,9 +1,8 @@
-'use client';
+'use client'
 
 import { createContext, useState, useEffect, useContext } from 'react';
-import authService from '@/app/(website)/login/services/authService';
-import PropTypes from 'prop-types';
 import { useRouter } from 'next/navigation';
+import authService from '@/app/(website)/login/services/authService';
 
 const AuthContext = createContext({});
 
@@ -50,12 +49,11 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await authService.logout();
+      setUser(null);
       router.push('/');
       router.refresh();
     } catch (e) {
       console.error(e);
-    } finally {
-      setUser(null);
     }
   };
 
@@ -64,10 +62,6 @@ export const AuthProvider = ({ children }) => {
       {!loading && children}
     </AuthContext.Provider>
   );
-};
-
-AuthProvider.propTypes = {
-  children: PropTypes.node.isRequired
 };
 
 export const useAuth = () => useContext(AuthContext);

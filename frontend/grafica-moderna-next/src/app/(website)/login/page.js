@@ -1,19 +1,20 @@
 'use client'
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/app/(website)/context/AuthContext';
 import { useCart } from '@/app/(website)/context/CartContext';
 
-export default function Login() {
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, logout } = useAuth(); 
   const { syncGuestCart } = useCart();
 
@@ -32,7 +33,7 @@ export default function Login() {
       
       await syncGuestCart();
       
-      const from = link.state?.from?.pathname || '/';
+      const from = searchParams.get('from') || '/';
       router.replace(from);
       
     } catch (err) {
@@ -91,11 +92,24 @@ export default function Login() {
                     Cadastre-se
                 </Link>
             </p>
+            <p>
+                <Link href="/login/recuperar-senha" class="text-sm text-primary hover:underline">
+                    Esqueci minha senha
+                </Link>
+            </p>
             <div>
-                <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← Voltar para a loja</a>
+                <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← Voltar para a loja</Link>
             </div>
         </div>
       </div>
     </div>
   );
 };
+
+export default function Login() {
+    return (
+        <Suspense fallback={<div>Carregando...</div>}>
+            <LoginContent />
+        </Suspense>
+    );
+}

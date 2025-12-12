@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+'use client'
+
+import { useEffect, useState, useCallback } from 'react';
 import { Package, Calendar, MapPin, ChevronDown, ChevronUp, CreditCard, Truck, RefreshCcw, AlertTriangle, Clock, Box, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import Image from 'next/image';
 import { OrderService } from '@/app/(website)/(shop)/services/orderService';
 import { PaymentService } from '@/app/(website)/(shop)/services/paymentService'; 
 import { Button } from '@/app/(website)/components/ui/Button';
 import RefundRequestModal from '@/app/(website)/perfil/components/RefundRequestModal';
 
-export const MyOrders = () => {
+export default function MyOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -17,9 +20,7 @@ export const MyOrders = () => {
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null);
   const [isRefundLoading, setIsRefundLoading] = useState(false);
 
-  useEffect(() => { loadOrders(); }, [page]);
-
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     try {
       setLoading(true);
       const data = await OrderService.getMyOrders(page);
@@ -30,7 +31,9 @@ export const MyOrders = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
+
+  useEffect(() => { loadOrders(); }, [loadOrders]);
 
   const toggleExpand = (id) => setExpandedOrderId(expandedOrderId === id ? null : id);
 
@@ -144,11 +147,13 @@ export const MyOrders = () => {
                                                 Seu navegador não suporta vídeos.
                                             </video>
                                         ) : (
-                                            <a href={order.refundRejectionProof} target="_blank" rel="noopener noreferrer">
-                                                <img 
+                                            <a href={order.refundRejectionProof} target="_blank" rel="noopener noreferrer" className="block relative h-32 w-32 border rounded border-gray-300 overflow-hidden hover:opacity-90 transition-opacity">
+                                                <Image 
                                                     src={order.refundRejectionProof} 
                                                     alt="Prova" 
-                                                    className="h-32 w-auto object-cover rounded border border-gray-300 hover:opacity-90 transition-opacity" 
+                                                    fill
+                                                    className="object-cover" 
+                                                    unoptimized
                                                 />
                                             </a>
                                         )}

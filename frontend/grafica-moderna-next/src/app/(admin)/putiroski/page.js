@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import '@/app/globals.css';
 import { useAuth } from '@/app/(website)/context/AuthContext';
 
-export default function AdminLogin () {
+export default function AdminLogin() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -23,7 +23,7 @@ export default function AdminLogin () {
     try {
       await login(formData, true);
       toast.success("Bem-vindo, Administrador.");
-      navigate('/putiroski/dashboard', { replace: true });
+      router.replace('/putiroski/dashboard');
     } catch (error) {
       console.error(error);
       const msg = error.response?.data?.message || "Acesso negado.";
@@ -34,8 +34,6 @@ export default function AdminLogin () {
   };
 
   return (
-    <html>
-      <body>
     <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
       <div className="max-w-sm w-full bg-white rounded-xl shadow-2xl overflow-hidden">
         <div className="bg-red-600 p-6 text-center">
@@ -83,14 +81,12 @@ export default function AdminLogin () {
             </form>
             
             <div className="mt-6 text-center border-t border-gray-100 pt-4">
-                <button onClick={() => router.replace('../../')} className="text-sm text-gray-500 hover:text-gray-800">
+                <button onClick={() => router.replace('/')} className="text-sm text-gray-500 hover:text-gray-800">
                     ← Voltar para a Loja
                 </button>
             </div>
         </div>
       </div>
     </div>
-    </body> 
-    </html>
   );
 };

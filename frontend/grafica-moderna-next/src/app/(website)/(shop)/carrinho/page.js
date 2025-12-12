@@ -33,10 +33,11 @@ export default function Cart() {
   const handleCheckout = () => {
     if (!AuthService.isAuthenticated()) {
         toast("Faça login para finalizar a compra.");
-        router.refresh('/login', { state: { from: '/carrinho' } });
+        router.push('/login?from=/carrinho');
         return;
     }
-    router.replace('/checkout', { state: { coupon: appliedCoupon } });
+    const query = appliedCoupon ? `?coupon=${appliedCoupon.code}` : '';
+    router.push(`/checkout${query}`);
   };
 
   const subTotal = cartItems.reduce((acc, i) => acc + (i.totalPrice || 0), 0);
@@ -80,7 +81,7 @@ export default function Cart() {
                     <td className="p-4">
                         <div className="flex items-center gap-4">
                         {item.productImage ? (
-                            <Image src={item.productImage} className="w-16 h-16 object-cover rounded border" alt="" />
+                            <Image width={64} height={64} src={item.productImage} className="object-cover rounded border" alt="" />
                         ) : (
                             <div className="w-16 h-16 bg-gray-200 rounded border flex items-center justify-center text-xs">Sem Imagem</div>
                         )}

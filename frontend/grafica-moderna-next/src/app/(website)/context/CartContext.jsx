@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/app/(website)/context/AuthContext';
 import { CartService } from '@/app/(website)/(shop)/services/cartService';
@@ -12,7 +12,7 @@ export const CartProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
 
-  const fetchCart = async () => {
+  const fetchCart = useCallback(async () => {
     if (!user || user.role === 'Admin') {
         setCart({ items: [], totalAmount: 0 });
         return;
@@ -28,11 +28,11 @@ export const CartProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchCart();
-  }, [user]);
+  }, [fetchCart]);
 
   const syncGuestCart = async () => {
       await fetchCart();

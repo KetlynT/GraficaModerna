@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+'use client'
+
+import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { Search, Eye, X, Settings, RefreshCcw, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DashboardService } from '@/app/(admin)/putiroski/services/dashboardService';
@@ -25,7 +27,22 @@ const OrdersTab = () => {
     const [refundProof, setRefundProof] = useState('');
     const [refundAmountInput, setRefundAmountInput] = useState('');
 
-    useEffect(() => { loadOrders(); }, [page]);
+    const loadOrders = useCallback(async () => {
+        try {
+            setLoading(true);
+            const data = await DashboardService.getOrders(page);
+            setOrders(data.items || []);
+            setTotalPages(data.totalPages || 1);
+        } catch (e) {
+            toast.error("Erro ao carregar pedidos.");
+        } finally {
+            setLoading(false);
+        }
+    }, [page]);
+
+    useEffect(() => { 
+        loadOrders(); 
+    }, [loadOrders]);
 
     useEffect(() => {
         let result = orders;
@@ -43,19 +60,6 @@ const OrdersTab = () => {
         }
         setFilteredOrders(result);
     }, [orders, statusFilter, searchTerm]);
-
-    const loadOrders = async () => {
-        try {
-            setLoading(true);
-            const data = await DashboardService.getOrders(page);
-            setOrders(data.items || []);
-            setTotalPages(data.totalPages || 1);
-        } catch (e) {
-            toast.error("Erro ao carregar pedidos.");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleOpenModal = (order) => {
         setSelectedOrder(order);
@@ -356,15 +360,17 @@ const OrdersTab = () => {
                                         </div>
                                     )}
                                     
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1">Código de Rastreio (Envio)</label>
-                                        <input 
-                                            className="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-blue-500"
-                                            placeholder="Ex: AA123456789BR"
-                                            value={trackingInput}
-                                            onChange={e => setTrackingInput(e.target.value)}
-                                        />
-                                    </div>
+                                    {statusInput === 'Enviado' && (
+                                        <div className="animate-in fade-in">
+                                            <label className="block text-xs font-bold text-gray-600 mb-1">Código de Rastreio (Envio)</label>
+                                            <input 
+                                                className="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-blue-500"
+                                                placeholder="Ex: AA123456789BR"
+                                                value={trackingInput}
+                                                onChange={e => setTrackingInput(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
 
                                     {statusInput === 'Aguardando Devolução' && (
                                         <div className="bg-white p-4 rounded border border-gray-200 space-y-3 animate-in fade-in">

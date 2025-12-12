@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from './ui/Button'
 import { ShieldCheck } from 'lucide-react'
 
@@ -17,15 +18,10 @@ export const CookieConsent = () => {
       }
     }
 
-    const delayedShow = () => {
-      setTimeout(showBanner, 3000)
-    }
-
     if (document.readyState === 'complete') {
-      delayedShow()
+      setTimeout(showBanner, 2000)
     } else {
-      window.addEventListener('load', showBanner)
-      return () => window.removeEventListener('load', showBanner)
+      window.addEventListener('load', () => setTimeout(showBanner, 2000))
     }
   }, [])
 
@@ -47,12 +43,12 @@ export const CookieConsent = () => {
     '/esqueci-senha',
     '/reset-password',
     '/confirm-email'
-  ].some(path => pathname.startsWith(path))
+  ].some(path => pathname?.startsWith(path))
 
   if (!isVisible || isBlockedRoute) return null
 
   return (
-    <div className="fixed bottom-0 left-0 w-full bg-gray-900/95 backdrop-blur text-white p-6 z-100 border-t border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-500">
+    <div className="fixed bottom-0 left-0 w-full bg-gray-900/95 backdrop-blur text-white p-6 z-[100] border-t border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-500">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex-1">
           <h4 className="text-lg font-bold flex items-center gap-2 mb-2 text-blue-400">
@@ -60,12 +56,10 @@ export const CookieConsent = () => {
           </h4>
           <p className="text-sm text-gray-300 leading-relaxed">
             Utilizamos cookies essenciais para manter sua sessão segura e funcional. 
-            Para fins de segurança e cumprimento legal (Marco Civil da Internet), 
-            registramos seu endereço IP durante transações e acessos administrativos. 
             Ao continuar, você concorda com nossa{' '}
-            <a href="/pagina/politica" className="underline hover:text-blue-400">
+            <Link href="/pagina/politica-de-privacidade" className="underline hover:text-blue-400">
               Política de Privacidade
-            </a>.
+            </Link>.
           </p>
         </div>
 

@@ -1,10 +1,12 @@
+'use client'
+
 import { useState } from 'react';
-import { Link } from 'next/link';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Mail, ArrowLeft } from 'lucide-react';
 import authService from '@/app/(website)/login/services/authService';
 
-export const ForgotPassword = () => {
+export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -58,7 +60,7 @@ export const ForgotPassword = () => {
         </form>
 
         <div className="mt-6 text-center">
-          <Link to="/login" className="text-gray-600 hover:text-primary flex items-center justify-center gap-2 text-sm font-medium">
+          <Link href="/login" className="text-gray-600 hover:text-primary flex items-center justify-center gap-2 text-sm font-medium">
             <ArrowLeft size={16} /> Voltar para o Login
           </Link>
         </div>
