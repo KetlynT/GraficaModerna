@@ -45,7 +45,7 @@ public class ProductService(IProductRepository repository, IMemoryCache cache) :
             dto.Name,
             dto.Description,
             dto.Price,
-            dto.ImageUrl,
+            dto.ImageUrls,
             dto.Weight,
             dto.Width,
             dto.Height,
@@ -64,7 +64,7 @@ public class ProductService(IProductRepository repository, IMemoryCache cache) :
             dto.Name,
             dto.Description,
             dto.Price,
-            dto.ImageUrl,
+            dto.ImageUrls,
             dto.Weight,
             dto.Width,
             dto.Height,
@@ -85,7 +85,7 @@ public class ProductService(IProductRepository repository, IMemoryCache cache) :
     private static ProductResponseDto MapToDto(Product p)
     {
         return new ProductResponseDto(
-            p.Id, p.Name, p.Description, p.Price, p.ImageUrl, p.Weight, p.Width, p.Height, p.Length, p.StockQuantity
+            p.Id, p.Name, p.Description, p.Price, p.ImageUrls, p.Weight, p.Width, p.Height, p.Length, p.StockQuantity
         );
     }
 }

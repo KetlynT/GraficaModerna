@@ -8,7 +8,7 @@ public record CreateProductDto(
     string Description,
     [Range(0.01, double.MaxValue, ErrorMessage = "Preço deve ser maior que zero")]
     decimal Price,
-    string ImageUrl,
+    List<string> ImageUrls,
     [Range(0.001, double.MaxValue, ErrorMessage = "Peso inválido (kg)")]
     decimal Weight,
     [Range(1, int.MaxValue, ErrorMessage = "Largura inválida (cm)")]
@@ -27,7 +27,7 @@ public record UpdateProductDto(
     string Description,
     [Range(0.01, double.MaxValue, ErrorMessage = "Preço deve ser maior que zero")]
     decimal Price,
-    string ImageUrl,
+    List<string> ImageUrls,
     [Range(0.001, double.MaxValue, ErrorMessage = "Peso inválido (kg)")]
     decimal Weight,
     [Range(1, int.MaxValue, ErrorMessage = "Largura inválida (cm)")]
@@ -44,7 +44,7 @@ public record ProductResponseDto(
     string Name,
     string Description,
     decimal Price,
-    string ImageUrl,
+    List<string> ImageUrls,
     decimal Weight,
     int Width,
     int Height,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, ArrowUp, ArrowDown, ArrowUpDown, Edit, Trash2, Box } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, ArrowUpDown, Edit, Trash2, Box, X, Upload, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { ProductService } from '@/app/(website)/(shop)/services/productService';
 import { Button } from '@/app/(website)/components/ui/Button';
 
@@ -19,7 +19,10 @@ const ProductsTab = () => {
   const [desc, setDesc] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
-  const [imageFile, setImageFile] = useState(null);
+  
+  const [images, setImages] = useState([]); 
+  const [isUploading, setIsUploading] = useState(false);
+
   const [weight, setWeight] = useState('');
   const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
@@ -59,13 +62,44 @@ const ProductsTab = () => {
           : <ArrowDown size={14} className="text-blue-600 ml-1 inline" />;
   };
 
+  const handleImageSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+        const uploadPromises = files.map(file => ProductService.uploadImage(file));
+        const uploadedUrls = await Promise.all(uploadPromises);
+        
+        setImages(prev => [...prev, ...uploadedUrls]);
+        toast.success(`${files.length} imagem(ns) adicionada(s)`);
+    } catch (error) {
+        console.error(error);
+        toast.error("Erro ao fazer upload das imagens");
+    } finally {
+        setIsUploading(false);
+        e.target.value = '';
+    }
+  };
+
+  const removeImage = (index) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const moveImage = (index, direction) => {
+    const newImages = [...images];
+    if (direction === 'left' && index > 0) {
+        [newImages[index - 1], newImages[index]] = [newImages[index], newImages[index - 1]];
+    } else if (direction === 'right' && index < newImages.length - 1) {
+        [newImages[index + 1], newImages[index]] = [newImages[index], newImages[index + 1]];
+    }
+    setImages(newImages);
+  };
+
   const handleSave = async (e) => {
       e.preventDefault();
       setLoading(true);
       try {
-          let imageUrl = editingProduct?.imageUrl || '';
-          if(imageFile) imageUrl = await ProductService.uploadImage(imageFile);
-          
           const formattedPrice = parseFloat(price.toString().replace(',', '.'));
 
         if (isNaN(formattedPrice)) {
@@ -78,7 +112,7 @@ const ProductsTab = () => {
               name, 
               description: desc, 
               price: parseFloat(price), 
-              imageUrl,
+              imageUrls: images,
               stockQuantity: parseInt(stock),
               weight: parseFloat(weight),
               width: parseInt(width),
@@ -90,11 +124,11 @@ const ProductsTab = () => {
           else await ProductService.create(data);
 
           setIsModalOpen(false);
-          setImageFile(null);
           loadProducts();
           toast.success("Salvo com sucesso!");
       } catch (e) { 
           toast.error("Erro ao salvar. Verifique os campos."); 
+          console.error(e);
       } finally {
           setLoading(false);
       }
@@ -115,11 +149,13 @@ const ProductsTab = () => {
       setDesc(p?.description || '');
       setPrice(p?.price ? p.price.toString().replace('.', ',') : '');
       setStock(p?.stockQuantity || '');
+      
+      setImages(p?.imageUrls || []);
+
       setWeight(p?.weight || '');
       setWidth(p?.width || '');
       setHeight(p?.height || '');
       setLength(p?.length || '');
-      setImageFile(null);
       setIsModalOpen(true);
   };
 
@@ -169,8 +205,19 @@ const ProductsTab = () => {
                       {products.map(p => (
                           <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                               <td className="p-4 align-middle">
-                                  <div className="font-bold text-gray-800">{p.name}</div>
-                                  <div className="text-xs text-gray-500 truncate max-w-xs">{p.description}</div>
+                                  <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded bg-gray-100 overflow-hidden relative border shrink-0">
+                                          {p.imageUrls && p.imageUrls.length > 0 ? (
+                                              <img src={p.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                              <ImageIcon className="text-gray-300 w-full h-full p-2" />
+                                          )}
+                                      </div>
+                                      <div>
+                                          <div className="font-bold text-gray-800">{p.name}</div>
+                                          <div className="text-xs text-gray-500 truncate max-w-xs">{p.description}</div>
+                                      </div>
+                                  </div>
                               </td>
                               <td className="p-4 text-center align-middle">
                                   <span className={`px-2 py-1 rounded text-xs font-bold ${p.stockQuantity < 10 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
@@ -213,8 +260,11 @@ const ProductsTab = () => {
 
           {isModalOpen && (
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto py-10">
-                  <form onSubmit={handleSave} className="bg-white p-8 rounded-xl w-full max-w-2xl space-y-5 shadow-2xl animate-in fade-in zoom-in duration-200 my-auto">
-                      <h3 className="font-bold text-2xl text-gray-800 border-b pb-2">{editingProduct ? 'Editar Produto' : 'Novo Produto'}</h3>
+                  <form onSubmit={handleSave} className="bg-white p-8 rounded-xl w-full max-w-3xl space-y-5 shadow-2xl animate-in fade-in zoom-in duration-200 my-auto">
+                      <div className="flex justify-between items-center border-b pb-2">
+                          <h3 className="font-bold text-2xl text-gray-800">{editingProduct ? 'Editar Produto' : 'Novo Produto'}</h3>
+                          <button type="button" onClick={()=>setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
+                      </div>
                       
                       <div className="grid md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
@@ -240,9 +290,87 @@ const ProductsTab = () => {
                             <label className="block text-sm font-bold text-gray-700 mb-1">Estoque</label>
                             <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" type="number" value={stock} onChange={e=>setStock(e.target.value)} required />
                         </div>
-                        <div className="md:col-span-2">
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Imagem</label>
-                            <input type="file" onChange={e=>setImageFile(e.target.files[0])} className="text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+
+                        {/* Área de Imagens Atualizada */}
+                        <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Galeria de Imagens</label>
+                            
+                            {/* Grid de imagens existentes */}
+                            {images.length > 0 && (
+                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mb-4">
+                                    {images.map((url, index) => (
+                                        <div key={index} className="relative aspect-square group bg-white rounded-lg border overflow-hidden shadow-sm">
+                                            <img src={url} alt={`Img ${index}`} className="w-full h-full object-cover" />
+                                            
+                                            {/* Overlay de ações */}
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => removeImage(index)} 
+                                                    className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600"
+                                                    title="Remover"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                                <div className="flex gap-2">
+                                                    {index > 0 && (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => moveImage(index, 'left')} 
+                                                            className="p-1 bg-white text-gray-800 rounded-full hover:bg-gray-100"
+                                                            title="Mover para esquerda (Capa)"
+                                                        >
+                                                            <ChevronLeft size={14} />
+                                                        </button>
+                                                    )}
+                                                    {index < images.length - 1 && (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => moveImage(index, 'right')} 
+                                                            className="p-1 bg-white text-gray-800 rounded-full hover:bg-gray-100"
+                                                            title="Mover para direita"
+                                                        >
+                                                            <ChevronRight size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {/* Badge de Capa */}
+                                            {index === 0 && (
+                                                <span className="absolute bottom-0 left-0 right-0 bg-blue-600 text-white text-[10px] font-bold text-center py-0.5">
+                                                    CAPA
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Botão de Upload */}
+                            <div className="relative">
+                                <input 
+                                    type="file" 
+                                    multiple 
+                                    accept="image/*"
+                                    onChange={handleImageSelect} 
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    disabled={isUploading}
+                                />
+                                <div className={`border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 transition-colors ${isUploading ? 'bg-gray-100' : 'hover:bg-blue-50 hover:border-blue-400 bg-white'}`}>
+                                    {isUploading ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2"></div>
+                                            <span className="text-sm">Enviando imagens...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload size={24} className="mb-2 text-gray-400" />
+                                            <span className="text-sm font-medium">Clique ou arraste imagens aqui</span>
+                                            <span className="text-xs text-gray-400 mt-1">Suporta múltiplos arquivos (JPG, PNG)</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                       </div>
 
@@ -256,9 +384,9 @@ const ProductsTab = () => {
                         </div>
                       </div>
 
-                      <div className="flex justify-end gap-3 pt-4">
+                      <div className="flex justify-end gap-3 pt-4 border-t">
                           <Button type="button" variant="ghost" onClick={()=>setIsModalOpen(false)}>Cancelar</Button>
-                          <Button type="submit" isLoading={loading}>Salvar</Button>
+                          <Button type="submit" isLoading={loading}>Salvar Produto</Button>
                       </div>
                   </form>
               </div>

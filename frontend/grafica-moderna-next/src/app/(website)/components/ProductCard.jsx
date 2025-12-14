@@ -14,7 +14,9 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
   const { addToCart } = useCart();
   const { user } = useAuth();
   
-  const [imgSrc, setImgSrc] = useState(product.imageUrl);
+  const images = product.imageUrls?.length > 0 ? product.imageUrls : [];
+
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
 
   const isAdmin = user?.role === 'Admin';
 
@@ -44,7 +46,7 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
     >
       <div className="relative h-64 w-full overflow-hidden bg-gray-50">
         <Image 
-          src={imgSrc || 'https://placehold.co/400x300?text=Sem+Imagem'}
+          src={images[currentImgIndex] || 'https://placehold.co/400x300?text=Sem+Imagem'}
           alt={product.name} 
           fill
           className="object-cover transform group-hover:scale-110 transition-transform duration-700" 
