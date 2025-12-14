@@ -18,6 +18,7 @@ namespace GraficaModerna.Application.Services;
 public class OrderService(
     IUnitOfWork unitOfWork,
     IEmailService emailService,
+    ITemplateService templateService,
     UserManager<ApplicationUser> userManager,
     IHttpContextAccessor httpContextAccessor,
     IEnumerable<IShippingService> shippingServices,
@@ -27,6 +28,7 @@ public class OrderService(
 {
     private readonly IUnitOfWork _uow = unitOfWork;
     private readonly IEmailService _emailService = emailService;
+    private readonly ITemplateService _templateService = templateService;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
     private readonly IPaymentService _paymentService = paymentService;
     private readonly IEnumerable<IShippingService> _shippingServices = shippingServices;
@@ -162,7 +164,7 @@ public class OrderService(
 
             await transaction.CommitAsync();
 
-            _ = SendOrderReceivedEmailAsync(userId, order.Id);
+            _ = SendOrderReceivedEmailAsync(userId, order);
 
             return MapToDto(order, "Atenção: A reserva dos itens e o débito no estoque só ocorrem após a confirmação do pagamento.");
         }
@@ -273,15 +275,16 @@ public class OrderService(
 
                     if (order.User != null && !string.IsNullOrEmpty(order.User.Email))
                     {
-                        var emailBody = $@"
-                    <p>Olá {order.User.FullName},</p>
-                    <p>Recebemos a confirmação do seu pagamento, porém...</p>
-                    <h3 style='color: #c0392b;'>Ah não! Alguém acabou comprando antes que você.</h3>
-                    <p>Infelizmente, um ou mais itens do seu pedido esgotaram nos últimos instantes e não temos estoque suficiente para concluir sua compra.</p>
-                    <p><b>Já estamos providenciando o estorno total do valor pago.</b></p>
-                    <p>O reembolso foi processado automaticamente e deve aparecer na sua fatura em breve.</p>";
+                        var emailModel = new
+                        {
+                            Name = order.User.FullName,
+                            OrderId = order.Id,
+                            Items = outOfStockItems,
+                            Year = DateTime.Now.Year
+                        };
 
-                        await _emailService.SendEmailAsync(order.User.Email, $"Atualização sobre o Pedido #{order.Id} - Reembolso Automático", emailBody);
+                        var (subject, body) = await _templateService.RenderEmailAsync("OrderCancelledOutOfStock", emailModel);
+                        await _emailService.SendEmailAsync(order.User.Email, subject, body);
                     }
 
                     return;
@@ -570,37 +573,22 @@ public class OrderService(
         {
             var securityEmail = _configuration["ADMIN_EMAIL"] ?? throw new InvalidOperationException("Configuração ADMIN_EMAIL não encontrada.");
 
-            var subject = $"🚨 ALERTA DE SEGURANÇA CRÍTICO - Tentativa de Fraude";
-            var body = $@"
-                <h2 style='color: red;'>⚠️ TENTATIVA DE MANIPULAÇÃO DE PAGAMENTO DETECTADA</h2>
-                
-                <h3>Detalhes do Incidente:</h3>
-                <ul>
-                    <li><b>Pedido:</b> {order.Id}</li>
-                    <li><b>Usuário:</b> {order.User?.Email ?? "N/A"} (ID: {order.UserId})</li>
-                    <li><b>Transaction ID:</b> {transactionId}</li>
-                    <li><b>Valor Esperado:</b> R$ {expectedAmount / 100.0:F2}</li>
-                    <li><b>Valor Recebido:</b> R$ {receivedAmount / 100.0:F2}</li>
-                    <li><b>Divergência:</b> R$ {Math.Abs(expectedAmount - receivedAmount) / 100.0:F2}</li>
-                    <li><b>IP do Cliente:</b> {order.CustomerIp ?? "N/A"}</li>
-                    <li><b>User Agent:</b> {order.UserAgent ?? "N/A"}</li>
-                    <li><b>Data/Hora:</b> {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC</li>
-                </ul>
+            var emailModel = new
+            {
+                OrderId = order.Id,
+                UserEmail = order.User?.Email ?? "N/A",
+                UserId = order.UserId,
+                TransactionId = transactionId,
+                ExpectedAmount = expectedAmount / 100.0,
+                ReceivedAmount = receivedAmount / 100.0,
+                Divergence = Math.Abs(expectedAmount - receivedAmount) / 100.0,
+                CustomerIp = order.CustomerIp ?? "N/A",
+                UserAgent = order.UserAgent ?? "N/A",
+                Date = DateTime.UtcNow,
+                Year = DateTime.Now.Year
+            };
 
-                <h3>⚠️ Ações Tomadas:</h3>
-                <ul>
-                    <li>✅ Pagamento foi <b>BLOQUEADO</b></li>
-                    <li>✅ Transação foi <b>REJEITADA</b></li>
-                    <li>✅ Incidente registrado no histórico do pedido</li>
-                    <li>⚠️ Requer <b>investigação manual imediata</b></li>
-                </ul>
-
-                <p style='color: red; font-weight: bold;'>
-                    Este é um alerta automático de segurança. 
-                    Investigue imediatamente e considere bloquear a conta do usuário.
-                </p>
-            ";
-
+            var (subject, body) = await _templateService.RenderEmailAsync("SecurityAlertPaymentMismatch", emailModel);
             await _emailService.SendEmailAsync(securityEmail, subject, body);
 
             _logger.LogCritical(
@@ -614,14 +602,25 @@ public class OrderService(
         }
     }
 
-    private async Task SendOrderReceivedEmailAsync(string userId, Guid orderId)
+    private async Task SendOrderReceivedEmailAsync(string userId, Order order)
     {
         try
         {
             var user = await _userManager.FindByIdAsync(userId);
-            if (user != null)
-                await _emailService.SendEmailAsync(user.Email!, "Pedido Recebido",
-                    $"Seu pedido #{orderId} foi recebido e está sendo processado.");
+            if (user != null && !string.IsNullOrEmpty(user.Email))
+            {
+                var emailModel = new
+                {
+                    Name = user.FullName,
+                    OrderNumber = order.Id,
+                    Total = order.TotalAmount.ToString("C"),
+                    Items = order.Items.Select(i => new { i.ProductName, i.Quantity, Price = i.UnitPrice.ToString("C") }),
+                    Year = DateTime.Now.Year
+                };
+
+                var (subject, body) = await _templateService.RenderEmailAsync("OrderReceived", emailModel);
+                await _emailService.SendEmailAsync(user.Email, subject, body);
+            }
         }
         catch
         {
@@ -635,60 +634,34 @@ public class OrderService(
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null || string.IsNullOrEmpty(user.Email)) return;
 
-            string subject;
-            string body;
-
-            switch (newStatus)
+            var templateKey = newStatus switch
             {
-                case "Pago":
-                    subject = $"Pagamento Confirmado - Pedido #{order.Id}";
-                    body = $"Olá! O pagamento do seu pedido #{order.Id} foi confirmado e ele já está sendo preparado.";
-                    break;
-                case "Enviado":
-                    subject = $"Pedido Enviado - #{order.Id}";
-                    body = $"Seu pedido #{order.Id} foi enviado! <br> Código de rastreio: {order.TrackingCode}";
-                    break;
-                case "Entregue":
-                    subject = $"Pedido Entregue - #{order.Id}";
-                    body = $"Seu pedido #{order.Id} foi marcado como entregue. Esperamos que goste!";
-                    break;
-                case "Cancelado":
-                    subject = $"Pedido Cancelado - #{order.Id}";
-                    body = $"Seu pedido #{order.Id} foi cancelado.";
-                    if (!string.IsNullOrEmpty(order.RefundRejectionReason))
-                        body += $"<br><br><b>Motivo:</b> {order.RefundRejectionReason}";
-                    break;
-                case "Reembolsado":
-                    subject = $"Reembolso Processado - #{order.Id}";
-                    body = $"O reembolso do seu pedido #{order.Id} foi processado e deve aparecer na sua fatura em breve.";
-                    if (!string.IsNullOrEmpty(order.RefundRejectionReason))
-                        body += $"<br><br><b>Detalhes:</b> {order.RefundRejectionReason}";
-                    break;
-                case "Reembolsado Parcialmente":
-                    subject = $"Reembolso Parcial Processado - #{order.Id}";
-                    body = $"Um reembolso parcial do seu pedido #{order.Id} foi processado e o valor deve aparecer na sua fatura em breve.";
-                    if (!string.IsNullOrEmpty(order.RefundRejectionReason))
-                        body += $"<br><br><b>Detalhes do Reembolso:</b> {order.RefundRejectionReason}";
-                    if (!string.IsNullOrEmpty(order.RefundRejectionProof))
-                        body += $"<br><br><b>Comprovante/Anexo:</b> <a href=\"{order.RefundRejectionProof}\">Clique aqui para visualizar</a>";
-                    break;
-                case "Aguardando Devolução":
-                    subject = $"Instruções de Devolução - Pedido #{order.Id}";
-                    body = $"Solicitação de troca/devolução aceita.<br>Código de Logística Reversa: <b>{order.ReverseLogisticsCode}</b><br><br>Instruções:<br>{order.ReturnInstructions}";
-                    break;
-                case "Reembolso Reprovado":
-                    subject = $"Solicitação de Reembolso Negada - Pedido #{order.Id}";
-                    body = $"Sua solicitação de reembolso para o pedido #{order.Id} foi analisada e reprovada.<br><br><b>Motivo:</b> {order.RefundRejectionReason}";
+                "Pago" => "PaymentConfirmed",
+                "Enviado" => "OrderShipped",
+                "Entregue" => "OrderDelivered",
+                "Cancelado" => "OrderCanceled",
+                "Reembolsado" => "OrderRefunded",
+                "Reembolsado Parcialmente" => "OrderPartiallyRefunded",
+                "Aguardando Devolução" => "OrderReturnInstructions",
+                "Reembolso Reprovado" => "OrderRefundRejected",
+                _ => null
+            };
 
-                    if (!string.IsNullOrEmpty(order.RefundRejectionProof))
-                    {
-                        body += $"<br><br><b>Evidência da análise:</b> <a href=\"{order.RefundRejectionProof}\">Clique aqui para visualizar</a>";
-                    }
-                    break;
-                default:
-                    return;
-            }
+            if (templateKey == null) return;
 
+            var emailModel = new
+            {
+                Name = user.FullName,
+                OrderNumber = order.Id,
+                TrackingCode = order.TrackingCode,
+                ReverseLogisticsCode = order.ReverseLogisticsCode,
+                ReturnInstructions = order.ReturnInstructions,
+                RefundRejectionReason = order.RefundRejectionReason,
+                RefundRejectionProof = order.RefundRejectionProof,
+                Year = DateTime.Now.Year
+            };
+
+            var (subject, body) = await _templateService.RenderEmailAsync(templateKey, emailModel);
             await _emailService.SendEmailAsync(user.Email, subject, body);
         }
         catch

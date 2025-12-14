@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.StaticFiles;
 using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
@@ -278,6 +279,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IShippingService, MelhorEnvioShippingService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<MetadataSecurityService>();
+builder.Services.AddScoped<TemplateRenderingService>();
 
 builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>();
 
@@ -323,35 +325,46 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Frame-Options", "DENY");
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
-    context.Response.Headers.Append("Content-Security-Policy",
-        "default-src 'self'; " +
-        "img-src 'self' data: https:; " +
-        "script-src 'self' 'unsafe-inline'; " +
-        "style-src 'self' 'unsafe-inline'; " +
-        "font-src 'self'; " +
-        "object-src 'none'; " +
-        "frame-ancestors 'none';");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+
+    using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+    var nonceBytes = new byte[32];
+    rng.GetBytes(nonceBytes);
+    var nonce = Convert.ToBase64String(nonceBytes);
+
+    context.Items["CspNonce"] = nonce;
+
+    var csp = "default-src 'self'; " +
+              $"script-src 'self' 'nonce-{nonce}' https://js.stripe.com; " +
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+              "font-src 'self' https://fonts.gstatic.com; " +
+              "img-src 'self' data: https: blob:; " +
+              "media-src 'self' blob:; " +
+              "connect-src 'self' https://api.stripe.com; " +
+              "object-src 'none'; " +
+              "base-uri 'self'; " +
+              "form-action 'self'; " +
+              "frame-ancestors 'none';";
+
+    context.Response.Headers.Append("Content-Security-Policy", csp);
+
     await next();
 });
 
 app.UseMiddleware<ExceptionMiddleware>();
 
+var provider = new FileExtensionContentTypeProvider();
+provider.Mappings[".mp4"] = "video/mp4";
+provider.Mappings[".webm"] = "video/webm";
+provider.Mappings[".mov"] = "video/quicktime";
+
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
     {
-        var path = ctx.File.PhysicalPath;
-        if (!string.IsNullOrEmpty(path))
-        {
-            var ext = Path.GetExtension(path).ToLowerInvariant();
-
-            if (ext is ".mp4" or ".webm" or ".mov")
-            {
-                ctx.Context.Response.Headers.Append("Content-Disposition", "attachment");
-            }
-        }
+        ctx.Context.Response.Headers.Append("Cache-Control", "public,max-age=31536000");
+        ctx.Context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
     }
 });
 

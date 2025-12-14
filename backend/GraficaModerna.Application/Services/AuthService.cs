@@ -18,13 +18,16 @@ public class AuthService(
     IConfiguration configuration,
     IContentService contentService,
     IPasswordHasher<ApplicationUser> passwordHasher,
-    IEmailService emailService) : IAuthService
+    IEmailService emailService,
+    ITemplateService templateService
+    ) : IAuthService
 {
     private readonly IConfiguration _configuration = configuration;
     private readonly IPasswordHasher<ApplicationUser> _passwordHasher = passwordHasher;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IContentService _contentService = contentService;
     private readonly IEmailService _emailService = emailService;
+    private readonly ITemplateService _templateService = templateService;
 
     private async Task CheckPurchaseEnabled()
     {
@@ -79,16 +82,19 @@ public class AuthService(
         {
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = Uri.EscapeDataString(token);
-            var frontendUrl = _configuration["FRONTEND_URL"] ?? "http://localhost:5173";
+            var frontendUrl = _configuration["CorsOrigins"];
             var link = $"{frontendUrl}/confirm-email?userid={user.Id}&token={encodedToken}";
 
-            var body = $@"
-                <h2>Bem-vindo à Gráfica Moderna!</h2>
-                <p>Olá {user.FullName}, obrigado por se cadastrar.</p>
-                <p>Confirme seu e-mail clicando abaixo:</p>
-                <p><a href='{link}'>CONFIRMAR CONTA</a></p>";
+            var emailModel = new
+            {
+                Name = user.FullName,
+                Link = link,
+                Year = DateTime.Now.Year
+            };
 
-            await _emailService.SendEmailAsync(user.Email!, "Confirme sua conta", body);
+            var (subject, body) = await _templateService.RenderEmailAsync("RegisterConfirmation", emailModel);
+
+            await _emailService.SendEmailAsync(user.Email!, subject, body);
         }
         catch
         {
@@ -144,8 +150,15 @@ public class AuthService(
         {
             try
             {
-                await _emailService.SendEmailAsync(user.Email!, "Alerta de Login",
-                    $"<p>Novo login detectado em sua conta em {DateTime.Now:dd/MM/yyyy HH:mm}.</p>");
+                var emailModel = new
+                {
+                    Name = user.FullName,
+                    Date = DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+                };
+
+                var (subject, body) = await _templateService.RenderEmailAsync("LoginAlert", emailModel);
+
+                await _emailService.SendEmailAsync(user.Email!, subject, body);
             }
             catch { }
         });
@@ -221,15 +234,13 @@ public class AuthService(
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var encodedToken = Uri.EscapeDataString(token);
-            var frontendUrl = _configuration["FRONTEND_URL"] ?? "http://localhost:5173";
+            var frontendUrl = _configuration["CorsOrigins"];
             var link = $"{frontendUrl}/reset-password?email={dto.Email}&token={encodedToken}";
 
-            var body = $@"
-                <h2>Recuperação de Senha</h2>
-                <p>Clique abaixo para redefinir sua senha:</p>
-                <p><a href='{link}'>REDEFINIR SENHA</a></p>";
+            var emailModel = new { Name = user.FullName, Link = link };
+            var (subject, body) = await _templateService.RenderEmailAsync("ForgotPassword", emailModel);
 
-            await _emailService.SendEmailAsync(user.Email!, "Recuperação de Senha", body);
+            await _emailService.SendEmailAsync(user.Email!, subject, body);
         }
         catch { }
     }
@@ -244,7 +255,14 @@ public class AuthService(
         if (!result.Succeeded)
             throw new Exception("Erro ao redefinir senha: " + string.Join(", ", result.Errors.Select(e => e.Description)));
 
-        _ = Task.Run(() => _emailService.SendEmailAsync(user.Email!, "Senha Alterada", "<p>Sua senha foi alterada com sucesso.</p>"));
+        _ = Task.Run(async () => {
+            try
+            {
+                var (subject, body) = await _templateService.RenderEmailAsync("PasswordChanged", new { Name = user.FullName });
+                await _emailService.SendEmailAsync(user.Email!, subject, body);
+            }
+            catch { }
+        });
     }
 
     private async Task<AuthResponseDto> CreateTokenPairAsync(ApplicationUser user)

@@ -22,7 +22,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<SiteSetting> SiteSettings { get; set; }
     public DbSet<OrderHistory> OrderHistories { get; set; }
     public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents { get; set; }
-
+    public DbSet<EmailTemplate> EmailTemplates { get; set; }
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -91,6 +91,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         builder.Entity<SiteSetting>().HasKey(s => s.Key);
 
         builder.Entity<ProcessedWebhookEvent>().HasKey(e => e.EventId);
+
+        builder.Entity<EmailTemplate>()
+            .HasIndex(e => e.Key)
+            .IsUnique();
     }
 
     private static OrderStatus ParseStatus(string status)
