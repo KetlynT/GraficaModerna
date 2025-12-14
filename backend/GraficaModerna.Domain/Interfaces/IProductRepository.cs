@@ -13,6 +13,7 @@ public interface IProductRepository
 
     Task<Product?> GetByIdAsync(Guid id);
     Task<List<Product>> GetByIdsAsync(List<Guid> ids);
+    Task<Product?> GetByIdWithLockAsync(Guid id);
     Task<Product> CreateAsync(Product product);
     Task UpdateAsync(Product product);
 }

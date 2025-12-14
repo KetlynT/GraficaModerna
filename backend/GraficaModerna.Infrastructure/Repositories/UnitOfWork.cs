@@ -1,6 +1,8 @@
 ﻿using GraficaModerna.Domain.Interfaces;
 using GraficaModerna.Infrastructure.Context;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
@@ -25,9 +27,9 @@ public class UnitOfWork(
         await _context.SaveChangesAsync();
     }
 
-    public async Task<IDbContextTransaction> BeginTransactionAsync()
+    public async Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
     {
-        return await _context.Database.BeginTransactionAsync();
+        return await _context.Database.BeginTransactionAsync(isolationLevel);
     }
 
     public void Dispose()

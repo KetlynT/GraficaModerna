@@ -16,6 +16,17 @@ public class CartRepository(AppDbContext context) : ICartRepository
             .FirstOrDefaultAsync(c => c.UserId == userId);
     }
 
+    public async Task<Cart?> GetByUserIdWithLockAsync(string userId)
+    {
+        return await _context.Carts
+            .FromSqlRaw(@"
+                SELECT * FROM ""Carts""
+                WHERE ""UserId"" = {0}
+                FOR UPDATE", userId)
+            .Include(c => c.Items)
+            .SingleOrDefaultAsync();
+    }
+
     public async Task AddAsync(Cart cart)
     {
         await _context.Carts.AddAsync(cart);

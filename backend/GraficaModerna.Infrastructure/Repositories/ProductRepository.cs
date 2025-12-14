@@ -97,6 +97,16 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
         return await _context.Products.Where(p => ids.Contains(p.Id)).ToListAsync();
     }
 
+    public async Task<Product?> GetByIdWithLockAsync(Guid id)
+    {
+        return await _context.Products
+            .FromSqlRaw(@"
+                SELECT * FROM ""Products"" 
+                WHERE ""Id"" = {0} AND ""IsActive"" = true 
+                FOR UPDATE", id)
+            .SingleOrDefaultAsync();
+    }
+
     public async Task<Product> CreateAsync(Product product)
     {
         try
