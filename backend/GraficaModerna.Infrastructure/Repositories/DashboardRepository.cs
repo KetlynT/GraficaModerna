@@ -1,16 +1,16 @@
-﻿using GraficaModerna.Application.DTOs;
-using GraficaModerna.Application.Interfaces;
+﻿using GraficaModerna.Domain.Enums;
+using GraficaModerna.Domain.Interfaces;
+using GraficaModerna.Domain.Models;
 using GraficaModerna.Infrastructure.Context;
-using GraficaModerna.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
-namespace GraficaModerna.Infrastructure.Services;
+namespace GraficaModerna.Infrastructure.Repositories;
 
-public class DashboardService(AppDbContext context) : IDashboardService
+public class DashboardRepository(AppDbContext context) : IDashboardRepository
 {
     private readonly AppDbContext _context = context;
 
-    public async Task<DashboardStatsDto> GetStatsAsync()
+    public async Task<DashboardAnalytics> GetAnalyticsAsync()
     {
         var totalOrders = await _context.Orders.CountAsync();
 
@@ -25,17 +25,19 @@ public class DashboardService(AppDbContext context) : IDashboardService
         var pendingOrders = await _context.Orders.CountAsync(o => o.Status == OrderStatus.Pendente);
 
         var lowStockProducts = await _context.Products
+            .AsNoTracking()
             .Where(p => p.IsActive && p.StockQuantity < 10)
-            .Select(p => new LowStockProductDto(p.Id, p.Name, p.StockQuantity))
             .OrderBy(p => p.StockQuantity)
             .Take(5)
+            .Select(p => new LowStockItem(p.Id, p.Name, p.StockQuantity))
             .ToListAsync();
 
         var recentOrders = await _context.Orders
+            .AsNoTracking()
             .Include(o => o.User)
             .OrderByDescending(o => o.OrderDate)
             .Take(5)
-            .Select(o => new RecentOrderDto(
+            .Select(o => new RecentOrderSummary(
                 o.Id,
                 o.TotalAmount,
                 o.Status,
@@ -45,6 +47,13 @@ public class DashboardService(AppDbContext context) : IDashboardService
             ))
             .ToListAsync();
 
-        return new DashboardStatsDto(totalOrders, totalRevenue, totalRefunded, pendingOrders, lowStockProducts, recentOrders);
+        return new DashboardAnalytics(
+            totalOrders,
+            totalRevenue,
+            totalRefunded,
+            pendingOrders,
+            lowStockProducts,
+            recentOrders
+        );
     }
 }

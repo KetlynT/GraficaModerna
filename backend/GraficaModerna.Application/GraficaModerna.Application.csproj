@@ -1,10 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<ItemGroup>
-	  <Compile Remove="Services\AddressService.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<ProjectReference Include="..\GraficaModerna.Domain\GraficaModerna.Domain.csproj" />
 	</ItemGroup>
 
