@@ -12,6 +12,7 @@ public interface IProductRepository
         int pageSize);
 
     Task<Product?> GetByIdAsync(Guid id);
+    Task<List<Product>> GetByIdsAsync(List<Guid> ids);
     Task<Product> CreateAsync(Product product);
     Task UpdateAsync(Product product);
 }

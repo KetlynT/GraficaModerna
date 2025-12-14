@@ -15,6 +15,7 @@ public interface IOrderRepository
 {
     Task AddAsync(Order order);
     Task<Order?> GetByIdAsync(Guid id);
+    Task<Order?> GetByTransactionIdAsync(string transactionId);
     Task<PagedResultDto<Order>> GetByUserIdAsync(string userId, int page, int pageSize);
     Task<PagedResultDto<Order>> GetAllAsync(int page, int pageSize);
     Task UpdateAsync(Order order);
@@ -35,4 +36,6 @@ public interface ICouponRepository
     Task<List<Coupon>> GetAllAsync();
     Task AddAsync(Coupon coupon);
     Task DeleteAsync(Guid id);
+    Task RecordUsageAsync(CouponUsage usage);
+    Task<bool> IsUsageLimitReachedAsync(string userId, string couponCode);
 }

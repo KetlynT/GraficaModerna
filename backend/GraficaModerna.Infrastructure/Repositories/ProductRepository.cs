@@ -9,7 +9,7 @@ namespace GraficaModerna.Infrastructure.Repositories;
 public class ProductRepository(AppDbContext context, ILogger<ProductRepository> logger) : IProductRepository
 {
     private readonly AppDbContext _context = context;
-    private readonly ILogger<ProductRepository> _logger = logger; 
+    private readonly ILogger<ProductRepository> _logger = logger;
 
     public async Task<(IEnumerable<Product> Items, int TotalCount)> GetAllAsync(
         string? searchTerm,
@@ -27,9 +27,9 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.Trim();
-                
+
                 var sanitizedTerm = term
-                .Replace("\\", "\\\\") 
+                .Replace("\\", "\\\\")
                 .Replace("%", "\\%")
                 .Replace("_", "\\_");
 
@@ -42,13 +42,13 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
 
             var allowedSortColumns = new[] { "price", "name", "stockquantity" };
             var safeSortColumn = sortColumn?.ToLower();
-            
-            if (!string.IsNullOrEmpty(safeSortColumn) && 
+
+            if (!string.IsNullOrEmpty(safeSortColumn) &&
                 !allowedSortColumns.Contains(safeSortColumn))
             {
                 _logger.LogWarning(
                     "Tentativa de ordenação por coluna não permitida: {Column}", sortColumn);
-                safeSortColumn = null; 
+                safeSortColumn = null;
             }
 
             query = safeSortColumn switch
@@ -90,6 +90,11 @@ public class ProductRepository(AppDbContext context, ILogger<ProductRepository> 
             _logger.LogError(ex, "Erro ao buscar produto por ID: {ProductId}", id);
             throw new Exception("Erro ao buscar detalhes do produto.");
         }
+    }
+
+    public async Task<List<Product>> GetByIdsAsync(List<Guid> ids)
+    {
+        return await _context.Products.Where(p => ids.Contains(p.Id)).ToListAsync();
     }
 
     public async Task<Product> CreateAsync(Product product)

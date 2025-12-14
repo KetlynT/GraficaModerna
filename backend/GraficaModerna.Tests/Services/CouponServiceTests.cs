@@ -1,27 +1,26 @@
 ﻿using GraficaModerna.Application.DTOs;
+using GraficaModerna.Application.Services;
 using GraficaModerna.Domain.Entities;
-using GraficaModerna.Infrastructure.Context;
-using GraficaModerna.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
+using GraficaModerna.Domain.Interfaces;
+using Moq;
 using Xunit;
 
 namespace GraficaModerna.Tests.Services;
 
 public class CouponServiceTests
 {
-    private readonly AppDbContext _context;
+    private readonly Mock<IUnitOfWork> _uowMock;
+    private readonly Mock<ICouponRepository> _couponRepoMock;
     private readonly CouponService _service;
 
     public CouponServiceTests()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(
-                databaseName: Guid.NewGuid().ToString()
-            )
-            .Options;
+        _uowMock = new Mock<IUnitOfWork>();
+        _couponRepoMock = new Mock<ICouponRepository>();
 
-        _context = new AppDbContext(options);
-        _service = new CouponService(_context);
+        _uowMock.Setup(u => u.Coupons).Returns(_couponRepoMock.Object);
+
+        _service = new CouponService(_uowMock.Object);
     }
 
     [Fact]
@@ -33,25 +32,25 @@ public class CouponServiceTests
             30
         );
 
+        _couponRepoMock.Setup(r => r.GetByCodeAsync("TEST10")).ReturnsAsync((Coupon?)null);
+
+        Coupon? capturedCoupon = null;
+        _couponRepoMock.Setup(r => r.AddAsync(It.IsAny<Coupon>()))
+            .Callback<Coupon>(c => capturedCoupon = c);
+
         var result = await _service.CreateAsync(dto);
 
         Assert.NotNull(result);
         Assert.Equal("TEST10", result.Code);
-        Assert.Single(_context.Coupons);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 
     [Fact]
     public async Task CreateAsync_ShouldThrowException_WhenCodeExists()
     {
-        _context.Coupons.Add(
-            new Coupon(
-                "DUPLICATE",
-                10,
-                10
-            )
-        );
+        var existingCoupon = new Coupon("DUPLICATE", 10, 10);
 
-        await _context.SaveChangesAsync();
+        _couponRepoMock.Setup(r => r.GetByCodeAsync("DUPLICATE")).ReturnsAsync(existingCoupon);
 
         var dto = new CreateCouponDto(
             "DUPLICATE",
@@ -73,10 +72,9 @@ public class CouponServiceTests
             5
         );
 
-        _context.Coupons.Add(coupon);
-        await _context.SaveChangesAsync();
+        _couponRepoMock.Setup(r => r.GetByCodeAsync("VALID")).ReturnsAsync(coupon);
 
-        var result = await _service.GetValidCouponAsync("valid");
+        var result = await _service.GetValidCouponAsync("valid"); // O serviço deve tratar uppercase/lowercase
 
         Assert.NotNull(result);
         Assert.Equal(15, result.DiscountPercentage);
@@ -91,8 +89,7 @@ public class CouponServiceTests
             -1
         );
 
-        _context.Coupons.Add(coupon);
-        await _context.SaveChangesAsync();
+        _couponRepoMock.Setup(r => r.GetByCodeAsync("EXPIRED")).ReturnsAsync(coupon);
 
         var result = await _service.GetValidCouponAsync("EXPIRED");
 

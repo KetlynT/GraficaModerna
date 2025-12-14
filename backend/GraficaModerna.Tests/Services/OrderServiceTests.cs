@@ -1,12 +1,13 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Application.Services;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Enums;
-using GraficaModerna.Infrastructure.Context;
-using GraficaModerna.Infrastructure.Services;
+using GraficaModerna.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -15,40 +16,56 @@ namespace GraficaModerna.Tests.Services;
 
 public class OrderServiceTests
 {
-    private readonly AppDbContext _context;
+    private readonly Mock<IUnitOfWork> _uowMock;
+    private readonly Mock<IOrderRepository> _orderRepoMock;
+    private readonly Mock<ICartRepository> _cartRepoMock;
+    private readonly Mock<IProductRepository> _productRepoMock;
+    private readonly Mock<ICouponRepository> _couponRepoMock;
     private readonly Mock<IEmailService> _emailServiceMock;
     private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
     private readonly Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private readonly Mock<IShippingService> _shippingServiceMock;
     private readonly Mock<IPaymentService> _paymentServiceMock;
+    private readonly Mock<IConfiguration> _configurationMock;
     private readonly Mock<ILogger<OrderService>> _loggerMock;
     private readonly OrderService _service;
 
     public OrderServiceTests()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
+        _uowMock = new Mock<IUnitOfWork>();
+        _orderRepoMock = new Mock<IOrderRepository>();
+        _cartRepoMock = new Mock<ICartRepository>();
+        _productRepoMock = new Mock<IProductRepository>();
+        _couponRepoMock = new Mock<ICouponRepository>();
 
-        _context = new AppDbContext(options);
+        _uowMock.Setup(u => u.Orders).Returns(_orderRepoMock.Object);
+        _uowMock.Setup(u => u.Carts).Returns(_cartRepoMock.Object);
+        _uowMock.Setup(u => u.Products).Returns(_productRepoMock.Object);
+        _uowMock.Setup(u => u.Coupons).Returns(_couponRepoMock.Object);
+        _uowMock.Setup(u => u.BeginTransactionAsync())
+            .ReturnsAsync(new Mock<IDbContextTransaction>().Object);
+
         _emailServiceMock = new Mock<IEmailService>();
         _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
         _shippingServiceMock = new Mock<IShippingService>();
         _paymentServiceMock = new Mock<IPaymentService>();
         _loggerMock = new Mock<ILogger<OrderService>>();
+        _configurationMock = new Mock<IConfiguration>();
+
+        _configurationMock.Setup(c => c["ADMIN_EMAIL"]).Returns("admin@test.com");
 
         var userStoreMock = new Mock<IUserStore<ApplicationUser>>();
-        // Correção CS8625: Usando null! para satisfazer o compilador em argumentos de dependência não utilizados no mock
         _userManagerMock = new Mock<UserManager<ApplicationUser>>(
             userStoreMock.Object, null!, null!, null!, null!, null!, null!, null!, null!);
 
         _service = new OrderService(
-            _context,
+            _uowMock.Object,
             _emailServiceMock.Object,
             _userManagerMock.Object,
             _httpContextAccessorMock.Object,
-            [_shippingServiceMock.Object], // Correção IDE0028: Simplificação de coleção
+            [_shippingServiceMock.Object],
             _paymentServiceMock.Object,
+            _configurationMock.Object,
             _loggerMock.Object
         );
     }
@@ -58,18 +75,16 @@ public class OrderServiceTests
     {
         var userId = "user123";
         var product = new Product("P1", "D1", 100m, "img", 1, 10, 10, 10, 50);
-        _context.Products.Add(product);
-
-        var cart = new Cart { UserId = userId };
+        var cart = new Cart { Id = Guid.NewGuid(), UserId = userId };
         cart.Items.Add(new CartItem { Product = product, ProductId = product.Id, Quantity = 2 });
-        _context.Carts.Add(cart);
-        await _context.SaveChangesAsync();
+
+        _cartRepoMock.Setup(c => c.GetByUserIdAsync(userId)).ReturnsAsync(cart);
 
         var addressDto = new CreateAddressDto("Home", "Me", "12345678", "St", "1", "", "Neigh", "City", "ST", "", "11999999999", false);
         var shippingOption = new ShippingOptionDto { Name = "Sedex", Price = 20m };
 
         _shippingServiceMock.Setup(s => s.CalculateAsync(It.IsAny<string>(), It.IsAny<List<ShippingItemDto>>()))
-            .ReturnsAsync([shippingOption]); // Correção IDE0028
+            .ReturnsAsync([shippingOption]);
 
         var result = await _service.CreateOrderFromCartAsync(userId, addressDto, null, "Sedex");
 
@@ -77,87 +92,77 @@ public class OrderServiceTests
         Assert.Equal(220m, result.TotalAmount);
         Assert.Equal("Pendente", result.Status);
 
-        var orderInDb = await _context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == result.Id);
-        Assert.NotNull(orderInDb);
-        Assert.Single(orderInDb.Items);
-        Assert.Empty(_context.CartItems);
+        _uowMock.Verify(u => u.Orders.AddAsync(It.IsAny<Order>()), Times.Once);
+        _uowMock.Verify(u => u.Carts.ClearCartAsync(cart.Id), Times.Once);
+        _uowMock.Verify(u => u.CommitAsync(), Times.AtLeastOnce);
     }
 
     [Fact]
     public async Task ConfirmPaymentViaWebhookAsync_ShouldUpdateStatusAndStock()
     {
-        var product = new Product("P1", "D1", 100m, "img", 1, 10, 10, 10, 50);
-        _context.Products.Add(product);
-        await _context.SaveChangesAsync();
+        var orderId = Guid.NewGuid();
+        var product = new Product("P1", "D1", 100m, "img", 1, 10, 10, 10, 50) { Id = Guid.NewGuid() };
 
         var order = new Order
         {
+            Id = orderId,
             UserId = "u1",
             TotalAmount = 100m,
             Status = OrderStatus.Pendente,
-            Items = [new() { ProductId = product.Id, Quantity = 10, UnitPrice = 10m }] // Correção IDE0028
+            Items = [new() { ProductId = product.Id, Quantity = 10, UnitPrice = 10m }]
         };
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
 
-        await _service.ConfirmPaymentViaWebhookAsync(order.Id, "txn_123", 10000);
+        _orderRepoMock.Setup(r => r.GetByIdAsync(orderId)).ReturnsAsync(order);
+        _productRepoMock.Setup(r => r.GetByIdsAsync(It.IsAny<List<Guid>>())).ReturnsAsync([product]);
 
-        var updatedOrder = await _context.Orders.FindAsync(order.Id);
-        var updatedProduct = await _context.Products.FindAsync(product.Id);
+        await _service.ConfirmPaymentViaWebhookAsync(orderId, "txn_123", 10000);
 
-        // Correção CS8602: Verificar nulidade antes de acessar propriedades
-        Assert.NotNull(updatedOrder);
-        Assert.NotNull(updatedProduct);
+        Assert.Equal(OrderStatus.Pago, order.Status);
+        Assert.Equal("txn_123", order.StripePaymentIntentId);
+        Assert.Equal(40, product.StockQuantity);
 
-        Assert.Equal(OrderStatus.Pago, updatedOrder.Status);
-        Assert.Equal("txn_123", updatedOrder.StripePaymentIntentId);
-        Assert.Equal(40, updatedProduct.StockQuantity);
+        _uowMock.Verify(u => u.Products.UpdateAsync(product), Times.Once);
+        _uowMock.Verify(u => u.CommitAsync(), Times.AtLeastOnce);
     }
 
     [Fact]
     public async Task RequestRefundAsync_ShouldSetRefundRequested()
     {
         var userId = "u1";
-        var order = new Order { UserId = userId, Status = OrderStatus.Entregue, TotalAmount = 100m };
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
+        var orderId = Guid.NewGuid();
+        var order = new Order { Id = orderId, UserId = userId, Status = OrderStatus.Entregue, TotalAmount = 100m };
+
+        _orderRepoMock.Setup(r => r.GetByIdAsync(orderId)).ReturnsAsync(order);
 
         var dto = new RequestRefundDto("Total", null);
 
-        await _service.RequestRefundAsync(order.Id, userId, dto);
+        await _service.RequestRefundAsync(orderId, userId, dto);
 
-        var updated = await _context.Orders.FindAsync(order.Id);
+        Assert.Equal("Total", order.RefundType);
+        Assert.Equal(100m, order.RefundRequestedAmount);
 
-        // Correção CS8602: Verificar nulidade antes de acessar propriedades
-        Assert.NotNull(updated);
-
-        Assert.Equal("Total", updated.RefundType);
-        Assert.Equal(100m, updated.RefundRequestedAmount);
+        _uowMock.Verify(u => u.Orders.UpdateAsync(order), Times.Once);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 
     [Fact]
     public async Task ConfirmPaymentViaWebhookAsync_ShouldDetectFraud_WhenAmountMismatch()
     {
-        // Arrange
         var order = new Order
         {
             Id = Guid.NewGuid(),
             UserId = "user1",
-            TotalAmount = 200.00m, // Esperado: 20000 centavos
+            TotalAmount = 200.00m,
             Status = OrderStatus.Pendente
         };
 
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
+        _orderRepoMock.Setup(r => r.GetByIdAsync(order.Id)).ReturnsAsync(order);
 
-        // Act & Assert
-        // Tentativa de pagar apenas 1 centavo num pedido de 200 reais
         var ex = await Assert.ThrowsAsync<Exception>(() =>
-            _service.ConfirmPaymentViaWebhookAsync(order.Id, "txn_fraud", 1)); // 1 centavo
+            _service.ConfirmPaymentViaWebhookAsync(order.Id, "txn_fraud", 1));
 
         Assert.Contains("Divergência de valores", ex.Message);
 
-        // Verifica se o alerta de segurança foi enviado (email para admin)
         _emailServiceMock.Verify(e => e.SendEmailAsync(
             It.IsAny<string>(),
             It.Is<string>(s => s.Contains("ALERTA DE SEGURANÇA")),
@@ -167,34 +172,21 @@ public class OrderServiceTests
     [Fact]
     public async Task CreateOrderFromCartAsync_ShouldThrow_WhenCouponAlreadyUsed()
     {
-        // Arrange
         var userId = "user_coupon_abuser";
         var product = new Product("P1", "D", 100m, "img", 1, 1, 1, 1, 10);
-        _context.Products.Add(product);
-
-        var cart = new Cart { UserId = userId };
+        var cart = new Cart { UserId = userId, Id = Guid.NewGuid() };
         cart.Items.Add(new CartItem { Product = product, ProductId = product.Id, Quantity = 1 });
-        _context.Carts.Add(cart);
+
+        _cartRepoMock.Setup(c => c.GetByUserIdAsync(userId)).ReturnsAsync(cart);
 
         var coupon = new Coupon("UNIQUETIME", 50, 10);
-        _context.Coupons.Add(coupon);
-
-        // Simula que o usuário JÁ usou este cupom antes
-        _context.CouponUsages.Add(new CouponUsage
-        {
-            UserId = userId,
-            CouponCode = "UNIQUETIME",
-            OrderId = Guid.NewGuid()
-        });
-
-        await _context.SaveChangesAsync();
+        _couponRepoMock.Setup(c => c.GetByCodeAsync("UNIQUETIME")).ReturnsAsync(coupon);
+        _couponRepoMock.Setup(c => c.IsUsageLimitReachedAsync(userId, "UNIQUETIME")).ReturnsAsync(true);
 
         var address = new CreateAddressDto("Casa", "Eu", "12345678", "Rua", "1", "", "Bairro", "Cidade", "UF", "", "1199999999", false);
-
         _shippingServiceMock.Setup(s => s.CalculateAsync(It.IsAny<string>(), It.IsAny<List<ShippingItemDto>>()))
             .ReturnsAsync([new() { Name = "Correios", Price = 10 }]);
 
-        // Act & Assert
         var ex = await Assert.ThrowsAsync<Exception>(() =>
             _service.CreateOrderFromCartAsync(userId, address, "UNIQUETIME", "Correios"));
 
@@ -204,7 +196,6 @@ public class OrderServiceTests
     [Fact]
     public async Task ConfirmPaymentViaWebhookAsync_DeveDetectarFraude_QuandoValorPagoForMenorQuePedido()
     {
-        // Arrange
         var order = new Order
         {
             Id = Guid.NewGuid(),
@@ -213,10 +204,8 @@ public class OrderServiceTests
             Status = OrderStatus.Pendente
         };
 
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
+        _orderRepoMock.Setup(r => r.GetByIdAsync(order.Id)).ReturnsAsync(order);
 
-        // Act & Assert
         var ex = await Assert.ThrowsAsync<Exception>(() =>
             _service.ConfirmPaymentViaWebhookAsync(order.Id, "txn_fraude_123", 1));
 
@@ -231,34 +220,21 @@ public class OrderServiceTests
     [Fact]
     public async Task CreateOrderFromCartAsync_DeveImpedirUso_DeCupomJaUtilizadoPeloUsuario()
     {
-        // Arrange
         var userId = "user_cupom_duplicado";
         var product = new Product("P1", "D", 100m, "img", 1, 1, 1, 1, 10);
-        _context.Products.Add(product);
-
-        var cart = new Cart { UserId = userId };
+        var cart = new Cart { UserId = userId, Id = Guid.NewGuid() };
         cart.Items.Add(new CartItem { Product = product, ProductId = product.Id, Quantity = 1 });
-        _context.Carts.Add(cart);
+
+        _cartRepoMock.Setup(c => c.GetByUserIdAsync(userId)).ReturnsAsync(cart);
 
         var coupon = new Coupon("PROMOUNIC", 50, 10);
-        _context.Coupons.Add(coupon);
-
-        _context.CouponUsages.Add(new CouponUsage
-        {
-            UserId = userId,
-            CouponCode = "PROMOUNIC",
-            OrderId = Guid.NewGuid()
-        });
-
-        await _context.SaveChangesAsync();
+        _couponRepoMock.Setup(c => c.GetByCodeAsync("PROMOUNIC")).ReturnsAsync(coupon);
+        _couponRepoMock.Setup(c => c.IsUsageLimitReachedAsync(userId, "PROMOUNIC")).ReturnsAsync(true);
 
         var address = new CreateAddressDto("Casa", "Eu", "12345678", "Rua", "1", "", "Bairro", "Cidade", "UF", "", "1199999999", false);
-
-        // CORREÇÃO IDE0028: Simplificação da lista de opções de frete
         _shippingServiceMock.Setup(s => s.CalculateAsync(It.IsAny<string>(), It.IsAny<List<ShippingItemDto>>()))
             .ReturnsAsync([new() { Name = "Sedex", Price = 10 }]);
 
-        // Act & Assert
         var ex = await Assert.ThrowsAsync<Exception>(() =>
             _service.CreateOrderFromCartAsync(userId, address, "PROMOUNIC", "Sedex"));
 

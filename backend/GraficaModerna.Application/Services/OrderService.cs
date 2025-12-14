@@ -1,5 +1,4 @@
-﻿using System.Data;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using GraficaModerna.Application.Constants;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
@@ -7,40 +6,38 @@ using GraficaModerna.Domain.Constants;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Enums;
 using GraficaModerna.Domain.Extensions;
+using GraficaModerna.Domain.Interfaces;
 using GraficaModerna.Domain.Models;
-using GraficaModerna.Infrastructure.Context;
-using GraficaModerna.Infrastructure.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace GraficaModerna.Infrastructure.Services;
+namespace GraficaModerna.Application.Services;
 
 public class OrderService(
-    AppDbContext context,
+    IUnitOfWork unitOfWork,
     IEmailService emailService,
     UserManager<ApplicationUser> userManager,
     IHttpContextAccessor httpContextAccessor,
     IEnumerable<IShippingService> shippingServices,
     IPaymentService paymentService,
+    IConfiguration configuration,
     ILogger<OrderService> logger) : IOrderService
 {
-    private readonly AppDbContext _context = context;
+    private readonly IUnitOfWork _uow = unitOfWork;
     private readonly IEmailService _emailService = emailService;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
     private readonly IPaymentService _paymentService = paymentService;
     private readonly IEnumerable<IShippingService> _shippingServices = shippingServices;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
+    private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<OrderService> _logger = logger;
 
     public async Task<OrderDto> CreateOrderFromCartAsync(string userId, CreateAddressDto addressDto, string? couponCode,
         string shippingMethod)
     {
-        var cart = await _context.Carts
-            .Include(c => c.Items)
-            .ThenInclude(i => i.Product)
-            .FirstOrDefaultAsync(c => c.UserId == userId);
+        var cart = await _uow.Carts.GetByUserIdAsync(userId);
 
         if (cart == null || cart.Items.Count == 0)
             throw new Exception("Carrinho vazio.");
@@ -68,7 +65,7 @@ public class OrderService(
                              throw new Exception("Método de envio inválido ou indisponível.");
         var verifiedShippingCost = selectedOption.Price;
 
-        using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        using var transaction = await _uow.BeginTransactionAsync();
         try
         {
             decimal subTotal = 0;
@@ -95,13 +92,11 @@ public class OrderService(
             decimal discount = 0;
             if (!string.IsNullOrWhiteSpace(couponCode))
             {
-                var coupon = await _context.Coupons.FirstOrDefaultAsync(c =>
-                    c.Code.Equals(couponCode, StringComparison.OrdinalIgnoreCase));
+                var coupon = await _uow.Coupons.GetByCodeAsync(couponCode);
 
                 if (coupon != null && coupon.IsValid())
                 {
-                    var alreadyUsed =
-                        await _context.CouponUsages.AnyAsync(u => u.UserId == userId && u.CouponCode == coupon.Code);
+                    var alreadyUsed = await _uow.Coupons.IsUsageLimitReachedAsync(userId, coupon.Code);
                     if (alreadyUsed) throw new Exception("Cupom já utilizado.");
 
                     discount = subTotal * (coupon.DiscountPercentage / 100m);
@@ -148,20 +143,22 @@ public class OrderService(
                 UserAgent = GetUserAgent()
             });
 
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
+            await _uow.Orders.AddAsync(order);
+            await _uow.CommitAsync();
 
             if (discount > 0 && couponCode != null)
-                _context.CouponUsages.Add(new CouponUsage
+            {
+                await _uow.Coupons.RecordUsageAsync(new CouponUsage
                 {
                     UserId = userId,
                     CouponCode = couponCode.ToUpper(),
                     OrderId = order.Id,
                     UsedAt = DateTime.UtcNow
                 });
+            }
 
-            _context.CartItems.RemoveRange(cart.Items);
-            await _context.SaveChangesAsync();
+            await _uow.Carts.ClearCartAsync(cart.Id);
+            await _uow.CommitAsync();
 
             await transaction.CommitAsync();
 
@@ -178,25 +175,14 @@ public class OrderService(
 
     public async Task<PagedResultDto<OrderDto>> GetUserOrdersAsync(string userId, int page, int pageSize)
     {
-        var query = _context.Orders
-            .Where(o => o.UserId == userId)
-            .Include(o => o.Items)
-            .Include(o => o.User)
-            .OrderByDescending(o => o.OrderDate);
+        var result = await _uow.Orders.GetByUserIdAsync(userId, page, pageSize);
 
-        var totalItems = await query.CountAsync();
-
-        var orders = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var dtos = orders.Select(o => MapToDto(o));
+        var dtos = result.Items.Select(o => MapToDto(o));
 
         return new PagedResultDto<OrderDto>
         {
             Items = dtos,
-            TotalItems = totalItems,
+            TotalItems = result.TotalItems,
             Page = page,
             PageSize = pageSize
         };
@@ -204,25 +190,14 @@ public class OrderService(
 
     public async Task<PagedResultDto<AdminOrderDto>> GetAllOrdersAsync(int page, int pageSize)
     {
-        var query = _context.Orders
-            .Include(o => o.Items)
-            .Include(o => o.User)
-            .Include(o => o.History)
-            .OrderByDescending(o => o.OrderDate);
+        var result = await _uow.Orders.GetAllAsync(page, pageSize);
 
-        var totalItems = await query.CountAsync();
-
-        var orders = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var dtos = orders.Select(MapToAdminDto);
+        var dtos = result.Items.Select(MapToAdminDto);
 
         return new PagedResultDto<AdminOrderDto>
         {
             Items = dtos,
-            TotalItems = totalItems,
+            TotalItems = result.TotalItems,
             Page = page,
             PageSize = pageSize
         };
@@ -230,24 +205,18 @@ public class OrderService(
 
     public async Task ConfirmPaymentViaWebhookAsync(Guid orderId, string transactionId, long amountPaidInCents)
     {
-        var isAlreadyProcessed = await _context.Orders
-            .AnyAsync(o => o.StripePaymentIntentId == transactionId && o.Status == OrderStatus.Pago);
-
-        if (isAlreadyProcessed)
+        var existingOrder = await _uow.Orders.GetByTransactionIdAsync(transactionId);
+        if (existingOrder != null && existingOrder.Status == OrderStatus.Pago)
         {
             _logger.LogWarning("[Webhook] Tentativa de reprocessamento detectada. Transaction: {TransactionId}", transactionId);
             return;
         }
 
-        using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        using var transaction = await _uow.BeginTransactionAsync();
 
         try
         {
-            var order = await _context.Orders
-                .Include(o => o.History)
-                .Include(o => o.User)
-                .Include(o => o.Items)
-                .FirstOrDefaultAsync(o => o.Id == orderId);
+            var order = await _uow.Orders.GetByIdAsync(orderId);
 
             if (order == null)
             {
@@ -269,7 +238,7 @@ public class OrderService(
             }
 
             var productIds = order.Items.Select(i => i.ProductId).ToList();
-            var products = await _context.Products.Where(p => productIds.Contains(p.Id)).ToListAsync();
+            var products = await _uow.Products.GetByIdsAsync(productIds);
 
             var outOfStockItems = new List<string>();
 
@@ -299,7 +268,7 @@ public class OrderService(
                         $"⚠️ Cancelamento Automático: Estoque insuficiente ({string.Join(", ", outOfStockItems)}). Valor estornado.",
                         "SYSTEM-STOCK-CHECK");
 
-                    await _context.SaveChangesAsync();
+                    await _uow.CommitAsync();
                     await transaction.CommitAsync();
 
                     if (order.User != null && !string.IsNullOrEmpty(order.User.Email))
@@ -331,7 +300,7 @@ public class OrderService(
                 if (product != null)
                 {
                     product.DebitStock(item.Quantity);
-                    _context.Entry(product).State = EntityState.Modified;
+                    await _uow.Products.UpdateAsync(product);
                 }
             }
 
@@ -342,7 +311,7 @@ public class OrderService(
                 $"✅ Pagamento confirmado e Estoque debitado. Transaction: {transactionId}",
                 "STRIPE-WEBHOOK");
 
-            await _context.SaveChangesAsync();
+            await _uow.CommitAsync();
             await transaction.CommitAsync();
 
             _logger.LogInformation("[Webhook] Pagamento confirmado. OrderId: {OrderId}", orderId);
@@ -364,13 +333,10 @@ public class OrderService(
         if (user == null || !user.IsInRole(Roles.Admin))
             throw new UnauthorizedAccessException("Apenas administradores podem alterar pedidos.");
 
-        using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        using var transaction = await _uow.BeginTransactionAsync();
         try
         {
-            var order = await _context.Orders
-                .Include(o => o.Items)
-                .Include(o => o.History)
-                .FirstOrDefaultAsync(o => o.Id == orderId) ?? throw new Exception("Pedido não encontrado");
+            var order = await _uow.Orders.GetByIdAsync(orderId) ?? throw new Exception("Pedido não encontrado");
 
             var oldStatus = order.Status;
             var newStatusEnum = ParseStatus(dto.Status);
@@ -456,7 +422,8 @@ public class OrderService(
 
             AddAuditLog(order, newStatusEnum, auditMessage, $"Admin:{adminUserId}");
 
-            await _context.SaveChangesAsync();
+            await _uow.Orders.UpdateAsync(order);
+            await _uow.CommitAsync();
             await transaction.CommitAsync();
 
             if (oldStatus != newStatusEnum)
@@ -523,7 +490,8 @@ public class OrderService(
                 "Cliente solicitou reembolso TOTAL.", userId);
         }
 
-        await _context.SaveChangesAsync();
+        await _uow.Orders.UpdateAsync(order);
+        await _uow.CommitAsync();
     }
 
     public async Task<Order> GetOrderForPaymentAsync(Guid orderId, string userId)
@@ -547,13 +515,12 @@ public class OrderService(
 
     public async Task<PaymentStatusDto> GetPaymentStatusAsync(Guid orderId, string userId)
     {
-        var order = await _context.Orders
-            .Where(o => o.Id == orderId && o.UserId == userId)
-            .Select(o => new PaymentStatusDto(o.Id, o.Status, o.TotalAmount))
-            .FirstOrDefaultAsync()
-            ?? throw new KeyNotFoundException("Pedido não encontrado.");
+        var order = await _uow.Orders.GetByIdAsync(orderId);
 
-        return order;
+        if (order == null || order.UserId != userId)
+            throw new KeyNotFoundException("Pedido não encontrado.");
+
+        return new PaymentStatusDto(order.Id, order.Status, order.TotalAmount);
     }
 
     private string GetIpAddress()
@@ -584,10 +551,7 @@ public class OrderService(
 
     private async Task<Order> GetUserOrderOrFail(Guid orderId, string userId)
     {
-        var order = await _context.Orders
-            .Include(o => o.Items)
-            .Include(o => o.History)
-            .FirstOrDefaultAsync(o => o.Id == orderId)
+        var order = await _uow.Orders.GetByIdAsync(orderId)
             ?? throw new KeyNotFoundException("Pedido não encontrado.");
 
         if (order.UserId != userId)
@@ -604,7 +568,7 @@ public class OrderService(
     {
         try
         {
-            var securityEmail = EnvHelper.Required("ADMIN_EMAIL");
+            var securityEmail = _configuration["ADMIN_EMAIL"] ?? throw new InvalidOperationException("Configuração ADMIN_EMAIL não encontrada.");
 
             var subject = $"🚨 ALERTA DE SEGURANÇA CRÍTICO - Tentativa de Fraude";
             var body = $@"

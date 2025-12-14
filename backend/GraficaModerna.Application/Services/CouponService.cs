@@ -28,9 +28,11 @@ public class CouponService(IUnitOfWork uow) : ICouponService
     {
         var coupons = await _uow.Coupons.GetAllAsync();
 
-        return coupons
-            .Select(c => new CouponResponseDto(c.Id, c.Code, c.DiscountPercentage, c.ExpiryDate, c.IsActive))
-            .ToList();
+        return
+        [
+            ..coupons.Select(c => new CouponResponseDto(
+            c.Id, c.Code, c.DiscountPercentage, c.ExpiryDate, c.IsActive))
+        ];
     }
 
     public async Task DeleteAsync(Guid id)

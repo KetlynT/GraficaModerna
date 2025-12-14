@@ -1,7 +1,7 @@
 ﻿using GraficaModerna.Application.DTOs;
+using GraficaModerna.Application.Services;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
-using GraficaModerna.Infrastructure.Services;
 using Moq;
 using Xunit;
 

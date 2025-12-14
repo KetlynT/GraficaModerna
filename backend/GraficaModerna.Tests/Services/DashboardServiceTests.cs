@@ -1,65 +1,54 @@
-﻿using GraficaModerna.Domain.Entities;
-using GraficaModerna.Domain.Enums;
-using GraficaModerna.Infrastructure.Context;
-using GraficaModerna.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
+﻿using GraficaModerna.Application.Services;
+using GraficaModerna.Domain.Interfaces;
+using GraficaModerna.Domain.Models;
+using Moq;
 using Xunit;
 
 namespace GraficaModerna.Tests.Services;
 
 public class DashboardServiceTests
 {
-    private readonly AppDbContext _context;
+    private readonly Mock<IDashboardRepository> _repoMock;
     private readonly DashboardService _service;
 
     public DashboardServiceTests()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new AppDbContext(options);
-        _service = new DashboardService(_context);
+        _repoMock = new Mock<IDashboardRepository>();
+        _service = new DashboardService(_repoMock.Object);
     }
 
     [Fact]
-    public async Task GetStatsAsync_ShouldCalculateRevenueCorrectly()
+    public async Task GetStatsAsync_ShouldReturnDataFromRepository()
     {
-        // Arrange
-        _context.Orders.AddRange(
-            new Order { TotalAmount = 100m, Status = OrderStatus.Pago },
-            new Order { TotalAmount = 200m, Status = OrderStatus.Entregue },
-            new Order { TotalAmount = 50m, Status = OrderStatus.Cancelado }, // Não deve somar
-            new Order { TotalAmount = 300m, Status = OrderStatus.Reembolsado } // Deve contar como reembolsado
-        );
-        await _context.SaveChangesAsync();
+        var lowStockId = Guid.NewGuid();
 
-        // Act
+        var lowStockList = new List<LowStockItem>
+        {
+            new(lowStockId, "P2", 5)
+        };
+
+        var recentOrdersList = new List<RecentOrderSummary>();
+
+        var expectedStats = new DashboardAnalytics(
+            10,
+            300m,
+            50m,
+            2,
+            lowStockList,
+            recentOrdersList
+        );
+
+        _repoMock.Setup(r => r.GetAnalyticsAsync())
+            .ReturnsAsync(expectedStats);
+
         var stats = await _service.GetStatsAsync();
 
-        // Assert
-        Assert.Equal(300m, stats.TotalRevenue); // 100 + 200 = 300
-        Assert.Equal(300m, stats.TotalRefunded); // 300
-        Assert.Equal(4, stats.TotalOrders); // Total de encomendas
-    }
+        Assert.Equal(300m, stats.TotalRevenue);
+        Assert.Equal(50m, stats.TotalRefunded);
+        Assert.Equal(10, stats.TotalOrders);
+        Assert.Single(stats.LowStockProducts);
+        Assert.Equal("P2", stats.LowStockProducts[0].Name);
 
-    [Fact]
-    public async Task GetStatsAsync_ShouldIdentifyLowStockProducts()
-    {
-        // Arrange
-        _context.Products.AddRange(
-            new Product("P1", "D", 10, "url", 1, 1, 1, 1, 100), // OK
-            new Product("P2", "D", 10, "url", 1, 1, 1, 1, 5),   // Baixo (<10)
-            new Product("P3", "D", 10, "url", 1, 1, 1, 1, 0)    // Baixo (<10)
-        );
-        await _context.SaveChangesAsync();
-
-        // Act
-        var stats = await _service.GetStatsAsync();
-
-        // Assert
-        Assert.Equal(2, stats.LowStockProducts.Count);
-        Assert.Contains(stats.LowStockProducts, p => p.Name == "P2");
-        Assert.Contains(stats.LowStockProducts, p => p.Name == "P3");
+        _repoMock.Verify(r => r.GetAnalyticsAsync(), Times.Once);
     }
 }

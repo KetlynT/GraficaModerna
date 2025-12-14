@@ -20,55 +20,66 @@ public class OrderRepository(AppDbContext context) : IOrderRepository
         return await _context.Orders
             .Include(o => o.Items)
             .Include(o => o.User)
+            .Include(o => o.History)
             .FirstOrDefaultAsync(o => o.Id == id);
     }
 
+    public async Task<Order?> GetByTransactionIdAsync(string transactionId)
+    {
+        return await _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.User)
+            .Include(o => o.History)
+            .FirstOrDefaultAsync(o => o.StripePaymentIntentId == transactionId);
+    }
+
     public async Task<PagedResultDto<Order>> GetByUserIdAsync(string userId, int page, int pageSize)
-{
-    var query = _context.Orders
-        .Include(o => o.Items)
-        .Include(o => o.User)
-        .Where(o => o.UserId == userId)
-        .OrderByDescending(o => o.OrderDate);
-
-    var totalItems = await query.CountAsync();
-
-    var items = await query
-        .Skip((page - 1) * pageSize)
-        .Take(pageSize)
-        .ToListAsync();
-
-    return new PagedResultDto<Order>
     {
-        Items = items,
-        TotalItems = totalItems,
-        Page = page,
-        PageSize = pageSize
-    };
-}
+        var query = _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.User)
+            .Where(o => o.UserId == userId)
+            .OrderByDescending(o => o.OrderDate);
 
-public async Task<PagedResultDto<Order>> GetAllAsync(int page, int pageSize)
-{
-    var query = _context.Orders
-        .Include(o => o.Items)
-        .Include(o => o.User)
-        .OrderByDescending(o => o.OrderDate);
+        var totalItems = await query.CountAsync();
 
-    var totalItems = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
 
-    var items = await query
-        .Skip((page - 1) * pageSize)
-        .Take(pageSize)
-        .ToListAsync();
+        return new PagedResultDto<Order>
+        {
+            Items = items,
+            TotalItems = totalItems,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
 
-    return new PagedResultDto<Order>
+    public async Task<PagedResultDto<Order>> GetAllAsync(int page, int pageSize)
     {
-        Items = items,
-        TotalItems = totalItems,
-        Page = page,
-        PageSize = pageSize
-    };
-}
+        var query = _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.User)
+            .Include(o => o.History)
+            .OrderByDescending(o => o.OrderDate);
+
+        var totalItems = await query.CountAsync();
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new PagedResultDto<Order>
+        {
+            Items = items,
+            TotalItems = totalItems,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
 
     public Task UpdateAsync(Order order)
     {

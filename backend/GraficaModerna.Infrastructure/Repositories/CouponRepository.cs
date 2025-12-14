@@ -30,4 +30,16 @@ public class CouponRepository(AppDbContext context) : ICouponRepository
         var coupon = await _context.Coupons.FindAsync(id);
         if (coupon != null) _context.Coupons.Remove(coupon);
     }
+
+    public async Task RecordUsageAsync(CouponUsage usage)
+    {
+        await _context.CouponUsages.AddAsync(usage);
+    }
+
+    public async Task<bool> IsUsageLimitReachedAsync(string userId, string couponCode)
+    {
+        return await _context.CouponUsages.AnyAsync(u =>
+            u.UserId == userId &&
+            u.CouponCode == couponCode);
+    }
 }
