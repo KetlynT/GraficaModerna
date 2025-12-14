@@ -137,7 +137,7 @@ const OrdersTab = () => {
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                 <h2 className="text-xl font-bold text-gray-800">Gerenciamento de Pedidos</h2>
                 <div className="flex gap-2 w-full md:w-auto">
-                    <div className="relative flex-grow">
+                    <div className="relative grow">
                         <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
                         <input 
                             className="pl-10 pr-4 py-2 border rounded-lg w-full md:w-64 focus:ring-2 focus:ring-blue-500 outline-none"

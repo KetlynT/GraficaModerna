@@ -48,7 +48,7 @@ export const CookieConsent = () => {
   if (!isVisible || isBlockedRoute) return null
 
   return (
-    <div className="fixed bottom-0 left-0 w-full bg-gray-900/95 backdrop-blur text-white p-6 z-[100] border-t border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-500">
+    <div className="fixed bottom-0 left-0 w-full bg-gray-900/95 backdrop-blur text-white p-6 z-100 border-t border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-500">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex-1">
           <h4 className="text-lg font-bold flex items-center gap-2 mb-2 text-blue-400">

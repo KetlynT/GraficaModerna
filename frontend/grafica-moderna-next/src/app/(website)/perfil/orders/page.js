@@ -201,12 +201,12 @@ export default function MyOrders() {
                             </table>
 
                             <div className="flex flex-col items-end gap-1 text-sm text-gray-700 mb-6">
-                                <div className="flex justify-between w-full max-w-[240px]"><span>Subtotal:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.subTotal || 0)}</span></div>
+                                <div className="flex justify-between w-full max-w-60"><span>Subtotal:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.subTotal || 0)}</span></div>
                                 {order.discount > 0 && (
-                                    <div className="flex justify-between w-full max-w-[240px] text-green-600"><span>Desconto:</span><span>- {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.discount)}</span></div>
+                                    <div className="flex justify-between w-full max-w-60 text-green-600"><span>Desconto:</span><span>- {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.discount)}</span></div>
                                 )}
-                                <div className="flex justify-between w-full max-w-[240px] text-primary"><span>Frete:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.shippingCost || 0)}</span></div>
-                                <div className="flex justify-between w-full max-w-[240px] font-bold text-lg mt-2 border-t pt-2 border-gray-200"><span>Total:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalAmount)}</span></div>
+                                <div className="flex justify-between w-full max-w-60 text-primary"><span>Frete:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.shippingCost || 0)}</span></div>
+                                <div className="flex justify-between w-full max-w-60 font-bold text-lg mt-2 border-t pt-2 border-gray-200"><span>Total:</span><span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalAmount)}</span></div>
                             </div>
 
                             {showSection && (

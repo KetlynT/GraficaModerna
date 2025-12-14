@@ -23,7 +23,7 @@ public class AdminController(IOrderService orderService, IProductService product
         return Ok(orders);
     }
 
-    [HttpPatch("{id}/status")]
+    [HttpPatch("orders/{id}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusDto dto)
     {
         try

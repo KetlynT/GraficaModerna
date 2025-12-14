@@ -50,7 +50,7 @@ export const CouponInput = ({ onApply, initialCoupon = null }) => {
 
   return (
     <div className="flex gap-2">
-      <div className="relative flex-grow">
+      <div className="relative grow">
         <Tag size={18} className="absolute left-3 top-3 text-gray-400" />
         <input 
           className="w-full border border-gray-300 rounded-lg pl-10 p-2.5 outline-none focus:ring-2 focus:ring-primary uppercase transition-all"
