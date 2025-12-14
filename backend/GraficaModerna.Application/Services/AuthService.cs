@@ -249,7 +249,7 @@ public class AuthService(
 
     private async Task<AuthResponseDto> CreateTokenPairAsync(ApplicationUser user)
     {
-        var accessToken = GenerateAccessToken(user);
+        var accessToken = await GenerateAccessTokenAsync(user);
         var refreshToken = GenerateRefreshToken();
 
         user.RefreshToken = _passwordHasher.HashPassword(user, refreshToken);
@@ -263,31 +263,42 @@ public class AuthService(
             role);
     }
 
-    private JwtSecurityToken GenerateAccessToken(ApplicationUser user)
+    private async Task<JwtSecurityToken> GenerateAccessTokenAsync(ApplicationUser user)
     {
-        var userRoles = _userManager.GetRolesAsync(user).Result;
-        var primaryRole = userRoles.Contains(Roles.Admin) ? Roles.Admin : userRoles.FirstOrDefault() ?? Roles.User;
+        var userRoles = await _userManager.GetRolesAsync(user);
+
+        var primaryRole = userRoles.Contains(Roles.Admin)
+            ? Roles.Admin
+            : userRoles.FirstOrDefault() ?? Roles.User;
 
         var authClaims = new List<Claim>
-        {
-            new(JwtRegisteredClaimNames.Sub, user.Id),
-            new(JwtRegisteredClaimNames.Email, user.Email!),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new("role", primaryRole),
-            new(JwtRegisteredClaimNames.UniqueName, user.UserName!)
-        };
+    {
+        new(JwtRegisteredClaimNames.Sub, user.Id),
+        new(JwtRegisteredClaimNames.Email, user.Email!),
+        new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new(ClaimTypes.Role, primaryRole),
+        new(JwtRegisteredClaimNames.UniqueName, user.UserName!)
+    };
 
-        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")!;
-        var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
+        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+            ?? throw new InvalidOperationException("JWT_SECRET_KEY não configurada.");
+
+        var authSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(keyString)
+        );
 
         return new JwtSecurityToken(
-            _configuration["Jwt:Issuer"],
-            _configuration["Jwt:Audience"],
-            expires: DateTime.UtcNow.AddMinutes(15),
+            issuer: _configuration["Jwt:Issuer"],
+            audience: _configuration["Jwt:Audience"],
             claims: authClaims,
-            signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: new SigningCredentials(
+                authSigningKey,
+                SecurityAlgorithms.HmacSha256
+            )
         );
     }
+
 
     private static string GenerateRefreshToken()
     {
