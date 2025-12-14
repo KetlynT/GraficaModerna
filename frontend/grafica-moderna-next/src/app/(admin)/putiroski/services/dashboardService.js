@@ -36,5 +36,20 @@ export const DashboardService = {
   
   saveSettings: async (settingsDict) => {
     await api.post('/content/settings', settingsDict);
-  }
+  },
+
+  getEmailTemplates: async () => {
+    const response = await api.get('/admin/email-templates');
+    return response.data;
+  },
+
+  getEmailTemplateById: async (id) => {
+        const response = await api.get(`/admin/email-templates/${id}`);
+        return response.data;
+    },
+
+    updateEmailTemplate: async (id, data) => {
+        const response = await api.put(`/admin/email-templates/${id}`, data);
+        return response.data;
+    }
 };

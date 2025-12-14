@@ -21,7 +21,8 @@ public class UnitOfWork(
     public IOrderRepository Orders { get; } = orders;
     public IAddressRepository Addresses { get; } = addresses;
     public ICouponRepository Coupons { get; } = coupons;
-
+    public IEmailTemplateRepository EmailTemplates => _emailTemplates ??= new EmailTemplateRepository(_context);
+    private IEmailTemplateRepository? _emailTemplates;
     public async Task CommitAsync()
     {
         await _context.SaveChangesAsync();

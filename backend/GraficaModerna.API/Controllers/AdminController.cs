@@ -1,7 +1,9 @@
 ﻿using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
+using GraficaModerna.Application.Services;
 using GraficaModerna.Domain.Constants;
 using GraficaModerna.Domain.Entities;
+using GraficaModerna.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -12,10 +14,31 @@ namespace GraficaModerna.API.Controllers;
 [ApiController]
 [Authorize(Roles = Roles.Admin)]
 [EnableRateLimiting("AdminPolicy")]
-public class AdminController(IOrderService orderService, IProductService productService) : ControllerBase
+public class AdminController(
+    IOrderService orderService,
+    IProductService productService,
+    IUnitOfWork uow) : ControllerBase
 {
     private readonly IOrderService _orderService = orderService;
     private readonly IProductService _productService = productService;
+    private readonly IUnitOfWork _uow = uow;
+
+    [EnableRateLimiting("AuthPolicy")]
+    [HttpPost("admin/login")]
+    public async Task<ActionResult> AdminLogin(LoginDto dto)
+    {
+        var adminLoginDto = dto with { IsAdminLogin = true };
+        var result = await _authService.LoginAsync(adminLoginDto);
+
+        SetTokenCookies(result.AccessToken, result.RefreshToken);
+
+        return Ok(new
+        {
+            result.Email,
+            result.Role,
+            message = "Login administrativo realizado com sucesso."
+        });
+    }
 
     [HttpGet("orders")]
     public async Task<IActionResult> GetOrders([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
@@ -37,11 +60,11 @@ public class AdminController(IOrderService orderService, IProductService product
             return BadRequest(new { message = ex.Message });
         }
     }
+
     [HttpGet("email-templates")]
     public async Task<ActionResult<IEnumerable<EmailTemplateDto>>> GetEmailTemplates()
     {
-        // ERRO CORRIGIDO: Usando uow.EmailTemplates em vez de context
-        var templates = await uow.EmailTemplates.GetAllAsync();
+        var templates = await _uow.EmailTemplates.GetAllAsync();
 
         var dtos = templates.Select(t => new EmailTemplateDto
         {
@@ -59,7 +82,7 @@ public class AdminController(IOrderService orderService, IProductService product
     [HttpGet("email-templates/{id}")]
     public async Task<ActionResult<EmailTemplateDto>> GetEmailTemplateById(int id)
     {
-        var template = await uow.EmailTemplates.GetByIdAsync(id);
+        var template = await _uow.EmailTemplates.GetByIdAsync(id);
 
         if (template == null)
             return NotFound(new { message = "Template não encontrado." });
@@ -81,7 +104,7 @@ public class AdminController(IOrderService orderService, IProductService product
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var template = await uow.EmailTemplates.GetByIdAsync(id);
+        var template = await _uow.EmailTemplates.GetByIdAsync(id);
 
         if (template == null)
             return NotFound(new { message = "Template não encontrado." });
@@ -92,8 +115,8 @@ public class AdminController(IOrderService orderService, IProductService product
 
         try
         {
-            uow.EmailTemplates.Update(template);
-            await uow.CommitAsync(); // Salva as alterações via Unit of Work
+            _uow.EmailTemplates.Update(template);
+            await _uow.CommitAsync();
             return NoContent();
         }
         catch (Exception ex)

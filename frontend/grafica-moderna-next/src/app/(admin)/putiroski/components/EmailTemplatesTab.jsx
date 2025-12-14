@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Button } from '@/app/(website)/components/ui/Button';
-import { ContentService } from '@/app/(website)/services/contentService';
+import { DashboardService } from '@/app/(admin)/putiroski/services/dashboardService';
 
 const EmailTemplatesTab = () => {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({});
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         loadTemplates();
@@ -15,10 +16,12 @@ const EmailTemplatesTab = () => {
 
     const loadTemplates = async () => {
         try {
-            const data = await ContentService.getEmailTemplates(); 
+            setLoading(true);
+            const data = await DashboardService.getEmailTemplates(); 
             setTemplates(data);
         } catch (error) {
-            toast.error("Erro ao carregar templates");
+            console.error(error);
+            toast.error("Erro ao carregar templates. Verifique se você é Admin.");
         } finally {
             setLoading(false);
         }
@@ -26,7 +29,10 @@ const EmailTemplatesTab = () => {
 
     const handleEdit = (template) => {
         setEditingId(template.id);
-        setEditForm({ ...template });
+        setEditForm({ 
+            subject: template.subject, 
+            bodyContent: template.bodyContent 
+        });
     };
 
     const handleCancel = () => {
@@ -36,62 +42,83 @@ const EmailTemplatesTab = () => {
 
     const handleSave = async (e) => {
         e.preventDefault();
+        setSaving(true);
         try {
-            await ContentService.updateEmailTemplate(editingId, editForm);
-            toast.success("Template atualizado!");
+            await DashboardService.updateEmailTemplate(editingId, editForm);
+            toast.success("Template atualizado com sucesso!");
             setEditingId(null);
             loadTemplates();
         } catch (error) {
-            toast.error("Erro ao salvar template");
+            console.error(error);
+            toast.error("Erro ao salvar template.");
+        } finally {
+            setSaving(false);
         }
     };
 
+    if (loading) return <div className="p-4 text-center">Carregando templates...</div>;
+
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-bold mb-6">Templates de E-mail (Scriban)</h2>
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                ✉️ Templates de E-mail
+                <span className="text-xs font-normal bg-blue-100 text-blue-800 px-2 py-1 rounded">System</span>
+            </h2>
             
             <div className="space-y-6">
-                {loading ? <p>Carregando...</p> : templates.map((tpl) => (
-                    <div key={tpl.id} className="border rounded-lg p-4 bg-gray-50">
+                {templates.length === 0 && <p className="text-gray-500">Nenhum template encontrado.</p>}
+                
+                {templates.map((tpl) => (
+                    <div key={tpl.id} className={`border rounded-lg p-4 transition-colors ${editingId === tpl.id ? 'bg-white border-blue-500 ring-1 ring-blue-500' : 'bg-gray-50'}`}>
                         <div className="flex justify-between items-start mb-2">
                             <div>
-                                <h3 className="font-bold text-blue-700">{tpl.key}</h3>
+                                <h3 className="font-bold text-blue-700 font-mono">{tpl.key}</h3>
                                 <p className="text-xs text-gray-500">{tpl.description}</p>
                             </div>
                             {editingId !== tpl.id && (
-                                <Button onClick={() => handleEdit(tpl)} variant="outline" className="text-xs">
+                                <Button onClick={() => handleEdit(tpl)} variant="outline" size="sm" className="text-xs h-8">
                                     Editar
                                 </Button>
                             )}
                         </div>
 
                         {editingId === tpl.id ? (
-                            <form onSubmit={handleSave} className="space-y-3 mt-4 bg-white p-4 rounded border">
+                            <form onSubmit={handleSave} className="space-y-4 mt-4">
                                 <div>
-                                    <label className="block text-sm font-bold mb-1">Assunto</label>
+                                    <label className="block text-sm font-bold mb-1 text-gray-700">Assunto do E-mail</label>
                                     <input 
-                                        className="w-full border p-2 rounded"
+                                        className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none"
                                         value={editForm.subject}
                                         onChange={e => setEditForm({...editForm, subject: e.target.value})}
+                                        required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold mb-1">HTML do Corpo</label>
-                                    <p className="text-xs text-gray-400 mb-2">Variáveis disponíveis: {'{{ user_name }}'}, {'{{ order_number }}'}, etc.</p>
+                                    <label className="block text-sm font-bold mb-1 text-gray-700">Corpo (HTML + Scriban)</label>
+                                    <div className="bg-gray-800 text-gray-300 text-xs p-2 rounded-t flex justify-between">
+                                        <span>Editor de Código</span>
+                                        <span>Sintaxe: {'{{ variavel }}'}</span>
+                                    </div>
                                     <textarea 
-                                        className="w-full border p-2 rounded font-mono text-sm h-64"
+                                        className="w-full border border-gray-300 p-2 rounded-b font-mono text-sm h-80 focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none resize-y"
                                         value={editForm.bodyContent}
                                         onChange={e => setEditForm({...editForm, bodyContent: e.target.value})}
+                                        spellCheck="false"
+                                        required
                                     />
                                 </div>
-                                <div className="flex gap-2 justify-end">
-                                    <Button type="button" onClick={handleCancel} className="bg-gray-400 hover:bg-gray-500">Cancelar</Button>
-                                    <Button type="submit">Salvar Alterações</Button>
+                                <div className="flex gap-3 justify-end pt-2">
+                                    <Button type="button" onClick={handleCancel} variant="ghost" disabled={saving}>
+                                        Cancelar
+                                    </Button>
+                                    <Button type="submit" disabled={saving}>
+                                        {saving ? 'Salvando...' : 'Salvar Alterações'}
+                                    </Button>
                                 </div>
                             </form>
                         ) : (
-                            <div className="text-sm text-gray-600 mt-2 border-t pt-2">
-                                <p><strong>Assunto:</strong> {tpl.subject}</p>
+                            <div className="text-sm text-gray-600 mt-2 border-t border-gray-200 pt-2">
+                                <p><strong className="text-gray-800">Assunto Atual:</strong> {tpl.subject}</p>
                             </div>
                         )}
                     </div>
