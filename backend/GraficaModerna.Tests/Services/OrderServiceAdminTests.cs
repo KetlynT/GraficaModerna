@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.Data;
+using System.Security.Claims;
 using GraficaModerna.Application.DTOs;
 using GraficaModerna.Application.Interfaces;
 using GraficaModerna.Application.Services;
@@ -34,7 +35,8 @@ public class OrderServiceAdminTests
         _uowMock = new Mock<IUnitOfWork>();
         _orderRepoMock = new Mock<IOrderRepository>();
         _uowMock.Setup(u => u.Orders).Returns(_orderRepoMock.Object);
-        _uowMock.Setup(u => u.BeginTransactionAsync())
+
+        _uowMock.Setup(u => u.BeginTransactionAsync(It.IsAny<IsolationLevel>()))
             .ReturnsAsync(new Mock<IDbContextTransaction>().Object);
 
         _emailServiceMock = new Mock<IEmailService>();

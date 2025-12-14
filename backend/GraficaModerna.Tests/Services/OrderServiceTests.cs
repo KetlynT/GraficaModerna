@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
+using System.Data;
 using Xunit;
 
 namespace GraficaModerna.Tests.Services;
@@ -42,7 +43,8 @@ public class OrderServiceTests
         _uowMock.Setup(u => u.Carts).Returns(_cartRepoMock.Object);
         _uowMock.Setup(u => u.Products).Returns(_productRepoMock.Object);
         _uowMock.Setup(u => u.Coupons).Returns(_couponRepoMock.Object);
-        _uowMock.Setup(u => u.BeginTransactionAsync())
+
+        _uowMock.Setup(u => u.BeginTransactionAsync(It.IsAny<IsolationLevel>()))
             .ReturnsAsync(new Mock<IDbContextTransaction>().Object);
 
         _emailServiceMock = new Mock<IEmailService>();

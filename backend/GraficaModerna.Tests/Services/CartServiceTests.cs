@@ -1,81 +1,86 @@
 ﻿using GraficaModerna.Application.DTOs;
+using GraficaModerna.Application.Services;
 using GraficaModerna.Domain.Entities;
 using GraficaModerna.Domain.Interfaces;
-using GraficaModerna.Infrastructure.Context;
-using GraficaModerna.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Moq;
+using System.Data;
 using Xunit;
 
 namespace GraficaModerna.Tests.Services;
 
 public class CartServiceTests
 {
-    private readonly AppDbContext _context;
     private readonly Mock<IUnitOfWork> _uowMock;
     private readonly Mock<ICartRepository> _cartRepoMock;
+    private readonly Mock<IProductRepository> _productRepoMock;
     private readonly Mock<ILogger<CartService>> _loggerMock;
     private readonly CartService _service;
 
     public CartServiceTests()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new AppDbContext(options);
         _uowMock = new Mock<IUnitOfWork>();
         _cartRepoMock = new Mock<ICartRepository>();
+        _productRepoMock = new Mock<IProductRepository>();
         _loggerMock = new Mock<ILogger<CartService>>();
 
+        // Configura o UoW para retornar os mocks dos repositórios
         _uowMock.Setup(u => u.Carts).Returns(_cartRepoMock.Object);
+        _uowMock.Setup(u => u.Products).Returns(_productRepoMock.Object);
 
-        // Sincronização do Mock com o InMemory DB para lógica complexa
-        _cartRepoMock.Setup(r => r.GetByUserIdAsync(It.IsAny<string>()))
-            .ReturnsAsync((string uid) => _context.Carts.Include(c => c.Items).FirstOrDefault(c => c.UserId == uid));
+        // Mock da transação para não falhar no 'using var transaction'
+        _uowMock.Setup(u => u.BeginTransactionAsync(It.IsAny<IsolationLevel>()))
+            .ReturnsAsync(new Mock<IDbContextTransaction>().Object);
 
-        _cartRepoMock.Setup(r => r.AddAsync(It.IsAny<Cart>()))
-            .Callback((Cart c) => _context.Carts.Add(c));
-
-        _service = new CartService(_uowMock.Object, _context, _loggerMock.Object);
+        // Instancia o serviço SEM o AppDbContext
+        _service = new CartService(_uowMock.Object, _loggerMock.Object);
     }
 
     [Fact]
     public async Task AddItemAsync_ShouldAggregateQuantity_WhenItemAlreadyExists()
     {
-        // Arrange: Adicionar o mesmo item deve somar a quantidade, não criar nova linha
+        // Arrange
         var userId = "user_agg";
-        var product = new Product("P1", "D", 10m, "url", 1, 1, 1, 1, 100);
-        _context.Products.Add(product);
+        var productId = Guid.NewGuid();
+        var product = new Product("P1", "D", 10m, "url", 1, 1, 1, 1, 100) { Id = productId };
 
         var cart = new Cart { UserId = userId };
-        cart.Items.Add(new CartItem { ProductId = product.Id, Quantity = 2 });
-        _context.Carts.Add(cart);
-        await _context.SaveChangesAsync();
+        cart.Items.Add(new CartItem { ProductId = productId, Quantity = 2, Product = product });
 
-        var dto = new AddToCartDto(product.Id, 3);
+        // Mock dos métodos WithLock que o serviço usa agora
+        _productRepoMock.Setup(r => r.GetByIdWithLockAsync(productId))
+            .ReturnsAsync(product);
+
+        _cartRepoMock.Setup(r => r.GetByUserIdWithLockAsync(userId))
+            .ReturnsAsync(cart);
+
+        var dto = new AddToCartDto(productId, 3);
 
         // Act
         await _service.AddItemAsync(userId, dto);
 
         // Assert
-        var updatedCart = await _context.Carts.Include(c => c.Items).FirstAsync(c => c.UserId == userId);
-        Assert.Single(updatedCart.Items); // Continua com 1 item na lista
-        Assert.Equal(5, updatedCart.Items.First().Quantity); // 2 + 3 = 5
+        Assert.Single(cart.Items);
+        Assert.Equal(5, cart.Items.First().Quantity); // 2 + 3 = 5
+
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 
     [Fact]
     public async Task AddItemAsync_ShouldThrowException_WhenProductIsInactive()
     {
-        // Arrange: Não permitir adicionar produtos inativos
+        // Arrange
         var userId = "user_inactive";
-        var product = new Product("P_Inactive", "D", 10m, "url", 1, 1, 1, 1, 100);
-        product.Deactivate(); //
-        _context.Products.Add(product);
-        await _context.SaveChangesAsync();
+        var productId = Guid.NewGuid();
+        // O repositório geralmente retorna null se o produto não estiver ativo (conforme cláusula WHERE no repository)
+        // ou podemos retornar o produto e verificar se o serviço checa o status, 
+        // mas o SQL do repositório já filtra IsActive=true.
 
-        var dto = new AddToCartDto(product.Id, 1);
+        _productRepoMock.Setup(r => r.GetByIdWithLockAsync(productId))
+            .ReturnsAsync((Product?)null); // Simula produto não encontrado ou inativo
+
+        var dto = new AddToCartDto(productId, 1);
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -87,32 +92,31 @@ public class CartServiceTests
     [Fact]
     public async Task GetCartAsync_ShouldRemoveOrphanedItems()
     {
-        // Arrange: Limpeza automática de itens que foram deletados/inativados
+        // Arrange
         var userId = "user_orphan";
         var activeProduct = new Product("Active", "D", 10m, "url", 1, 1, 1, 1, 10);
         var inactiveProduct = new Product("Inactive", "D", 10m, "url", 1, 1, 1, 1, 10);
         inactiveProduct.Deactivate();
 
-        _context.Products.AddRange(activeProduct, inactiveProduct);
-
         var cart = new Cart { UserId = userId };
-        cart.Items.Add(new CartItem { Product = activeProduct, ProductId = activeProduct.Id, Quantity = 1 });
-        cart.Items.Add(new CartItem { Product = inactiveProduct, ProductId = inactiveProduct.Id, Quantity = 1 });
-        _context.Carts.Add(cart);
-        await _context.SaveChangesAsync();
+        var itemActive = new CartItem { Product = activeProduct, ProductId = activeProduct.Id, Quantity = 1 };
+        var itemInactive = new CartItem { Product = inactiveProduct, ProductId = inactiveProduct.Id, Quantity = 1 };
 
-        // Configurar Mock para permitir a remoção (necessário pois o serviço chama o repo para remover)
-        _cartRepoMock.Setup(r => r.RemoveItemAsync(It.IsAny<CartItem>()))
-            .Callback((CartItem item) => {
-                var dbItem = _context.CartItems.Local.FirstOrDefault(i => i.Id == item.Id);
-                if (dbItem != null) _context.CartItems.Remove(dbItem);
-            });
+        cart.Items.Add(itemActive);
+        cart.Items.Add(itemInactive);
+
+        _cartRepoMock.Setup(r => r.GetByUserIdAsync(userId)).ReturnsAsync(cart);
 
         // Act
         var result = await _service.GetCartAsync(userId);
 
         // Assert
-        Assert.Single(result.Items); // Deve restar apenas 1 item
+        // O serviço retorna DTO apenas dos itens ativos
+        Assert.Single(result.Items);
         Assert.Equal("Active", result.Items.First().ProductName);
+
+        // Verifica se chamou a remoção do item inativo
+        _cartRepoMock.Verify(r => r.RemoveItemAsync(itemInactive), Times.Once);
+        _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
 }
