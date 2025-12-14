@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { LogOut, Package, Settings, FileText, Truck, BarChart2, Tag } from 'lucide-react';
+import { LogOut, Package, Settings, FileText, Truck, BarChart2, Tag, Template } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import 'react-quill/dist/quill.snow.css';
@@ -14,6 +14,7 @@ import OrdersTab from '@/app/(admin)/putiroski/components/OrdersTab';
 import CouponsTab from '@/app/(admin)/putiroski/components/CouponsTab';
 import SettingsTab from '@/app/(admin)/putiroski/components/SettingsTab';
 import PagesTab from '@/app/(admin)/putiroski/components/PagesTab';
+import EmailTemplatesTab from '@/app/(admin)/putiroski/components/EmailTemplatesTabTab';
 
 export default function AdminDashboard() {
   const [logoUrl, setLogoUrl] = useState('');
@@ -106,6 +107,9 @@ export default function AdminDashboard() {
             <TabButton active={activeTab === 'pages'} onClick={() => setActiveTab('pages')} icon={<FileText size={18} />}>
                 Páginas
             </TabButton>
+            <TabButton active={activeTab === 'emailtemplates'} onClick={() => setActiveTab('emailtemplates')} icon={<Template size={18} />}>
+                Email Templates
+            </TabButton>
         </div>
 
         <div className="animate-in fade-in duration-300">
@@ -115,6 +119,7 @@ export default function AdminDashboard() {
             {activeTab === 'coupons' && <CouponsTab />}
             {activeTab === 'settings' && <SettingsTab />}
             {activeTab === 'pages' && <PagesTab />}
+            {activeTab === 'emailtemplates' && <EmailTemplatesTab />}
         </div>
       </div>
     </div>
