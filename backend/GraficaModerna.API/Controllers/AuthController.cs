@@ -70,23 +70,6 @@ public class AuthController(
         });
     }
 
-    [EnableRateLimiting("AuthPolicy")]
-    [HttpPost("admin/login")]
-    public async Task<ActionResult> AdminLogin(LoginDto dto)
-    {
-        var adminLoginDto = dto with { IsAdminLogin = true };
-        var result = await _authService.LoginAsync(adminLoginDto);
-
-        SetTokenCookies(result.AccessToken, result.RefreshToken);
-
-        return Ok(new
-        {
-            result.Email,
-            result.Role,
-            message = "Login administrativo realizado com sucesso."
-        });
-    }
-
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout()

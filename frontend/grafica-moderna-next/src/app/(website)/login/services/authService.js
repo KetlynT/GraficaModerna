@@ -2,7 +2,7 @@ import api from '@/app/(website)/services/api';
 
 const authService = {
   login: async (credentials, isAdmin = false) => {
-    const url = isAdmin ? '/auth/admin/login' : '/auth/login';
+    const url = isAdmin ? '/admin/auth/login' : '/auth/login';
     const response = await api.post(url, credentials);
     return response.data;
   },

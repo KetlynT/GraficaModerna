@@ -16,26 +16,17 @@ export const DashboardService = {
     return response.data;
   },
 
-  uploadImage: async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await api.post('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    return response.data.url;
-  },
-
   updatePage: async (slug, data) => {
-    await api.put(`/content/pages/${slug}`, data);
+    await api.put(`/admin/content/pages/${slug}`, data);
   },
 
   createPage: async (data) => {
-    const response = await api.post('/content', data);
+    const response = await api.post('/admin/content', data);
     return response.data;
   },
   
   saveSettings: async (settingsDict) => {
-    await api.post('/content/settings', settingsDict);
+    await api.post('/admin/content/settings', settingsDict);
   },
 
   getEmailTemplates: async () => {
@@ -44,12 +35,50 @@ export const DashboardService = {
   },
 
   getEmailTemplateById: async (id) => {
-        const response = await api.get(`/admin/email-templates/${id}`);
-        return response.data;
-    },
+    const response = await api.get(`/admin/email-templates/${id}`);
+    return response.data;
+  },
 
-    updateEmailTemplate: async (id, data) => {
-        const response = await api.put(`/admin/email-templates/${id}`, data);
-        return response.data;
-    }
+  updateEmailTemplate: async (id, data) => {
+    const response = await api.put(`/admin/email-templates/${id}`, data);
+    return response.data;
+  },
+
+  create: async (productData) => {
+    const response = await api.post('/admin/products', productData);
+    return response.data;
+  },
+
+  update: async (id, productData) => {
+    await api.put(`/admin/products/${id}`, productData);
+  },
+
+  delete: async (id) => {
+    await api.delete(`/admin/products/${id}`);
+  },
+
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/admin/upload', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+    return response.data.url || response.data; 
+  },
+    getAll: async () => {
+    const response = await api.get('/admin/coupons');
+    return response.data;
+  },
+
+  create: async (couponData) => {
+    const response = await api.post('/admin/coupons', couponData);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    await api.delete(`/admin/coupons/${id}`);
+  }
 };

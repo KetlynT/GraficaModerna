@@ -14,30 +14,5 @@ export const ProductService = {
   getById: async (id) => {
     const response = await api.get(`/products/${id}`);
     return response.data;
-  },
-
-  create: async (productData) => {
-    const response = await api.post('/products', productData);
-    return response.data;
-  },
-
-  update: async (id, productData) => {
-    await api.put(`/products/${id}`, productData);
-  },
-
-  delete: async (id) => {
-    await api.delete(`/products/${id}`);
-  },
-
-  uploadImage: async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await api.post('/upload', formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data'
-        }
-    });
-    return response.data.url || response.data; 
   }
 };
