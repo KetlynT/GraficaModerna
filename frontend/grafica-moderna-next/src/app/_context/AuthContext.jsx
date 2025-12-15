@@ -3,6 +3,7 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import authService from '@/app/(website)/login/_services/authService';
+import toast from 'react-hot-toast';
 
 const AuthContext = createContext({});
 
@@ -16,9 +17,14 @@ export const AuthProvider = ({ children }) => {
       try {
         const status = await authService.checkAuth();
         
-        if (status.isAuthenticated) {
-          const userProfile = await authService.getProfile();
-          setUser({ ...userProfile, role: status.role });
+        if (status && status.isAuthenticated) {
+          try {
+             const userProfile = await authService.getProfile();
+             setUser({ ...userProfile, role: status.role });
+          } catch (profileError) {
+             console.error("Sessão válida, mas falha ao carregar perfil:", profileError);
+             setUser(null);
+          }
         } else {
           setUser(null);
         }
@@ -33,27 +39,50 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (credentials, isAdmin = false) => {
-    const data = await authService.login(credentials, isAdmin);
-    const userProfile = await authService.getProfile(); 
-    setUser({ ...userProfile, role: data.role });
-    return data;
+    try {
+      const data = await authService.login(credentials, isAdmin);
+      
+      if (data) {
+          const userProfile = await authService.getProfile(); 
+          setUser({ ...userProfile, role: data.role });
+          
+          toast.success(`Bem-vindo, ${userProfile.firstName || 'Usuário'}!`);
+          router.refresh();
+          return data;
+      }
+    } catch (error) {
+      console.error("Login falhou:", error);
+      throw error; 
+    }
   };
 
   const register = async (userData) => {
-    const data = await authService.register(userData);
-    const userProfile = await authService.getProfile();
-    setUser({ ...userProfile, role: data.role });
-    return data;
+    try {
+      const data = await authService.register(userData);
+      if (data) {
+         const userProfile = await authService.getProfile();
+         setUser({ ...userProfile, role: data.role });
+         toast.success("Conta criada com sucesso!");
+         router.refresh();
+         return data;
+      }
+    } catch (error) {
+      console.error("Cadastro falhou:", error);
+      throw error;
+    }
   };
 
   const logout = async () => {
     try {
       await authService.logout();
       setUser(null);
+      toast.success("Você saiu com sucesso.");
       router.push('/');
-      router.refresh();
+      router.refresh(); 
     } catch (e) {
-      console.error(e);
+      console.error("Erro ao sair:", e);
+      setUser(null);
+      router.push('/');
     }
   };
 

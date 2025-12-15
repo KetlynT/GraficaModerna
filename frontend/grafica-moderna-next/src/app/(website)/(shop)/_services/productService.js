@@ -1,4 +1,6 @@
-import api from '@/app/(website)/services/api';
+'use server'
+
+import { apiServer } from '@/lib/apiServer';
 
 export const ProductService = {
   getAll: async (page = 1, pageSize = 8, search = '', sort = '', order = '') => {
@@ -7,12 +9,10 @@ export const ProductService = {
     if (sort) params.append('sort', sort);
     if (order) params.append('order', order);
 
-    const response = await api.get(`/products?${params.toString()}`);
-    return response.data;
+    return await apiServer(`/products?${params.toString()}`);
   },
 
   getById: async (id) => {
-    const response = await api.get(`/products/${id}`);
-    return response.data;
+    return await apiServer(`/products/${id}`);
   }
 };

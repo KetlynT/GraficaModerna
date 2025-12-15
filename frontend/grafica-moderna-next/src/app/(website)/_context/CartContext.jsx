@@ -21,10 +21,9 @@ export const CartProvider = ({ children }) => {
     try {
       setLoading(true);
       const data = await CartService.getCart();
-      setCart(data);
+      setCart(data || { items: [], totalAmount: 0 });
     } catch (error) {
-      console.error('Erro ao buscar carrinho', error);
-      setCart({ items: [], totalAmount: 0 });
+      console.error('Erro ao buscar carrinho:', error);
     } finally {
       setLoading(false);
     }
@@ -40,16 +39,18 @@ export const CartProvider = ({ children }) => {
 
   const addToCart = async (product, quantity) => {
     if (!user) {
-        toast.error("Você precisa fazer login para adicionar itens ao carrinho.");
+        toast.error("Faça login para comprar.");
+        router.push('/login')
         return;
     }
 
     try {
       await CartService.addItem(product.id, quantity);
-      toast.success('Produto adicionado ao carrinho!');
+      toast.success('Produto adicionado!');
       await fetchCart();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Erro ao adicionar produto');
+      const msg = error.message || 'Erro ao adicionar produto';
+      toast.error(msg);
     }
   };
 
@@ -58,7 +59,8 @@ export const CartProvider = ({ children }) => {
       await CartService.updateQuantity(itemId, quantity);
       await fetchCart();
     } catch (error) {
-      toast.error('Erro ao atualizar quantidade');
+      const msg = error.message || 'Erro ao atualizar quantidade';
+      toast.error(msg);
     }
   };
 
@@ -68,7 +70,8 @@ export const CartProvider = ({ children }) => {
       toast.success('Item removido!');
       await fetchCart();
     } catch (error) {
-      toast.error('Erro ao remover item');
+      const msg = error.message || 'Erro ao remover item';
+      toast.error(msg);
     }
   };
 
@@ -76,6 +79,7 @@ export const CartProvider = ({ children }) => {
     try {
       await CartService.clearCart();
       setCart({ items: [], totalAmount: 0 });
+      toast.success('Carrinho limpo!');
     } catch (error) {
       toast.error('Erro ao limpar carrinho');
     }

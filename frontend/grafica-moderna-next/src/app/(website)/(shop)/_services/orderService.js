@@ -1,18 +1,17 @@
-import api from '@/app/(website)/services/api';
+'use server'
+
+import { apiServer } from '@/lib/apiServer';
 
 export const OrderService = {
   checkout: async (checkoutData) => {
-    const response = await api.post('/orders', checkoutData);
-    return response.data;
+    return await apiServer('/orders', 'POST', checkoutData);
   },
 
   getMyOrders: async (page = 1, pageSize = 10) => {
-    const response = await api.get(`/orders?page=${page}&pageSize=${pageSize}`);
-    return response.data;
+    return await apiServer(`/orders?page=${page}&pageSize=${pageSize}`);
   },
 
   requestRefund: async (orderId, refundData) => {
-    const response = await api.post(`/orders/${orderId}/request-refund`, refundData);
-    return response.data;
+    return await apiServer(`/orders/${orderId}/request-refund`, 'POST', refundData);
   },
 };

@@ -1,24 +1,30 @@
-import api from '@/app/(website)/services/api';
+'use server'
+
+import { apiServer } from '@/lib/apiServer';
+import { revalidatePath } from 'next/cache';
 
 export const CartService = {
   getCart: async () => {
-    const response = await api.get('/cart');
-    return response.data;
+    return await apiServer('/cart');
   },
 
   addItem: async (productId, quantity) => {
-    await api.post('/cart/items', { productId, quantity });
+    await apiServer('/cart/items', 'POST', { productId, quantity });
+    revalidatePath('/carrinho');
   },
 
   updateQuantity: async (itemId, quantity) => {
-    await api.patch(`/cart/items/${itemId}`, { quantity });
+    await apiServer(`/cart/items/${itemId}`, 'PATCH', { quantity });
+    revalidatePath('/carrinho');
   },
 
   removeItem: async (itemId) => {
-    await api.delete(`/cart/items/${itemId}`);
+    await apiServer(`/cart/items/${itemId}`, 'DELETE');
+    revalidatePath('/carrinho');
   },
 
   clearCart: async () => {
-    await api.delete('/cart');
+    await apiServer('/cart', 'DELETE');
+    revalidatePath('/carrinho');
   },
 };

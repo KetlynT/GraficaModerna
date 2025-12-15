@@ -1,12 +1,13 @@
-import api from '@/app/(website)/services/api';
+'use server'
+
+import { apiServer } from '@/lib/apiServer';
 
 export const PaymentService = {
   createCheckoutSession: async (orderId) => {
-    const response = await api.post(`/payments/checkout-session/${orderId}`);
-    return response.data;
+    return await apiServer(`/payments/checkout-session/${orderId}`, 'POST');
   },
+  
   getPaymentStatus: async (orderId) => {
-    const response = await api.get(`/payments/status/${orderId}`);
-    return response.data;
+    return await apiServer(`/payments/status/${orderId}`);
   }
 };

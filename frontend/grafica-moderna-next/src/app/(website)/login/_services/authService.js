@@ -1,39 +1,42 @@
-import api from '@/app/(website)/services/api';
+'use server'
+
+import { apiServer } from '@/lib/apiServer';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 const authService = {
   login: async (credentials, isAdmin = false) => {
     const url = isAdmin ? '/admin/auth/login' : '/auth/login';
-    const response = await api.post(url, credentials);
-    return response.data;
+    const data = await apiServer(url, 'POST', credentials);
+    return data;
   },
 
   register: async (data) => {
-    const response = await api.post('/auth/register', data);
-    return response.data;
+    return await apiServer('/auth/register', 'POST', data);
   },
 
   logout: async () => {
     try {
-      await api.post('/auth/logout');
+      await apiServer('/auth/logout', 'POST');
+      const cookieStore = await cookies();
+      cookieStore.delete('jwt');
+      cookieStore.delete('refreshToken');
     } catch (e) {
       console.error(e);
     }
   },
 
   getProfile: async () => {
-    const response = await api.get('/auth/profile');
-    return response.data;
+    return await apiServer('/auth/profile');
   },
 
   updateProfile: async (data) => {
-    const response = await api.put('/auth/profile', data);
-    return response.data;
+    return await apiServer('/auth/profile', 'PUT', data);
   },
 
   checkAuth: async () => {
     try {
-      const response = await api.get('/auth/check-auth');
-      return response.data; 
+      return await apiServer('/auth/check-auth');
     } catch (error) {
       return { isAuthenticated: false, role: null };
     }
@@ -41,23 +44,23 @@ const authService = {
 
   isAuthenticated: async () => {
       try {
-          await api.get('/auth/check-auth');
-          return true;
+          const data = await apiServer('/auth/check-auth');
+          return data?.isAuthenticated || false;
       } catch {
           return false;
       }
   },
 
   confirmEmail: async (userId, token) => {
-    return await api.post('/auth/confirm-email', { userId, token });
+    return await apiServer('/auth/confirm-email', 'POST', { userId, token });
   },
 
   forgotPassword: async (email) => {
-    return await api.post('/auth/forgot-password', { email });
+    return await apiServer('/auth/forgot-password', 'POST', { email });
   },
 
   resetPassword: async (data) => {
-    return await api.post('/auth/reset-password', data);
+    return await apiServer('/auth/reset-password', 'POST', data);
   },
 };
 

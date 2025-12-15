@@ -1,4 +1,6 @@
-import api from '@/app/(website)/services/api';
+'use server'
+
+import { apiServer } from '@/lib/apiServer';
 
 export const ShippingService = {
   calculate: async (cep, items) => {
@@ -10,13 +12,11 @@ export const ShippingService = {
       }))
     };
     
-    const response = await api.post('/shipping/calculate', payload);
-    return response.data;
+    return await apiServer('/shipping/calculate', 'POST', payload);
   },
 
   calculateForProduct: async (productId, cep) => {
     const cleanCep = cep.replace(/\D/g, '');
-    const response = await api.get(`/shipping/product/${productId}/${cleanCep}`);
-    return response.data;
+    return await apiServer(`/shipping/product/${productId}/${cleanCep}`);
   }
 };

@@ -1,26 +1,25 @@
-import api from '@/app/(website)/services/api';
+'use server'
+
+import { apiServer } from '@/lib/apiServer';
 
 export const AddressService = {
   getAll: async () => {
-    const response = await api.get('/addresses');
-    return response.data;
+    return await apiServer('/addresses');
   },
 
   getById: async (id) => {
-    const response = await api.get(`/addresses/${id}`);
-    return response.data;
+    return await apiServer(`/addresses/${id}`);
   },
 
   create: async (addressData) => {
-    const response = await api.post('/addresses', addressData);
-    return response.data;
+    return await apiServer('/addresses', 'POST', addressData);
   },
 
   update: async (id, addressData) => {
-    await api.put(`/addresses/${id}`, addressData);
+    await apiServer(`/addresses/${id}`, 'PUT', addressData);
   },
 
   delete: async (id) => {
-    await api.delete(`/addresses/${id}`);
+    await apiServer(`/addresses/${id}`, 'DELETE');
   },
 };
