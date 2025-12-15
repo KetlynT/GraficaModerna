@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { getProxyImageUrl } from '@/lib/imageHelper';
 import { ProductService } from '@/app/(website)/(shop)/_services/productService';
-import { ContentService } from '@/app/(website)/services/contentService';
+import * as ContentService from '@/app/(website)/_services/contentService';
 import { useCart } from '@/app/(website)/_context/CartContext';
 import { Button } from '@/app/_components/ui/Button';
 import { ShippingCalculator } from '@/app/(website)/(shop)/carrinho/components/ShippingCalculator';

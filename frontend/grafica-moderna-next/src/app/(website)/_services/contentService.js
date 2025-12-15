@@ -2,25 +2,23 @@
 
 import { apiServer } from '@/app/lib/apiServer';
 
-export const ContentService = {
-  getPage: async (slug) => {
-    try {
-      return await apiServer(`/content/pages/${slug}`);
-    } catch (error) {
-      return null;
-    }
-  },
+export async function getPage(slug) {
+  try {
+    return await apiServer(`/content/pages/${slug}`);
+  } catch (error) {
+    return null;
+  }
+}
 
-  getAllPages: async () => {
-    return await apiServer('/content/pages');
-  },
+export async function getAllPages() {
+  return await apiServer('/content/pages');
+}
 
-  getSettings: async () => {
-    try {
-      return await apiServer('/content/settings');
-    } catch (error) {
-      console.error("Erro ao carregar configurações", error);
-      return {}; 
-    }
-  },
-};
+export async function getSettings() {
+  try {
+    return await apiServer('/content/settings');
+  } catch (error) {
+    console.error("Erro ao carregar configurações", error);
+    return {}; 
+  }
+}

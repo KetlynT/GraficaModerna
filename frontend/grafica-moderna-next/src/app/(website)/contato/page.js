@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Phone, MapPin, Send, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/app/_components/ui/Button';
-import { ContentService } from '@/app/(website)/_services/contentService';
+import * as ContentService from '@/app/(website)/_services/contentService';
 
 export default function Contact() {
   const [settings, setSettings] = useState({

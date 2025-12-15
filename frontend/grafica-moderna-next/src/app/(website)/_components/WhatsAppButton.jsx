@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { ContentService } from '@/app/(website)/_services/contentService';
+import * as ContentService from '@/app/(website)/_services/contentService';
 
 export const WhatsAppButton = () => {
   const [number, setNumber] = useState('');

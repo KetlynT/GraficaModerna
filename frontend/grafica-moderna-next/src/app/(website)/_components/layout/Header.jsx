@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, ShoppingCart, User, LogOut, LayoutDashboard, Package } from 'lucide-react';
-import { ContentService } from '@/app/(website)/_services/contentService';
+import { MessageSquare, ShoppingCart, User, LogOut, Package } from 'lucide-react';
+import * as ContentService from '@/app/(website)/_services/contentService';
 import { useCart } from '@/app/(website)/_context/CartContext';
 import { useAuth } from '@/app/_context/AuthContext';
 
