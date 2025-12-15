@@ -1,6 +1,6 @@
 'use server'
 
-import { apiServer } from '@/lib/apiServer';
+import { apiServer } from '@/app/lib/apiServer'; 
 import { revalidatePath } from 'next/cache';
 
 export const CartService = {

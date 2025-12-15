@@ -1,6 +1,6 @@
 'use server'
 
-import { apiServer } from '@/lib/apiServer';
+import { apiServer } from '@/app/lib/apiServer';
 
 export const PaymentService = {
   createCheckoutSession: async (orderId) => {

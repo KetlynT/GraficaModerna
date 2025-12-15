@@ -1,6 +1,6 @@
 'use server'
 
-import { apiServer } from '@/lib/apiServer';
+import { apiServer } from '@/app/lib/apiServer';
 
 export const ProductService = {
   getAll: async (page = 1, pageSize = 8, search = '', sort = '', order = '') => {

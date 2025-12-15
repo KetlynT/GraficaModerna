@@ -17,7 +17,7 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
   
   const images = product.imageUrls?.length > 0 ? product.imageUrls : [];
 
-  const [currentImgIndex, setCurrentImgIndex] = useState(0);
+  const currentImgIndex = useState(0);
 
   const isAdmin = user?.role === 'Admin';
 
@@ -63,13 +63,6 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
                     <Search size={20} />
                 </Button>
             </Link>
-            {isAdmin && (
-               <Link href={`/putiroski/produtos/${product.id}`}>
-                  <Button variant="ghost" className="bg-white text-blue-600 hover:bg-blue-50 rounded-full p-3 shadow-lg">
-                      <Edit size={20} />
-                  </Button>
-               </Link>
-            )}
         </div>
       </div>
 
