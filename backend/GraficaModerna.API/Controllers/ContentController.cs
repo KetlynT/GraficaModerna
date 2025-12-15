@@ -1,18 +1,12 @@
-﻿using Ganss.Xss;
-using GraficaModerna.Application.DTOs;
-using GraficaModerna.Application.Interfaces;
-using GraficaModerna.Domain.Constants;
-using Microsoft.AspNetCore.Authorization;
+﻿using GraficaModerna.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 
 namespace GraficaModerna.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class ContentController(IContentService service, IHtmlSanitizer sanitizer) : ControllerBase
+public class ContentController(IContentService service) : ControllerBase
 {
-    private readonly IHtmlSanitizer _sanitizer = sanitizer;
     private readonly IContentService _service = service;
 
     [HttpGet("pages")]
@@ -20,31 +14,6 @@ public class ContentController(IContentService service, IHtmlSanitizer sanitizer
     {
         var pages = await _service.GetAllPagesAsync();
         return Ok(pages);
-    }
-
-    [HttpGet("settings")]
-    public async Task<IActionResult> GetSettings()
-    {
-        var settingsList = await _service.GetSettingsAsync();
-        var settingsDict = settingsList.ToDictionary(s => s.Key, s => s.Value);
-        return Ok(settingsDict);
-    }
-
-    [HttpPost("settings")]
-    [Authorize(Roles = Roles.Admin)]
-    public async Task<IActionResult> UpdateSettings([FromBody] Dictionary<string, string> settings)
-    {
-        await _service.UpdateSettingsAsync(settings);
-        return Ok();
-    }
-
-    [HttpPut("pages/{slug}")]
-    [Authorize(Roles = Roles.Admin)]
-    public async Task<IActionResult> UpdatePage(string slug, [FromBody] UpdateContentDto dto)
-    {
-        dto.Content = _sanitizer.Sanitize(dto.Content);
-        await _service.UpdateAsync(slug, dto);
-        return Ok();
     }
 
     [HttpGet("pages/{slug}")]
@@ -58,14 +27,11 @@ public class ContentController(IContentService service, IHtmlSanitizer sanitizer
         return Ok(page);
     }
 
-    [HttpPost]
-    [Authorize(Roles = Roles.Admin)]
-    [EnableRateLimiting("AdminPolicy")]
-    public async Task<IActionResult> Create([FromBody] CreateContentDto dto)
+    [HttpGet("settings")]
+    public async Task<IActionResult> GetSettings()
     {
-        dto.Content = _sanitizer.Sanitize(dto.Content);
-
-        var result = await _service.CreateAsync(dto);
-        return Ok(result);
+        var settingsList = await _service.GetSettingsAsync();
+        var settingsDict = settingsList.ToDictionary(s => s.Key, s => s.Value);
+        return Ok(settingsDict);
     }
 }

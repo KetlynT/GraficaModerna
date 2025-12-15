@@ -2,27 +2,41 @@
 using GraficaModerna.Infrastructure.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using System.Data;
 
 namespace GraficaModerna.Infrastructure.Repositories;
 
-public class UnitOfWork(
-    AppDbContext context,
-    IProductRepository products,
-    ICartRepository carts,
-    IOrderRepository orders,
-    IAddressRepository addresses,
-    ICouponRepository coupons) : IUnitOfWork
+public class UnitOfWork(AppDbContext context, ILoggerFactory loggerFactory) : IUnitOfWork
 {
     private readonly AppDbContext _context = context;
+    private readonly ILoggerFactory _loggerFactory = loggerFactory;
 
-    public IProductRepository Products { get; } = products;
-    public ICartRepository Carts { get; } = carts;
-    public IOrderRepository Orders { get; } = orders;
-    public IAddressRepository Addresses { get; } = addresses;
-    public ICouponRepository Coupons { get; } = coupons;
-    public IEmailTemplateRepository EmailTemplates => _emailTemplates ??= new EmailTemplateRepository(_context);
+    private IProductRepository? _products;
+    private ICartRepository? _carts;
+    private IOrderRepository? _orders;
+    private IAddressRepository? _addresses;
+    private ICouponRepository? _coupons;
     private IEmailTemplateRepository? _emailTemplates;
+
+    public IProductRepository Products =>
+        _products ??= new ProductRepository(_context, _loggerFactory.CreateLogger<ProductRepository>());
+
+    public ICartRepository Carts =>
+        _carts ??= new CartRepository(_context);
+
+    public IOrderRepository Orders =>
+        _orders ??= new OrderRepository(_context);
+
+    public IAddressRepository Addresses =>
+        _addresses ??= new AddressRepository(_context);
+
+    public ICouponRepository Coupons =>
+        _coupons ??= new CouponRepository(_context);
+
+    public IEmailTemplateRepository EmailTemplates =>
+        _emailTemplates ??= new EmailTemplateRepository(_context);
+
     public async Task CommitAsync()
     {
         await _context.SaveChangesAsync();

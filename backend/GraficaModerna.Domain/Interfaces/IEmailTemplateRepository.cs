@@ -5,6 +5,6 @@ namespace GraficaModerna.Domain.Interfaces;
 public interface IEmailTemplateRepository
 {
     Task<IEnumerable<EmailTemplate>> GetAllAsync();
-    Task<EmailTemplate?> GetByIdAsync(int id);
+    Task<EmailTemplate?> GetByIdAsync(Guid id);
     void Update(EmailTemplate template);
 }

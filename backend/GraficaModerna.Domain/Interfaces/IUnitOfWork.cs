@@ -1,5 +1,4 @@
-﻿using GraficaModerna.Domain.Entities;
-using Microsoft.EntityFrameworkCore.Storage;
+﻿using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
 
 namespace GraficaModerna.Domain.Interfaces;
@@ -11,7 +10,7 @@ public interface IUnitOfWork : IDisposable
     IOrderRepository Orders { get; }
     IAddressRepository Addresses { get; }
     ICouponRepository Coupons { get; }
-    IGenericRepository<EmailTemplate> EmailTemplates { get; }
+    IEmailTemplateRepository EmailTemplates { get; }
 
     Task CommitAsync();
     Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);

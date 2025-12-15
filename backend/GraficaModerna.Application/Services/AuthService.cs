@@ -83,13 +83,15 @@ public class AuthService(
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = Uri.EscapeDataString(token);
             var frontendUrl = _configuration["CorsOrigins"];
-            var link = $"{frontendUrl}/confirm-email?userid={user.Id}&token={encodedToken}";
+
+            var Link = $"{frontendUrl}/confirm-email?userid={user.Id}&token={encodedToken}";
+            var Year = DateTime.Now.Year;
 
             var emailModel = new
             {
                 Name = user.FullName,
-                Link = link,
-                Year = DateTime.Now.Year
+                Link,
+                Year
             };
 
             var (subject, body) = await _templateService.RenderEmailAsync("RegisterConfirmation", emailModel);
@@ -235,9 +237,10 @@ public class AuthService(
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var encodedToken = Uri.EscapeDataString(token);
             var frontendUrl = _configuration["CorsOrigins"];
-            var link = $"{frontendUrl}/reset-password?email={dto.Email}&token={encodedToken}";
 
-            var emailModel = new { Name = user.FullName, Link = link };
+            var Link = $"{frontendUrl}/reset-password?email={dto.Email}&token={encodedToken}";
+
+            var emailModel = new { Name = user.FullName, Link };
             var (subject, body) = await _templateService.RenderEmailAsync("ForgotPassword", emailModel);
 
             await _emailService.SendEmailAsync(user.Email!, subject, body);
