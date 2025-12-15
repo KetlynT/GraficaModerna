@@ -279,7 +279,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IShippingService, MelhorEnvioShippingService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<MetadataSecurityService>();
-builder.Services.AddScoped<TemplateService>();
+builder.Services.AddScoped<ITemplateService, TemplateService>();
 
 builder.Services.AddValidatorsFromAssemblyContaining<ProductValidator>();
 
