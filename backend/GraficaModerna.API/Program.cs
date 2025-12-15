@@ -34,6 +34,7 @@ if (builder.Environment.IsDevelopment())
 
 builder.Configuration.AddEnvironmentVariables();
 
+var apiSegmentKey = EnvHelper.Required("API_SEGMENT_KEY");
 var jwtKey = EnvHelper.Required("JWT_SECRET_KEY", 64);
 var melhorEnvioUrl = EnvHelper.Required("MELHOR_ENVIO_URL");
 var melhorEnvioToken = EnvHelper.Required("MELHOR_ENVIO_TOKEN");
@@ -57,7 +58,12 @@ var smtpPassword = EnvHelper.Required("SMTP_PASSWORD");
 var smtpFromEmail = EnvHelper.Required("SMTP_FROM_EMAIL");
 var smtpFromName = EnvHelper.Required("SMTP_FROM_NAME");
 
-builder.Services.AddControllers();
+var routePrefix = Environment.GetEnvironmentVariable("API_SEGMENT_KEY")!;
+
+builder.Services.AddControllers(options =>
+{
+    options.Conventions.Insert(0, new GraficaModerna.API.Conventions.RoutePrefixConvention(new Microsoft.AspNetCore.Mvc.RouteAttribute(routePrefix)));
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();

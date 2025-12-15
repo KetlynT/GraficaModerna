@@ -26,7 +26,6 @@ export const WhatsAppButton = () => {
 
   const isBlockedRoute = [
     '/login', 
-    '/putiroski', 
     '/cadastro', 
     '/esqueci-senha', 
     '/reset-password', 

@@ -38,7 +38,6 @@ export const CookieConsent = () => {
   const isBlockedRoute = [
     '/error',
     '/login',
-    '/putiroski',
     '/cadastro',
     '/esqueci-senha',
     '/reset-password',
