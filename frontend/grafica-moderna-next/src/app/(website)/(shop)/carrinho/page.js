@@ -6,11 +6,11 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Trash2, ShoppingBag, ArrowRight, Plus, Minus } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useCart } from '@/app/(website)/context/CartContext';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { useCart } from '@/app/(website)/_context/CartContext';
+import { Button } from '@/app/_components/ui/Button';
 import { CouponInput } from './components/CouponInput';
 import { ShippingCalculator } from './components/ShippingCalculator';
-import AuthService from '@/app/(website)/login/services/authService';
+import AuthService from '@/app/(website)/login/_services/authService';
 
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart } = useCart();

@@ -15,10 +15,10 @@ import {
   X
 } from 'lucide-react';
 
-import { ProductService } from '@/app/(website)/(shop)/services/productService';
+import { ProductService } from '@/app/(website)/(shop)/_services/productService';
 import { ContentService } from '@/app/(website)/services/contentService';
-import { useCart } from '@/app/(website)/context/CartContext';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { useCart } from '@/app/(website)/_context/CartContext';
+import { Button } from '@/app/_components/ui/Button';
 import { ShippingCalculator } from '@/app/(website)/(shop)/carrinho/components/ShippingCalculator';
 
 export default function ProductDetails() {

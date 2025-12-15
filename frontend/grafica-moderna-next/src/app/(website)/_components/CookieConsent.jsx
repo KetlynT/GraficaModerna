@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Button } from './ui/Button'
+import { Button } from '../../_components/ui/Button'
 import { ShieldCheck } from 'lucide-react'
 
 export const CookieConsent = () => {

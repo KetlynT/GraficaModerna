@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { formatCurrency } from '@/app/(website)/utils/formatters';
+import { Button } from '@/app/_components/ui/Button';
+import { formatCurrency } from '@/app/(website)/_utils/formatters';
 
 export default function RefundRequestModal({ order, onClose, onSubmit, isLoading }) {
   const [refundType, setRefundType] = useState('Total'); 

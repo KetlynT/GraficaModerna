@@ -6,8 +6,8 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { MessageSquare, ShoppingCart, User, LogOut, LayoutDashboard, Package } from 'lucide-react';
 import { ContentService } from '@/app/(website)/services/contentService';
-import { useCart } from '@/app/(website)/context/CartContext';
-import { useAuth } from '@/app/(website)/context/AuthContext';
+import { useCart } from '@/app/(website)/_context/CartContext';
+import { useAuth } from '@/app/_context/AuthContext';
 
 export const Header = () => {
   const [logoUrl, setLogoUrl] = useState('');

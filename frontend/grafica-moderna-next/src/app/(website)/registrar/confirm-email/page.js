@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
-import authService from '@/app/(website)/login/services/authService';
+import authService from '@/app/(website)/login/_services/authService';
 
 function ConfirmEmailContent() {
   const searchParams = useSearchParams();

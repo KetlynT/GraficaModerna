@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { User, Phone, FileText, Save, Loader } from 'lucide-react';
-import { useAuth } from '@/app/(website)/context/AuthContext';
-import authService from '@/app/(website)/login/services/authService';
-import { maskCpfCnpj, maskPhone, cleanString } from '@/app/(website)/utils/formatters';
+import { useAuth } from '@/app/_context/AuthContext';
+import authService from '@/app/(website)/login/_services/authService';
+import { maskCpfCnpj, maskPhone, cleanString } from '@/app/(website)/_utils/formatters';
 
 export default function Profile() {
   const { user, logout } = useAuth();

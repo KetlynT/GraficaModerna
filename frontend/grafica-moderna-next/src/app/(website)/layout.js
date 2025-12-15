@@ -1,9 +1,9 @@
 import '../globals.css';
-import { Header } from '@/app/(website)/components/layout/Header';
-import { Footer } from '@/app/(website)/components/layout/Footer';
-import { WhatsAppButton } from '@/app/(website)/components/WhatsAppButton';
-import { Providers } from '@/app/(website)/components/Providers';
-import { CookieConsent } from '@/app/(website)/components/CookieConsent';
+import { Header } from '@/app/(website)/_components/layout/Header';
+import { Footer } from '@/app/(website)/_components/layout/Footer';
+import { WhatsAppButton } from '@/app/(website)/_components/WhatsAppButton';
+import { Providers } from '@/app/(website)/_components/Providers';
+import { CookieConsent } from '@/app/(website)/_components/CookieConsent';
 
 export const metadata = {
   title: 'Gráfica Moderna',

@@ -4,8 +4,8 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, Package, ArrowRight, AlertTriangle, Loader } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { PaymentService } from '@/app/(website)/(shop)/services/paymentService';
+import { Button } from '@/app/_components/ui/Button';
+import { PaymentService } from '@/app/(website)/(shop)/_services/paymentService';
 
 function SuccessContent() {
   const searchParams = useSearchParams();

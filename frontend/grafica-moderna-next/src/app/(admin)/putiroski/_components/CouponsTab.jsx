@@ -1,26 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { CouponService } from '@/app/(website)/(shop)/services/couponService';
+import { Button } from '@/app/_components/ui/Button';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
 
 const CouponsTab = () => {
     const [coupons, setCoupons] = useState([]);
     const [form, setForm] = useState({ code: '', discountPercentage: '', validityDays: '30' });
 
-    useEffect(() => { load(); }, []);
-
-    const load = async () => {
+    const load = useCallback(async () => {
         try {
-            const data = await CouponService.getAll();
+            const data = await DashboardService.getCoupons();
             setCoupons(data);
         } catch (e) { console.error(e); }
-    };
+    }, []);
+
+    useEffect(() => { 
+        const fetchCoupons = async () => {
+            await load();
+        };
+        fetchCoupons();
+    }, [load]);
 
     const handleCreate = async (e) => {
         e.preventDefault();
         try {
-            await CouponService.create({ 
+            await DashboardService.createCoupon({ 
                 ...form, 
                 discountPercentage: parseFloat(form.discountPercentage),
                 validityDays: parseInt(form.validityDays)
@@ -35,8 +40,13 @@ const CouponsTab = () => {
 
     const handleDelete = async (id) => {
         if(!confirm("Excluir cupom?")) return;
-        await CouponService.delete(id);
-        load();
+        try {
+            await DashboardService.deleteCoupon(id);
+            toast.success("Cupom removido!");
+            load();
+        } catch (e) {
+            toast.error("Erro ao excluir cupom.");
+        }
     };
 
     return (

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Lock } from 'lucide-react';
 
-import authService from '@/app/(website)/login/services/authService';
+import authService from '@/app/(website)/login/_services/authService';
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();

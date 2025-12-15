@@ -5,14 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { MapPin, Truck, CheckCircle, Settings, Plus, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { CartService } from '@/app/(website)/(shop)/services/cartService';
-import { AddressService } from '@/app/(website)/(shop)/services/addressService';
-import { ShippingService } from '@/app/(website)/(shop)/services/shippingService';
-import { PaymentService } from '@/app/(website)/(shop)/services/paymentService';
-import { CouponService } from '@/app/(website)/(shop)/services/couponService';
-import { useCart } from '@/app/(website)/context/CartContext';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { AddressManager } from '@/app/(website)/(shop)/components/AddressManager';
+import { CartService } from '@/app/(website)/(shop)/_services/cartService';
+import { AddressService } from '@/app/(website)/(shop)/_services/addressService';
+import { ShippingService } from '@/app/(website)/(shop)/_services/shippingService';
+import { PaymentService } from '@/app/(website)/(shop)/_services/paymentService';
+import { CouponService } from '@/app/(website)/(shop)/_services/couponService';
+import { useCart } from '@/app/(website)/_context/CartContext';
+import { Button } from '@/app/_components/ui/Button';
+import { AddressManager } from '@/app/(website)/(shop)/_components/AddressManager';
 import { CouponInput } from '@/app/(website)/(shop)/carrinho/components/CouponInput';
 
 function CheckoutContent() {

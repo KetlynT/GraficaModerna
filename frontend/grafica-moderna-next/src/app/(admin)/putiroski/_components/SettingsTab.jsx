@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ProductService } from '@/app/(website)/(shop)/services/productService';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { ContentService } from '@/app/(website)/services/contentService';
-import { InputGroup } from '@/app/(website)/components/ui/InputGroup';
+import { Button } from '@/app/_components/ui/Button';
+import { InputGroup } from '@/app/_components/ui/InputGroup';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
 
 const SettingsTab = () => {
     const [formData, setFormData] = useState({});
@@ -14,7 +13,7 @@ const SettingsTab = () => {
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await ContentService.getSettings();
+                const data = await DashboardService.getSettings();
 
                 if (!data.purchase_enabled) {
                     data.purchase_enabled = 'true';
@@ -37,10 +36,10 @@ const SettingsTab = () => {
         setLoading(true);
         try {
             let updatedData = { ...formData };
-            if (heroImageFile) updatedData.hero_bg_url = await ProductService.uploadImage(heroImageFile);
-            if (logoFile) updatedData.site_logo = await ProductService.uploadImage(logoFile);
+            if (heroImageFile) updatedData.hero_bg_url = await DashboardService.uploadImage(heroImageFile);
+            if (logoFile) updatedData.site_logo = await DashboardService.uploadImage(logoFile);
 
-            await ContentService.saveSettings(updatedData);
+            await DashboardService.saveSettings(updatedData);
             
             toast.success("Configurações atualizadas!");
         } catch (e) {

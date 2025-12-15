@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Tag, X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PropTypes from 'prop-types';
-import { CouponService } from '@/app/(website)/(shop)/services/couponService';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { CouponService } from '@/app/(website)/(shop)/_services/couponService';
+import { Button } from '@/app/_components/ui/Button';
 
 export const CouponInput = ({ onApply, initialCoupon = null }) => {
   const [code, setCode] = useState('');

@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAuth } from '@/app/(website)/context/AuthContext';
-import { useCart } from '@/app/(website)/context/CartContext';
+import { useAuth } from '@/app/_context/AuthContext';
+import { useCart } from '@/app/(website)/_context/CartContext';
 
 function LoginContent() {
   const [email, setEmail] = useState('');

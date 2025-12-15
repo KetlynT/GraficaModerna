@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Truck, AlertCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PropTypes from 'prop-types';
-import { ShippingService } from '@/app/(website)/(shop)/services/shippingService';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { ShippingService } from '@/app/(website)/(shop)/_services/shippingService';
+import { Button } from '@/app/_components/ui/Button';
 
 export const ShippingCalculator = ({ items = [], productId = null, onSelectOption, className }) => {
   const [cep, setCep] = useState('');

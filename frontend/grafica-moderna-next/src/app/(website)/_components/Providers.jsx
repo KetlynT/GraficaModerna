@@ -1,7 +1,7 @@
 'use client';
 
-import { AuthProvider } from '@/app/(website)/context/AuthContext';
-import { CartProvider } from '@/app/(website)/context/CartContext';
+import { AuthProvider } from '@/app/_context/AuthContext';
+import { CartProvider } from '@/app/(website)/_context/CartContext';
 import { Toaster } from 'react-hot-toast';
 
 export function Providers({ children }) {

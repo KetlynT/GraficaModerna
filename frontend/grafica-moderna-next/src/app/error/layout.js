@@ -1,7 +1,7 @@
 'use client'
 
 import './globals.css';
-import { Providers } from '@/app/(website)/components/Providers';
+import { Providers } from '@/app/(website)/_components/Providers';
 
 export default function RootLayout({ children }) {
   return (

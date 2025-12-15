@@ -5,10 +5,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { Search, Printer, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { ProductService } from '@/app/(website)/(shop)/services/productService';
+import { ProductService } from '@/app/(website)/(shop)/_services/productService';
 import { ContentService } from '@/app/(website)/services/contentService';
-import { ProductCard } from '@/app/(website)/components/ProductCard';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { ProductCard } from '@/app/(website)/_components/ProductCard';
+import { Button } from '@/app/_components/ui/Button';
 
 export default function Home() {
   const router = useRouter();

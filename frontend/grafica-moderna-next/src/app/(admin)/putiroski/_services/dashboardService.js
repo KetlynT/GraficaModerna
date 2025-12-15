@@ -1,4 +1,4 @@
-import api from '@/app/(website)/services/api';
+import api from '@/app/_services/api';
 
 export const DashboardService = {
   // --- Dashboard & Stats ---
@@ -64,6 +64,20 @@ export const DashboardService = {
   },
 
   // --- Content & Settings ---
+  getPage: async (slug) => {
+    try {
+      const response = await api.get(`/admin/content/pages/${slug}`);
+      return response.data;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  getAllPages: async () => {
+    const response = await api.get('/admin/content/pages');
+    return response.data;
+  },
+
   createPage: async (data) => {
     const response = await api.post('/admin/content/pages', data);
     return response.data;

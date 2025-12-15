@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Mail, ArrowLeft } from 'lucide-react';
-import authService from '@/app/(website)/login/services/authService';
+import authService from '@/app/(website)/login/_services/authService';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');

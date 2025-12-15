@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { RefreshCcw, DollarSign, ShoppingBag, AlertTriangle } from 'lucide-react';
-import { DashboardService } from '@/app/(admin)/putiroski/services/dashboardService';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
 
 const OverviewTab = () => {
     const [stats, setStats] = useState(null);

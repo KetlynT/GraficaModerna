@@ -6,14 +6,14 @@ import { LogOut, Package, Settings, FileText, Truck, BarChart2, Tag, Template } 
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import 'react-quill/dist/quill.snow.css';
-import { useAuth } from '@/app/(website)/context/AuthContext';
-import { ContentService } from '@/app/(website)/services/contentService';
-import OverviewTab from '@/app/(admin)/putiroski/components/OverviewTab';
-import ProductsTab from '@/app/(admin)/putiroski/components/ProductsTab';
-import OrdersTab from '@/app/(admin)/putiroski/components/OrdersTab';
-import CouponsTab from '@/app/(admin)/putiroski/components/CouponsTab';
-import SettingsTab from '@/app/(admin)/putiroski/components/SettingsTab';
-import PagesTab from '@/app/(admin)/putiroski/components/PagesTab';
+import { useAuth } from '@/app/_context/AuthContext';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
+import OverviewTab from '@/app/(admin)/putiroski/_components/OverviewTab';
+import ProductsTab from '@/app/(admin)/putiroski/_components/ProductsTab';
+import OrdersTab from '@/app/(admin)/putiroski/_components/OrdersTab';
+import CouponsTab from '@/app/(admin)/putiroski/_components/CouponsTab';
+import SettingsTab from '@/app/(admin)/putiroski/_components/SettingsTab';
+import PagesTab from '@/app/(admin)/putiroski/_components/PagesTab';
 import EmailTemplatesTab from '@/app/(admin)/putiroski/components/EmailTemplatesTabTab';
 
 export default function AdminDashboard() {
@@ -33,7 +33,7 @@ export default function AdminDashboard() {
 
     const loadSettings = async () => {
           try {
-            const settings = await ContentService.getSettings();
+            const settings = await DashboardService.getSettings();
             if (settings && settings.site_logo) {
                 setLogoUrl(settings.site_logo);
             }

@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit, Trash2, MapPin, Star, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PropTypes from 'prop-types';
-import { AddressService } from '@/app/(website)/(shop)/services/addressService';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { AddressService } from '@/app/(website)/(shop)/_services/addressService';
+import { Button } from '@/app/_components/ui/Button';
 
 export const AddressManager = ({ onUpdate, allowSelection = false, onSelect }) => {
   const [addresses, setAddresses] = useState([]);

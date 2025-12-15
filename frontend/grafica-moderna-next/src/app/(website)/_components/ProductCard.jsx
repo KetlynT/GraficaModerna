@@ -5,9 +5,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Search, Edit } from 'lucide-react';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { useCart } from '@/app/(website)/context/CartContext';
-import { useAuth } from '@/app/(website)/context/AuthContext';
+import { Button } from '@/app/_components/ui/Button';
+import { useCart } from '@/app/(website)/_context/CartContext';
+import { useAuth } from '@/app/_context/AuthContext';
 import PropTypes from 'prop-types';
 
 export const ProductCard = ({ product, purchaseEnabled = true }) => {

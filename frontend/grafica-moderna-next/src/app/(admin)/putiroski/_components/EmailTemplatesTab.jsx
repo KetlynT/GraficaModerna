@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { DashboardService } from '@/app/(admin)/putiroski/services/dashboardService';
+import { Button } from '@/app/_components/ui/Button';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
 
 const EmailTemplatesTab = () => {
     const [templates, setTemplates] = useState([]);

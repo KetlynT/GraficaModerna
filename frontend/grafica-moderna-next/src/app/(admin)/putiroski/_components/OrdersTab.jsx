@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { Search, Eye, X, Settings, RefreshCcw, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { DashboardService } from '@/app/(admin)/putiroski/services/dashboardService';
-import { ProductService } from '@/app/(website)/(shop)/services/productService';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { Button } from '@/app/_components/ui/Button';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
 
 const OrdersTab = () => {
     const [orders, setOrders] = useState([]);
@@ -86,7 +85,7 @@ const OrdersTab = () => {
         if (!file) return;
         setUploadingProof(true);
         try {
-            const url = await ProductService.uploadImage(file); 
+            const url = await DashboardService.uploadImage(file); 
             setRefundProof(url);
             toast.success("Arquivo anexado!");
         } catch (error) {

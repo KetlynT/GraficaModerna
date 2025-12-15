@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import Image from 'next/image';
 import { Search, ArrowUp, ArrowDown, ArrowUpDown, Edit, Trash2, Box, X, Upload, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
-import { ProductService } from '@/app/(website)/(shop)/services/productService';
-import { Button } from '@/app/(website)/components/ui/Button';
+import { Button } from '@/app/_components/ui/Button';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
 
 const ProductsTab = () => {
   const [products, setProducts] = useState([]);
@@ -30,12 +31,10 @@ const ProductsTab = () => {
 
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { loadProducts(); }, [sortConfig, searchTerm, currentPage]);
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
         setLoading(true);
-        const data = await ProductService.getAll(currentPage, pageSize, searchTerm, sortConfig.key, sortConfig.direction);
+        const data = await DashboardService.getProducts(currentPage, pageSize, searchTerm, sortConfig.key, sortConfig.direction);
 
         setProducts(data.items);
         const total = Math.ceil(data.totalCount / pageSize); 
@@ -45,7 +44,11 @@ const ProductsTab = () => {
     } finally {
         setLoading(false);
     }
-};
+  }, [currentPage, pageSize, searchTerm, sortConfig]);
+
+  useEffect(() => { 
+      loadProducts(); 
+  }, [loadProducts]);
 
   const handleSort = (key) => {
       let direction = 'asc';
@@ -68,7 +71,7 @@ const ProductsTab = () => {
 
     setIsUploading(true);
     try {
-        const uploadPromises = files.map(file => ProductService.uploadImage(file));
+        const uploadPromises = files.map(file => DashboardService.uploadImage(file));
         const uploadedUrls = await Promise.all(uploadPromises);
         
         setImages(prev => [...prev, ...uploadedUrls]);
@@ -111,7 +114,7 @@ const ProductsTab = () => {
           const data = { 
               name, 
               description: desc, 
-              price: parseFloat(price), 
+              price: parseFloat(formattedPrice), 
               imageUrls: images,
               stockQuantity: parseInt(stock),
               weight: parseFloat(weight),
@@ -120,8 +123,8 @@ const ProductsTab = () => {
               length: parseInt(length)
           };
           
-          if(editingProduct) await ProductService.update(editingProduct.id, data);
-          else await ProductService.create(data);
+          if(editingProduct) await DashboardService.updateProduct(editingProduct.id, data);
+          else await DashboardService.createProduct(data);
 
           setIsModalOpen(false);
           loadProducts();
@@ -137,7 +140,7 @@ const ProductsTab = () => {
   const handleDelete = async (id) => {
       if(!window.confirm("Tem certeza que deseja excluir este produto?")) return;
       try {
-          await ProductService.delete(id);
+          await DashboardService.deleteProduct(id);
           loadProducts();
           toast.success("Excluído!");
       } catch(e) { toast.error("Erro ao excluir"); }
@@ -208,7 +211,7 @@ const ProductsTab = () => {
                                   <div className="flex items-center gap-3">
                                       <div className="w-10 h-10 rounded bg-gray-100 overflow-hidden relative border shrink-0">
                                           {p.imageUrls && p.imageUrls.length > 0 ? (
-                                              <img src={p.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                                              <Image src={p.imageUrls[0]} width={40} height={40} alt="" className="w-full h-full object-cover" />
                                             ) : (
                                               <ImageIcon className="text-gray-300 w-full h-full p-2" />
                                           )}
@@ -291,18 +294,15 @@ const ProductsTab = () => {
                             <input className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" type="number" value={stock} onChange={e=>setStock(e.target.value)} required />
                         </div>
 
-                        {/* Área de Imagens Atualizada */}
                         <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
                             <label className="block text-sm font-bold text-gray-700 mb-2">Galeria de Imagens</label>
                             
-                            {/* Grid de imagens existentes */}
                             {images.length > 0 && (
                                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mb-4">
                                     {images.map((url, index) => (
                                         <div key={index} className="relative aspect-square group bg-white rounded-lg border overflow-hidden shadow-sm">
-                                            <img src={url} alt={`Img ${index}`} className="w-full h-full object-cover" />
+                                            <Image src={url} width={100} height={100} alt={`Img ${index}`} className="w-full h-full object-cover" />
                                             
-                                            {/* Overlay de ações */}
                                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
                                                 <button 
                                                     type="button" 
@@ -335,7 +335,6 @@ const ProductsTab = () => {
                                                     )}
                                                 </div>
                                             </div>
-                                            {/* Badge de Capa */}
                                             {index === 0 && (
                                                 <span className="absolute bottom-0 left-0 right-0 bg-blue-600 text-white text-[10px] font-bold text-center py-0.5">
                                                     CAPA
@@ -346,7 +345,6 @@ const ProductsTab = () => {
                                 </div>
                             )}
 
-                            {/* Botão de Upload */}
                             <div className="relative">
                                 <input 
                                     type="file" 

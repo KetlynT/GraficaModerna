@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import { Button } from '@/app/(website)/components/ui/Button';
-import { ContentService } from '@/app/(website)/services/contentService';
-import { InputGroup } from '@/app/(website)/components/ui/InputGroup';
+import { Button } from '@/app/_components/ui/Button';
+import { InputGroup } from '@/app/_components/ui/InputGroup';
+import { DashboardService } from '@/app/(admin)/putiroski/_services/dashboardService';
 
 const PagesTab = () => {
     const [pages, setPages] = useState([]);
@@ -14,13 +14,13 @@ const PagesTab = () => {
     useEffect(() => { loadPages(); }, []);
 
     const loadPages = () => {
-        ContentService.getAllPages().then(setPages);
+        DashboardService.getAllPages().then(setPages);
     };
 
     const handleEdit = async (page) => {
         setLoading(true);
         try {
-            const fullPage = await ContentService.getPage(page.slug);
+            const fullPage = await DashboardService.getPage(page.slug);
             setSelectedPage(fullPage);
         } catch (error) {
             toast.error("Erro ao carregar detalhes da página.");
@@ -48,10 +48,10 @@ const PagesTab = () => {
         setLoading(true);
         try {
             if (selectedPage.id) {
-                await ContentService.updatePage(selectedPage.slug, selectedPage);
+                await DashboardService.updatePage(selectedPage.slug, selectedPage);
                 toast.success("Página atualizada com sucesso!");
             } else {
-                await ContentService.createPage(selectedPage);
+                await DashboardService.createPage(selectedPage);
                 toast.success("Página criada com sucesso!");
                 setSelectedPage(null); 
             }
