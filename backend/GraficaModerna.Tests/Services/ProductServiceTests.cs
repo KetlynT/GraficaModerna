@@ -28,17 +28,8 @@ public class ProductServiceTests
     public async Task GetByIdAsync_ShouldReturnProduct_WhenExists()
     {
         var productId = Guid.NewGuid();
-        var product = new Product(
-            "Test",
-            "Desc",
-            10,
-            "url",
-            1,
-            10,
-            10,
-            10,
-            5
-        );
+        // Correção: lista de imagens ["url"]
+        var product = new Product("Test", "Desc", 10, ["url"], 1, 10, 10, 10, 5);
 
         typeof(Product)
             .GetProperty("Id")?
@@ -72,11 +63,12 @@ public class ProductServiceTests
     [Fact]
     public async Task CreateAsync_ShouldReturnCreatedProduct()
     {
+        // Correção: lista de imagens ["http://img.com"]
         var dto = new CreateProductDto(
             "New Product",
             "Desc",
             100,
-            "http://img.com",
+            ["http://img.com"],
             2,
             20,
             20,
@@ -91,7 +83,6 @@ public class ProductServiceTests
                 typeof(Product)
                     .GetProperty("Id")?
                     .SetValue(p, Guid.NewGuid());
-
                 return p;
             });
 
@@ -101,37 +92,26 @@ public class ProductServiceTests
         Assert.Equal(dto.Name, result.Name);
         Assert.NotEqual(Guid.Empty, result.Id);
 
-        _repositoryMock.Verify(
-            r => r.CreateAsync(It.IsAny<Product>()),
-            Times.Once
-        );
+        _repositoryMock.Verify(r => r.CreateAsync(It.IsAny<Product>()), Times.Once);
     }
 
     [Fact]
     public async Task UpdateAsync_ShouldUpdateProduct_WhenExists()
     {
         var productId = Guid.NewGuid();
-        var existingProduct = new Product(
-            "Old",
-            "Desc",
-            10,
-            "url",
-            1,
-            10,
-            10,
-            10,
-            5
-        );
+        // Correção: lista de imagens ["url"]
+        var existingProduct = new Product("Old", "Desc", 10, ["url"], 1, 10, 10, 10, 5);
 
         _repositoryMock
             .Setup(r => r.GetByIdAsync(productId))
             .ReturnsAsync(existingProduct);
 
+        // Correção: lista de imagens ["new_url"]
         var dto = new UpdateProductDto(
             "Updated",
             "New Desc",
             20,
-            "new_url",
+            ["new_url"],
             2,
             15,
             15,
@@ -144,27 +124,15 @@ public class ProductServiceTests
         Assert.Equal("Updated", existingProduct.Name);
         Assert.Equal(20, existingProduct.Price);
 
-        _repositoryMock.Verify(
-            r => r.UpdateAsync(existingProduct),
-            Times.Once
-        );
+        _repositoryMock.Verify(r => r.UpdateAsync(existingProduct), Times.Once);
     }
 
     [Fact]
     public async Task DeleteAsync_ShouldDeactivateProduct_WhenExists()
     {
         var productId = Guid.NewGuid();
-        var product = new Product(
-            "Test",
-            "Desc",
-            10,
-            "url",
-            1,
-            10,
-            10,
-            10,
-            5
-        );
+        // Correção: lista de imagens ["url"]
+        var product = new Product("Test", "Desc", 10, ["url"], 1, 10, 10, 10, 5);
 
         _repositoryMock
             .Setup(r => r.GetByIdAsync(productId))
@@ -173,31 +141,21 @@ public class ProductServiceTests
         await _service.DeleteAsync(productId);
 
         Assert.False(product.IsActive);
-
-        _repositoryMock.Verify(
-            r => r.UpdateAsync(product),
-            Times.Once
-        );
+        _repositoryMock.Verify(r => r.UpdateAsync(product), Times.Once);
     }
 
     [Fact]
     public async Task GetCatalogAsync_ShouldCacheResults()
     {
-        // Arrange
-        var products = new List<Product> { new("P1", "D", 10, "url", 1, 1, 1, 1, 10) };
+        // Correção: lista de imagens ["url"]
+        var products = new List<Product> { new("P1", "D", 10, ["url"], 1, 1, 1, 1, 10) };
 
         _repositoryMock.Setup(r => r.GetAllAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync((products, 1));
 
-        // Act
-        // Primeira chamada (deve ir ao repo)
+        await _service.GetCatalogAsync(null, null, null, 1, 10);
         await _service.GetCatalogAsync(null, null, null, 1, 10);
 
-        // Segunda chamada com mesmos parâmetros (deve pegar do cache - MemoryCache real foi instanciado no construtor)
-        await _service.GetCatalogAsync(null, null, null, 1, 10);
-
-        // Assert
-        // Verifica se o repositório foi chamado APENAS UMA VEZ
         _repositoryMock.Verify(r => r.GetAllAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()),
             Times.Once);
@@ -206,22 +164,15 @@ public class ProductServiceTests
     [Fact]
     public async Task GetCatalogAsync_DeveUsarCache_NaSegundaChamada()
     {
-        // Arrange
-        var products = new List<Product> { new("Prod", "Desc", 10, "url", 1, 1, 1, 1, 10) };
+        // Correção: lista de imagens ["url"]
+        var products = new List<Product> { new("Prod", "Desc", 10, ["url"], 1, 1, 1, 1, 10) };
 
-        // Configura o mock para retornar os produtos
         _repositoryMock.Setup(r => r.GetAllAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync((products, 1));
 
-        // Act
-        // 1ª Chamada: Deve ir ao repositório
+        await _service.GetCatalogAsync(null, null, null, 1, 10);
         await _service.GetCatalogAsync(null, null, null, 1, 10);
 
-        // 2ª Chamada: Deve pegar do Cache (mesmos parâmetros)
-        await _service.GetCatalogAsync(null, null, null, 1, 10);
-
-        // Assert
-        // Verifica se o método GetAllAsync do repositório foi chamado EXATAMENTE UMA VEZ
         _repositoryMock.Verify(r => r.GetAllAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()),
             Times.Once);

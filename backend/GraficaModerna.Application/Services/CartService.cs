@@ -24,7 +24,7 @@ public class CartService(IUnitOfWork uow, ILogger<CartService> logger) : ICartSe
                 i.Id,
                 i.ProductId,
                 i.Product!.Name,
-                i.Product.ImageUrl ?? "",
+                (i.Product.ImageUrls != null && i.Product.ImageUrls.Count > 0) ? i.Product.ImageUrls[0] : "",
                 i.Product.Price,
                 i.Quantity,
                 i.Product.Price * i.Quantity,

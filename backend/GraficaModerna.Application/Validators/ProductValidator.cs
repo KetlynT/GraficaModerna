@@ -17,10 +17,10 @@ public class ProductValidator : AbstractValidator<CreateProductDto>
         RuleFor(x => x.Description)
             .MaximumLength(1000).WithMessage("A descrição é muito longa.");
 
-        RuleFor(x => x.ImageUrl)
+        RuleForEach(x => x.ImageUrls)
             .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out _))
-            .When(x => !string.IsNullOrEmpty(x.ImageUrl))
-            .WithMessage("A URL da imagem é inválida.");
+            .When(x => x.ImageUrls != null && x.ImageUrls.Count > 0)
+            .WithMessage("Uma das URLs da imagem é inválida.");
     }
 }
 
@@ -38,9 +38,9 @@ public class UpdateProductValidator : AbstractValidator<UpdateProductDto>
         RuleFor(x => x.Description)
             .MaximumLength(1000).WithMessage("A descrição é muito longa.");
 
-        RuleFor(x => x.ImageUrl)
+        RuleForEach(x => x.ImageUrls)
             .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out _))
-            .When(x => !string.IsNullOrEmpty(x.ImageUrl))
-            .WithMessage("A URL da imagem é inválida.");
+            .When(x => x.ImageUrls != null && x.ImageUrls.Count > 0)
+            .WithMessage("Uma das URLs da imagem é inválida.");
     }
 }

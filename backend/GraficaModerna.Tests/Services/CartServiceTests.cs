@@ -25,15 +25,12 @@ public class CartServiceTests
         _productRepoMock = new Mock<IProductRepository>();
         _loggerMock = new Mock<ILogger<CartService>>();
 
-        // Configura o UoW para retornar os mocks dos repositórios
         _uowMock.Setup(u => u.Carts).Returns(_cartRepoMock.Object);
         _uowMock.Setup(u => u.Products).Returns(_productRepoMock.Object);
 
-        // Mock da transação para não falhar no 'using var transaction'
         _uowMock.Setup(u => u.BeginTransactionAsync(It.IsAny<IsolationLevel>()))
             .ReturnsAsync(new Mock<IDbContextTransaction>().Object);
 
-        // Instancia o serviço SEM o AppDbContext
         _service = new CartService(_uowMock.Object, _loggerMock.Object);
     }
 
@@ -43,12 +40,12 @@ public class CartServiceTests
         // Arrange
         var userId = "user_agg";
         var productId = Guid.NewGuid();
-        var product = new Product("P1", "D", 10m, "url", 1, 1, 1, 1, 100) { Id = productId };
+        // Correção: Passando lista de imagens ["url"]
+        var product = new Product("P1", "D", 10m, ["url"], 1, 1, 1, 1, 100) { Id = productId };
 
         var cart = new Cart { UserId = userId };
         cart.Items.Add(new CartItem { ProductId = productId, Quantity = 2, Product = product });
 
-        // Mock dos métodos WithLock que o serviço usa agora
         _productRepoMock.Setup(r => r.GetByIdWithLockAsync(productId))
             .ReturnsAsync(product);
 
@@ -62,7 +59,7 @@ public class CartServiceTests
 
         // Assert
         Assert.Single(cart.Items);
-        Assert.Equal(5, cart.Items.First().Quantity); // 2 + 3 = 5
+        Assert.Equal(5, cart.Items.First().Quantity);
 
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }
@@ -73,12 +70,9 @@ public class CartServiceTests
         // Arrange
         var userId = "user_inactive";
         var productId = Guid.NewGuid();
-        // O repositório geralmente retorna null se o produto não estiver ativo (conforme cláusula WHERE no repository)
-        // ou podemos retornar o produto e verificar se o serviço checa o status, 
-        // mas o SQL do repositório já filtra IsActive=true.
 
         _productRepoMock.Setup(r => r.GetByIdWithLockAsync(productId))
-            .ReturnsAsync((Product?)null); // Simula produto não encontrado ou inativo
+            .ReturnsAsync((Product?)null);
 
         var dto = new AddToCartDto(productId, 1);
 
@@ -94,8 +88,9 @@ public class CartServiceTests
     {
         // Arrange
         var userId = "user_orphan";
-        var activeProduct = new Product("Active", "D", 10m, "url", 1, 1, 1, 1, 10);
-        var inactiveProduct = new Product("Inactive", "D", 10m, "url", 1, 1, 1, 1, 10);
+        // Correção: Passando lista de imagens ["url"]
+        var activeProduct = new Product("Active", "D", 10m, ["url"], 1, 1, 1, 1, 10);
+        var inactiveProduct = new Product("Inactive", "D", 10m, ["url"], 1, 1, 1, 1, 10);
         inactiveProduct.Deactivate();
 
         var cart = new Cart { UserId = userId };
@@ -111,11 +106,9 @@ public class CartServiceTests
         var result = await _service.GetCartAsync(userId);
 
         // Assert
-        // O serviço retorna DTO apenas dos itens ativos
         Assert.Single(result.Items);
         Assert.Equal("Active", result.Items.First().ProductName);
 
-        // Verifica se chamou a remoção do item inativo
         _cartRepoMock.Verify(r => r.RemoveItemAsync(itemInactive), Times.Once);
         _uowMock.Verify(u => u.CommitAsync(), Times.Once);
     }

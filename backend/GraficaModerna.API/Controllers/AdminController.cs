@@ -92,9 +92,7 @@ public class AdminController(
 
             var detectedExtension = await DetectExtensionFromSignatureAsync(memoryStream);
             if (string.IsNullOrEmpty(detectedExtension))
-            {
-                return BadRequest("O arquivo parece estar corrompido, falsificado ou tem um formato não permitido.");
-            }
+                return BadRequest("O arquivo parece estar corrompido ou tem um formato não permitido.");
 
             var fileName = $"{Guid.NewGuid()}{detectedExtension}";
             var filePath = Path.Combine(folderPath, fileName);
@@ -109,7 +107,6 @@ public class AdminController(
             else
             {
                 using var image = await Image.LoadAsync(memoryStream);
-
                 if (image.Width > MaxImageDimension || image.Height > MaxImageDimension)
                 {
                     image.Mutate(x => x.Resize(new ResizeOptions
@@ -118,24 +115,15 @@ public class AdminController(
                         Mode = ResizeMode.Max
                     }));
                 }
-
                 await image.SaveAsync(filePath);
             }
 
             var fileUrl = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
             return Ok(new { url = fileUrl });
         }
-        catch (UnknownImageFormatException)
+        catch (Exception ex)
         {
-            return BadRequest("O arquivo não é uma imagem válida ou está corrompido.");
-        }
-        catch (ImageFormatException)
-        {
-            return BadRequest("Erro ao decodificar a imagem.");
-        }
-        catch (Exception)
-        {
-            return StatusCode(500, "Erro interno ao processar o ficheiro.");
+            return StatusCode(500, new { message = "Erro ao processar arquivo.", details = ex.Message });
         }
     }
 
@@ -176,18 +164,23 @@ public class AdminController(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 8)
     {
-        if (page < 1) page = 1;
-        if (pageSize > 50) pageSize = 50;
-
         var result = await _productService.GetCatalogAsync(search, sort, order, page, pageSize);
         return Ok(result);
+    }
+
+    [HttpGet("products/{id}")]
+    public async Task<ActionResult<ProductResponseDto>> GetProductById(Guid id)
+    {
+        var product = await _productService.GetByIdAsync(id);
+        if (product == null) return NotFound(new { message = "Produto não encontrado." });
+        return Ok(product);
     }
 
     [HttpPost("products")]
     public async Task<ActionResult<ProductResponseDto>> CreateProduct([FromBody] CreateProductDto dto)
     {
         var result = await _productService.CreateAsync(dto);
-        return Created($"/api/products/{result.Id}", result);
+        return CreatedAtAction(nameof(GetProductById), new { id = result.Id }, result);
     }
 
     [HttpPut("products/{id}")]
@@ -279,8 +272,7 @@ public class AdminController(
     public async Task<ActionResult<IEnumerable<EmailTemplateDto>>> GetEmailTemplates()
     {
         var templates = await _uow.EmailTemplates.GetAllAsync();
-
-        var dtos = templates.Select(t => new EmailTemplateDto
+        return Ok(templates.Select(t => new EmailTemplateDto
         {
             Id = t.Id,
             Key = t.Key,
@@ -288,18 +280,14 @@ public class AdminController(
             BodyContent = t.BodyContent,
             Description = t.Description,
             UpdatedAt = t.UpdatedAt
-        });
-        return Ok(dtos);
+        }));
     }
 
     [HttpGet("email-templates/{id}")]
     public async Task<ActionResult<EmailTemplateDto>> GetEmailTemplateById(Guid id)
     {
         var template = await _uow.EmailTemplates.GetByIdAsync(id);
-
-        if (template == null)
-            return NotFound(new { message = "Template não encontrado." });
-
+        if (template == null) return NotFound(new { message = "Template não encontrado." });
         return Ok(new EmailTemplateDto
         {
             Id = template.Id,
@@ -315,25 +303,16 @@ public class AdminController(
     public async Task<IActionResult> UpdateEmailTemplate(Guid id, [FromBody] UpdateEmailTemplateDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-
         var template = await _uow.EmailTemplates.GetByIdAsync(id);
-
         if (template == null) return NotFound(new { message = "Template não encontrado." });
 
         template.Subject = dto.Subject;
         template.BodyContent = dto.BodyContent;
         template.UpdatedAt = DateTime.UtcNow;
 
-        try
-        {
-            _uow.EmailTemplates.Update(template);
-            await _uow.CommitAsync();
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Erro ao atualizar template.", details = ex.Message });
-        }
+        _uow.EmailTemplates.Update(template);
+        await _uow.CommitAsync();
+        return NoContent();
     }
 
     #endregion
@@ -347,7 +326,6 @@ public class AdminController(
             SameSite = SameSiteMode.Strict,
             Expires = DateTime.UtcNow.AddMinutes(15)
         };
-
         var refreshCookieOptions = new CookieOptions
         {
             HttpOnly = true,
@@ -355,7 +333,6 @@ public class AdminController(
             SameSite = SameSiteMode.Strict,
             Expires = DateTime.UtcNow.AddDays(7)
         };
-
         Response.Cookies.Append("accessToken", accessToken, cookieOptions);
         Response.Cookies.Append("refreshToken", refreshToken, refreshCookieOptions);
     }
@@ -367,18 +344,10 @@ public class AdminController(
         stream.Position = 0;
         var header = new byte[16];
         var bytesRead = await stream.ReadAsync(header);
-
         if (bytesRead < 4) return null;
-
         if (header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF) return ".jpg";
         if (header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47) return ".png";
-        if (bytesRead >= 12 &&
-            header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46 &&
-            header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50) return ".webp";
-        if (bytesRead >= 8 &&
-            header[4] == 0x66 && header[5] == 0x74 && header[6] == 0x79 && header[7] == 0x70) return ".mp4";
-        if (header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3) return ".webm";
-
+        if (bytesRead >= 8 && header[4] == 0x66 && header[5] == 0x74 && header[6] == 0x79 && header[7] == 0x70) return ".mp4";
         return null;
     }
 }
