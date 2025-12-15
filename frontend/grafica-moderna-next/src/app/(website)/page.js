@@ -6,7 +6,7 @@ import { Search, Printer, ChevronLeft, ChevronRight, Filter } from 'lucide-react
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { ProductService } from '@/app/(website)/(shop)/_services/productService';
-import { ContentService } from '@/app/(website)/services/contentService';
+import { ContentService } from '@/app/(website)/_services/contentService';
 import { ProductCard } from '@/app/(website)/_components/ProductCard';
 import { Button } from '@/app/_components/ui/Button';
 

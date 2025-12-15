@@ -9,7 +9,7 @@ import { ShoppingCart, Search, Edit } from 'lucide-react';
 import { Button } from '@/app/_components/ui/Button';
 import { useCart } from '@/app/(website)/_context/CartContext';
 import { useAuth } from '@/app/_context/AuthContext';
-import { getProxyImageUrl } from '@/lib/imageHelper';
+import { getProxyImageUrl } from '@/app/lib/imageHelper';
 
 export const ProductCard = ({ product, purchaseEnabled = true }) => {
   const { addToCart } = useCart();

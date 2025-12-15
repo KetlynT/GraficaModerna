@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Phone, Mail, MapPin } from 'lucide-react';
-import { ContentService } from '@/app/(website)/services/contentService';
+import { ContentService } from '@/app/(website)/_services/contentService';
 
 export const Footer = () => {
   const [settings, setSettings] = useState(null);

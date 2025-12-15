@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { MessageSquare, ShoppingCart, User, LogOut, LayoutDashboard, Package } from 'lucide-react';
-import { ContentService } from '@/app/(website)/services/contentService';
+import { ContentService } from '@/app/(website)/_services/contentService';
 import { useCart } from '@/app/(website)/_context/CartContext';
 import { useAuth } from '@/app/_context/AuthContext';
 
@@ -103,15 +103,7 @@ export const Header = () => {
           {!settingsLoading && (
             isAuthenticated ? (
                 <div className="flex items-center gap-4 border-l pl-6 border-gray-200">
-                    {isAdmin ? (
-                        <Link 
-                            href="/putiroski/dashboard" 
-                            className="flex items-center gap-2 text-sm font-bold text-primary bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-all" 
-                        >
-                            <LayoutDashboard size={18} />
-                            <span className="hidden md:inline">Painel</span>
-                        </Link>
-                    ) : (
+
                         <>
                             <Link href="/meus-pedidos" className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-primary" title="Meus Pedidos">
                                 <Package size={20} />
@@ -120,7 +112,6 @@ export const Header = () => {
                                 <User size={20} />
                             </Link>
                         </>
-                    )}
                     
                     <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 ml-2" title="Sair">
                         <LogOut size={20} />
