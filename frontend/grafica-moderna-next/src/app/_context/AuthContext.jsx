@@ -2,7 +2,7 @@
 
 import { createContext, useState, useEffect, useContext } from 'react';
 import { useRouter } from 'next/navigation';
-import authService from '@/app/(website)/login/_services/authService';
+import * as authService from '@/app/(website)/login/_services/authService';
 import toast from 'react-hot-toast';
 
 const AuthContext = createContext({});
