@@ -4,11 +4,12 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import PropTypes from 'prop-types';
 import { ShoppingCart, Search, Edit } from 'lucide-react';
 import { Button } from '@/app/_components/ui/Button';
 import { useCart } from '@/app/(website)/_context/CartContext';
 import { useAuth } from '@/app/_context/AuthContext';
-import PropTypes from 'prop-types';
+import { getProxyImageUrl } from '@/lib/imageHelper';
 
 export const ProductCard = ({ product, purchaseEnabled = true }) => {
   const { addToCart } = useCart();
@@ -36,6 +37,9 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
     }
   };
 
+  const rawImageUrl = images[currentImgIndex] || 'https://placehold.co/400x300?text=Sem+Imagem';
+  const displayImageUrl = getProxyImageUrl(rawImageUrl);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -46,7 +50,7 @@ export const ProductCard = ({ product, purchaseEnabled = true }) => {
     >
       <div className="relative h-64 w-full overflow-hidden bg-gray-50">
         <Image 
-          src={images[currentImgIndex] || 'https://placehold.co/400x300?text=Sem+Imagem'}
+          src={displayImageUrl}
           alt={product.name} 
           fill
           className="object-cover transform group-hover:scale-110 transition-transform duration-700" 

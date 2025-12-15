@@ -14,7 +14,7 @@ import {
   Maximize2,
   X
 } from 'lucide-react';
-
+import { getProxyImageUrl } from '@/lib/imageHelper';
 import { ProductService } from '@/app/(website)/(shop)/_services/productService';
 import { ContentService } from '@/app/(website)/services/contentService';
 import { useCart } from '@/app/(website)/_context/CartContext';
@@ -72,9 +72,11 @@ export default function ProductDetails() {
     loadData();
   }, [id]);
 
-  const images = product?.imageUrls?.length
+  const rawImages = product?.imageUrls?.length
     ? product.imageUrls
     : ['https://placehold.co/600x400?text=Sem+Imagem'];
+
+  const images = rawImages.map(img => getProxyImageUrl(img));
 
   const currentImage = useMemo(
     () => images[selectedImageIndex] || images[0],

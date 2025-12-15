@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 
-const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7255/api';
+const API_URL = process.env.INTERNAL_API_URL || 'https://localhost:7255/api';
 
 export async function apiServer(endpoint, method = 'GET', body = null, contentType = 'application/json') {
   const cookieStore = await cookies();
