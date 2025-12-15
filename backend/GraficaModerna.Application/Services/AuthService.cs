@@ -33,14 +33,14 @@ public class AuthService(
     {
         var settings = await _contentService.GetSettingsAsync();
         if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
-            throw new Exception("O sistema está em modo orçamento. Login de clientes desativado.");
+            throw new InvalidOperationException("O sistema está em modo orçamento. Login de clientes desativado.");
     }
 
     private async Task CheckRegistrationEnabled()
     {
         var settings = await _contentService.GetSettingsAsync();
         if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
-            throw new Exception("O cadastro de novos clientes está temporariamente suspenso.");
+            throw new InvalidOperationException("O cadastro de novos clientes está temporariamente suspenso.");
     }
 
     public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
@@ -49,7 +49,7 @@ public class AuthService(
 
         if (!DocumentValidator.IsValid(dto.CpfCnpj))
         {
-            throw new Exception("O documento informado (CPF ou CNPJ) é inválido.");
+            throw new ArgumentException("O documento informado (CPF ou CNPJ) é inválido.");
         }
 
         var user = new ApplicationUser
@@ -71,9 +71,9 @@ public class AuthService(
                 .Select(e => e.Description);
 
             if (safeErrors.Any())
-                throw new Exception($"Senha fraca: {string.Join("; ", safeErrors)}");
+                throw new ArgumentException($"Senha fraca: {string.Join("; ", safeErrors)}");
 
-            throw new Exception("Erro ao criar usuário.");
+            throw new InvalidOperationException("Erro ao criar usuário.");
         }
 
         await _userManager.AddToRoleAsync(user, Roles.User);
@@ -107,14 +107,19 @@ public class AuthService(
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
     {
+        if (!dto.IsAdminLogin)
+        {
+            await CheckPurchaseEnabled();
+        }
+
         var user = await _userManager.FindByEmailAsync(dto.Email)
-                   ?? throw new Exception("Credenciais inválidas.");
+                   ?? throw new ArgumentException("Credenciais inválidas.");
 
         if (await _userManager.IsLockedOutAsync(user))
         {
             var end = await _userManager.GetLockoutEndDateAsync(user);
             var timeLeft = end!.Value - DateTimeOffset.UtcNow;
-            throw new Exception($"Conta bloqueada temporariamente. Tente novamente em {Math.Ceiling(timeLeft.TotalMinutes)} minutos.");
+            throw new InvalidOperationException($"Conta bloqueada temporariamente. Tente novamente em {Math.Ceiling(timeLeft.TotalMinutes)} minutos.");
         }
 
         if (!await _userManager.CheckPasswordAsync(user, dto.Password))
@@ -122,9 +127,9 @@ public class AuthService(
             await _userManager.AccessFailedAsync(user);
 
             if (await _userManager.IsLockedOutAsync(user))
-                throw new Exception("Muitas tentativas falhas. Conta bloqueada temporariamente.");
+                throw new InvalidOperationException("Muitas tentativas falhas. Conta bloqueada temporariamente.");
 
-            throw new Exception("Credenciais inválidas.");
+            throw new ArgumentException("Credenciais inválidas.");
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
@@ -135,17 +140,12 @@ public class AuthService(
         if (dto.IsAdminLogin)
         {
             if (!isAdmin)
-                throw new Exception("Acesso não autorizado para contas de cliente.");
+                throw new UnauthorizedAccessException("Acesso não autorizado para contas de cliente.");
         }
         else
         {
             if (isAdmin)
-                throw new Exception("Administradores devem acessar exclusivamente pelo Painel Administrativo.");
-        }
-
-        if (!isAdmin)
-        {
-            await CheckPurchaseEnabled();
+                throw new UnauthorizedAccessException("Administradores devem acessar exclusivamente pelo Painel Administrativo.");
         }
 
         _ = Task.Run(async () =>
@@ -170,36 +170,36 @@ public class AuthService(
 
     public async Task<AuthResponseDto> RefreshTokenAsync(TokenModel tokenModel)
     {
-        if (tokenModel is null) throw new Exception("Requisição inválida");
+        if (tokenModel is null) throw new ArgumentException("Requisição inválida");
 
         var accessToken = tokenModel.AccessToken;
         var refreshToken = tokenModel.RefreshToken;
 
-        if (string.IsNullOrEmpty(refreshToken)) throw new Exception("Refresh token inválido");
+        if (string.IsNullOrEmpty(refreshToken)) throw new ArgumentException("Refresh token inválido");
 
         var principal = GetPrincipalFromExpiredToken(accessToken) ??
-                        throw new Exception("Token de acesso ou refresh token inválido");
+                        throw new SecurityTokenException("Token de acesso ou refresh token inválido");
         var username = principal.Identity!.Name!;
 
         var user = await _userManager.FindByNameAsync(username);
 
         if (user == null || user.RefreshToken == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
-            throw new Exception("Refresh token inválido ou expirado.");
+            throw new SecurityTokenException("Refresh token inválido ou expirado.");
 
         if (await _userManager.IsLockedOutAsync(user))
-            throw new Exception("Conta bloqueada temporariamente.");
+            throw new InvalidOperationException("Conta bloqueada temporariamente.");
 
         var verificationResult = _passwordHasher.VerifyHashedPassword(user, user.RefreshToken, refreshToken);
 
         if (verificationResult != PasswordVerificationResult.Success)
-            throw new Exception("Refresh token inválido ou expirado.");
+            throw new SecurityTokenException("Refresh token inválido ou expirado.");
 
         return await CreateTokenPairAsync(user);
     }
 
     public async Task<UserProfileDto> GetProfileAsync(string userId)
     {
-        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuário não encontrado.");
+        var user = await _userManager.FindByIdAsync(userId) ?? throw new KeyNotFoundException("Usuário não encontrado.");
         return new UserProfileDto(user.FullName, user.Email!, user.CpfCnpj, user.PhoneNumber ?? "");
     }
 
@@ -207,24 +207,24 @@ public class AuthService(
     {
         if (!DocumentValidator.IsValid(dto.CpfCnpj))
         {
-            throw new Exception("O documento informado (CPF ou CNPJ) é inválido.");
+            throw new ArgumentException("O documento informado (CPF ou CNPJ) é inválido.");
         }
 
-        var user = await _userManager.FindByIdAsync(userId) ?? throw new Exception("Usuário não encontrado.");
+        var user = await _userManager.FindByIdAsync(userId) ?? throw new KeyNotFoundException("Usuário não encontrado.");
         user.FullName = dto.FullName;
         user.PhoneNumber = dto.PhoneNumber;
         user.CpfCnpj = dto.CpfCnpj;
 
         var result = await _userManager.UpdateAsync(user);
-        if (!result.Succeeded) throw new Exception("Erro ao atualizar perfil.");
+        if (!result.Succeeded) throw new InvalidOperationException("Erro ao atualizar perfil.");
     }
 
     public async Task ConfirmEmailAsync(ConfirmEmailDto dto)
     {
-        var user = await _userManager.FindByIdAsync(dto.UserId) ?? throw new Exception("Usuário inválido.");
+        var user = await _userManager.FindByIdAsync(dto.UserId) ?? throw new ArgumentException("Usuário inválido.");
 
         var result = await _userManager.ConfirmEmailAsync(user, dto.Token);
-        if (!result.Succeeded) throw new Exception("Falha ao confirmar e-mail.");
+        if (!result.Succeeded) throw new InvalidOperationException("Falha ao confirmar e-mail.");
     }
 
     public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
@@ -251,12 +251,12 @@ public class AuthService(
     public async Task ResetPasswordAsync(ResetPasswordDto dto)
     {
         var user = await _userManager.FindByEmailAsync(dto.Email)
-                   ?? throw new Exception("Usuário não encontrado.");
+                   ?? throw new KeyNotFoundException("Usuário não encontrado.");
 
         var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
 
         if (!result.Succeeded)
-            throw new Exception("Erro ao redefinir senha: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+            throw new InvalidOperationException("Erro ao redefinir senha: " + string.Join(", ", result.Errors.Select(e => e.Description)));
 
         _ = Task.Run(async () => {
             try
@@ -301,7 +301,7 @@ public class AuthService(
         new(JwtRegisteredClaimNames.UniqueName, user.UserName!)
     };
 
-        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+        var keyString = _configuration["JWT_SECRET_KEY"]
             ?? throw new InvalidOperationException("JWT_SECRET_KEY não configurada.");
 
         var authSigningKey = new SymmetricSecurityKey(
@@ -329,15 +329,17 @@ public class AuthService(
         return Convert.ToBase64String(randomNumber);
     }
 
-    private static ClaimsPrincipal? GetPrincipalFromExpiredToken(string? token)
+    private ClaimsPrincipal? GetPrincipalFromExpiredToken(string? token)
     {
-        var keyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")!;
+        var keyString = _configuration["JWT_SECRET_KEY"]
+             ?? throw new InvalidOperationException("JWT_SECRET_KEY não configurada.");
+
         var tokenValidationParameters = new TokenValidationParameters
         {
             ValidateAudience = false,
             ValidateIssuer = false,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString!)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString)),
             ValidateLifetime = false
         };
 

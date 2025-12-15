@@ -34,125 +34,39 @@ public class StripeWebhookController(
     public async Task<IActionResult> HandleStripeEvent()
     {
         var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
-        var endpointSecret = Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET")!;
+        var endpointSecret = _configuration["STRIPE_WEBHOOK_SECRET"];
+
+        if (string.IsNullOrEmpty(endpointSecret))
+        {
+            _logger.LogCritical("STRIPE_WEBHOOK_SECRET não configurado.");
+            return StatusCode(500);
+        }
 
         try
         {
             var signature = Request.Headers["Stripe-Signature"];
             var stripeEvent = EventUtility.ConstructEvent(json, signature, endpointSecret);
 
-            var eventExists = await _context.ProcessedWebhookEvents.AnyAsync(e => e.EventId == stripeEvent.Id);
+            var eventExists = await _context.ProcessedWebhookEvents
+                .AsNoTracking()
+                .AnyAsync(e => e.EventId == stripeEvent.Id);
+
             if (eventExists)
             {
                 _logger.LogInformation("Evento {EventId} já processado anteriormente. Ignorando.", stripeEvent.Id);
                 return Ok();
             }
 
-            _context.ProcessedWebhookEvents.Add(new ProcessedWebhookEvent { EventId = stripeEvent.Id });
-            await _context.SaveChangesAsync();
-
             if (stripeEvent.Type == Events.CheckoutSessionCompleted)
             {
-                if (stripeEvent.Data.Object is Session session && session.Metadata != null)
-                {
-                    if (session.Metadata.TryGetValue("order_data", out var encryptedOrder))
-                    {
-                        try
-                        {
-                            var plainOrderId = _securityService.Unprotect(encryptedOrder);
-
-                            if (!Guid.TryParse(plainOrderId, out var orderId))
-                            {
-                                _logger.LogError("ID descriptografado inválido no evento {EventId}.", stripeEvent.Id);
-                                return BadRequest("Invalid Order ID format");
-                            }
-
-                            var transactionId = session.PaymentIntentId;
-                            var amountPaid = session.AmountTotal ?? 0;
-
-                            if (string.IsNullOrEmpty(transactionId))
-                            {
-                                _logger.LogError("[Webhook] PaymentIntentId ausente para Order {OrderId}. Event: {EventId}", orderId, stripeEvent.Id);
-                                return BadRequest("Missing PaymentIntentId");
-                            }
-
-                            if (amountPaid <= 0)
-                            {
-                                _logger.LogError("[Webhook] Valor pago inválido ({Amount}) para Order {OrderId}. Event: {EventId}",
-                                    amountPaid, orderId, stripeEvent.Id);
-                                return BadRequest("Invalid payment amount");
-                            }
-
-                            _logger.LogInformation(
-                                "[Webhook] Processando pagamento para Order {OrderId}. Transaction: {TransactionId}. Amount: {Amount} cents",
-                                orderId, transactionId, amountPaid);
-
-                            try
-                            {
-                                await _orderService.ConfirmPaymentViaWebhookAsync(orderId, transactionId, amountPaid);
-                            }
-                            catch (Exception ex) when (ex.Message.Contains("FATAL"))
-                            {
-                                _logger.LogCritical(ex,
-                                    "[SECURITY ALERT] Tentativa de fraude detectada. Order: {OrderId}, Transaction: {TransactionId}",
-                                    orderId, transactionId);
-
-                                return BadRequest("Payment validation failed - security violation");
-                            }
-
-                            _logger.LogInformation(
-                                "[Webhook] Pagamento confirmado com sucesso. Order {OrderId}", orderId);
-                        }
-                        catch (SecurityException)
-                        {
-                            _logger.LogCritical("FALHA DE INTEGRIDADE: Assinatura dos metadados inválida no Webhook {EventId}.", stripeEvent.Id);
-                            return StatusCode(403, "Integrity Check Failed");
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogCritical(ex,
-                                "[Webhook] ERRO CRÍTICO ao confirmar pagamento. Event: {EventId}", stripeEvent.Id);
-                            return StatusCode(500, "Payment confirmation failed");
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning("[Webhook] Metadados de segurança ausentes ou inválidos no evento {EventId}", stripeEvent.Id);
-                    }
-                }
+                await ProcessCheckoutSessionAsync(stripeEvent);
             }
             else if (stripeEvent.Type == Events.CheckoutSessionAsyncPaymentSucceeded)
             {
-                if (stripeEvent.Data.Object is Session session && session.Metadata != null)
-                {
-                    if (session.Metadata.TryGetValue("order_data", out var encryptedOrder))
-                    {
-                        try
-                        {
-                            var plainOrderId = _securityService.Unprotect(encryptedOrder);
-                            if (Guid.TryParse(plainOrderId, out var orderId))
-                            {
-                                var transactionId = session.PaymentIntentId;
-                                var amountPaid = session.AmountTotal ?? 0;
-
-                                _logger.LogInformation(
-                                    "[Webhook] Pagamento assíncrono bem-sucedido para Order {OrderId}. Event: {EventId}", orderId, stripeEvent.Id);
-
-                                await _orderService.ConfirmPaymentViaWebhookAsync(orderId, transactionId, amountPaid);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "[Webhook] Erro ao processar metadados no pagamento assíncrono. Event: {EventId}", stripeEvent.Id);
-                        }
-                    }
-                }
+                await ProcessCheckoutSessionAsync(stripeEvent);
             }
-            else if (stripeEvent.Type == Events.CheckoutSessionAsyncPaymentFailed)
-            {
-                _logger.LogWarning("[Webhook] Pagamento assíncrono falhou: {EventId}", stripeEvent.Id);
-            }
-            else if (stripeEvent.Type == Events.PaymentIntentPaymentFailed)
+            else if (stripeEvent.Type == Events.CheckoutSessionAsyncPaymentFailed ||
+                     stripeEvent.Type == Events.PaymentIntentPaymentFailed)
             {
                 _logger.LogWarning("[Webhook] Pagamento falhou: {EventId}", stripeEvent.Id);
             }
@@ -160,6 +74,9 @@ public class StripeWebhookController(
             {
                 _logger.LogInformation("[Webhook] Evento não tratado recebido: {EventType}. ID: {EventId}", stripeEvent.Type, stripeEvent.Id);
             }
+
+            _context.ProcessedWebhookEvents.Add(new ProcessedWebhookEvent { EventId = stripeEvent.Id });
+            await _context.SaveChangesAsync();
 
             return Ok();
         }
@@ -170,8 +87,61 @@ public class StripeWebhookController(
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "[Webhook] Erro interno ao processar webhook.");
+            _logger.LogError(e, "[Webhook] Erro interno ao processar webhook {EventId}.", Request.Headers["Stripe-Event-Id"]);
             return StatusCode(500, "Internal server error");
+        }
+    }
+
+    private async Task ProcessCheckoutSessionAsync(Event stripeEvent)
+    {
+        if (stripeEvent.Data.Object is not Session session || session.Metadata == null)
+            return;
+
+        if (session.Metadata.TryGetValue("order_data", out var encryptedOrder))
+        {
+            try
+            {
+                var plainOrderId = _securityService.Unprotect(encryptedOrder);
+
+                if (!Guid.TryParse(plainOrderId, out var orderId))
+                {
+                    _logger.LogError("ID descriptografado inválido no evento {EventId}.", stripeEvent.Id);
+                    throw new Exception("Invalid Order ID format");
+                }
+
+                var transactionId = session.PaymentIntentId;
+                var amountPaid = session.AmountTotal ?? 0;
+
+                if (string.IsNullOrEmpty(transactionId))
+                {
+                    _logger.LogError("[Webhook] PaymentIntentId ausente para Order {OrderId}. Event: {EventId}", orderId, stripeEvent.Id);
+                    return;
+                }
+
+                _logger.LogInformation(
+                    "[Webhook] Processando pagamento para Order {OrderId}. Transaction: {TransactionId}",
+                    orderId, transactionId);
+
+                try
+                {
+                    await _orderService.ConfirmPaymentViaWebhookAsync(orderId, transactionId, amountPaid);
+                    _logger.LogInformation("[Webhook] Pagamento confirmado com sucesso. Order {OrderId}", orderId);
+                }
+                catch (Exception ex) when (ex.Message.Contains("FATAL") || ex.Message.Contains("SECURITY"))
+                {
+                    _logger.LogCritical(ex, "[SECURITY ALERT] Tentativa de fraude detectada. Order: {OrderId}", orderId);
+                    throw;
+                }
+            }
+            catch (SecurityException)
+            {
+                _logger.LogCritical("FALHA DE INTEGRIDADE: Assinatura dos metadados inválida no Webhook {EventId}.", stripeEvent.Id);
+                throw;
+            }
+        }
+        else
+        {
+            _logger.LogWarning("[Webhook] Metadados de segurança ausentes ou inválidos no evento {EventId}", stripeEvent.Id);
         }
     }
 }

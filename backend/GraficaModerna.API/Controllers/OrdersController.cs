@@ -19,35 +19,28 @@ public class OrdersController(IOrderService orderService, IContentService conten
     {
         var settings = await _contentService.GetSettingsAsync();
         if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
-            throw new Exception("Novos pedidos estão desativados temporariamente. Entre em contato para orçamento.");
+            throw new InvalidOperationException("Novos pedidos estão desativados temporariamente. Entre em contato para orçamento.");
     }
 
     [HttpPost]
     public async Task<IActionResult> Checkout([FromBody] CheckoutDto dto)
     {
-        try
-        {
-            await CheckPurchaseEnabled();
+        await CheckPurchaseEnabled();
 
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
 
-            var order = await _orderService.CreateOrderFromCartAsync(
-                userId,
-                dto.Address,
-                dto.CouponCode,
-                dto.ShippingMethod
-            );
+        var order = await _orderService.CreateOrderFromCartAsync(
+            userId,
+            dto.Address,
+            dto.CouponCode,
+            dto.ShippingMethod
+        );
 
-            return Ok(order);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(order);
     }
 
-[HttpGet]
+    [HttpGet]
     public async Task<IActionResult> GetMyOrders([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -60,18 +53,11 @@ public class OrdersController(IOrderService orderService, IContentService conten
     [HttpPost("{id}/request-refund")]
     public async Task<IActionResult> RequestRefund(Guid id, [FromBody] RequestRefundDto dto)
     {
-        try
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Usuário não autenticado." });
 
-            await _orderService.RequestRefundAsync(id, userId, dto);
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        await _orderService.RequestRefundAsync(id, userId, dto);
+        return Ok();
     }
 }
 

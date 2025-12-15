@@ -42,10 +42,10 @@ public class OrderService(
         var cart = await _uow.Carts.GetByUserIdAsync(userId);
 
         if (cart == null || cart.Items.Count == 0)
-            throw new Exception("Carrinho vazio.");
+            throw new InvalidOperationException("Carrinho vazio.");
 
         if (cart.Items.Any(i => i.Quantity <= 0))
-            throw new Exception("O carrinho contém itens com quantidades inválidas.");
+            throw new InvalidOperationException("O carrinho contém itens com quantidades inválidas.");
 
         var shippingItems = cart.Items.Select(i => new ShippingItemDto
         {
@@ -64,7 +64,7 @@ public class OrderService(
         var selectedOption = allOptions.FirstOrDefault(o =>
                                  o.Name.Trim().Equals(shippingMethod.Trim(),
                                      StringComparison.InvariantCultureIgnoreCase)) ??
-                             throw new Exception("Método de envio inválido ou indisponível.");
+                             throw new ArgumentException("Método de envio inválido ou indisponível.");
         var verifiedShippingCost = selectedOption.Price;
 
         using var transaction = await _uow.BeginTransactionAsync();
@@ -78,7 +78,7 @@ public class OrderService(
                 if (item.Product == null) continue;
 
                 if (item.Product.StockQuantity < item.Quantity)
-                    throw new Exception($"Estoque insuficiente para o produto {item.Product.Name}");
+                    throw new InvalidOperationException($"Estoque insuficiente para o produto {item.Product.Name}");
 
                 subTotal += item.Quantity * item.Product.Price;
 
@@ -99,7 +99,7 @@ public class OrderService(
                 if (coupon != null && coupon.IsValid())
                 {
                     var alreadyUsed = await _uow.Coupons.IsUsageLimitReachedAsync(userId, coupon.Code);
-                    if (alreadyUsed) throw new Exception("Cupom já utilizado.");
+                    if (alreadyUsed) throw new InvalidOperationException("Cupom já utilizado.");
 
                     discount = subTotal * (coupon.DiscountPercentage / 100m);
                 }
@@ -108,10 +108,10 @@ public class OrderService(
             var totalAmount = subTotal - discount + verifiedShippingCost;
 
             if (totalAmount < Order.MinOrderAmount)
-                throw new Exception($"O valor total do pedido deve ser no mínimo {Order.MinOrderAmount:C}.");
+                throw new InvalidOperationException($"O valor total do pedido deve ser no mínimo {Order.MinOrderAmount:C}.");
 
             if (totalAmount > Order.MaxOrderAmount)
-                throw new Exception($"O valor do pedido excede o limite de segurança de {Order.MaxOrderAmount:C}.");
+                throw new InvalidOperationException($"O valor do pedido excede o limite de segurança de {Order.MaxOrderAmount:C}.");
 
             var formattedAddress =
                 $"{addressDto.Street}, {addressDto.Number} - {addressDto.Complement} - {addressDto.Neighborhood}, " +
@@ -339,7 +339,7 @@ public class OrderService(
         using var transaction = await _uow.BeginTransactionAsync();
         try
         {
-            var order = await _uow.Orders.GetByIdAsync(orderId) ?? throw new Exception("Pedido não encontrado");
+            var order = await _uow.Orders.GetByIdAsync(orderId) ?? throw new KeyNotFoundException("Pedido não encontrado");
 
             var oldStatus = order.Status;
             var newStatusEnum = ParseStatus(dto.Status);
@@ -390,12 +390,12 @@ public class OrderService(
                         amountToRefund = order.RefundRequestedAmount ?? order.TotalAmount;
 
                     if (amountToRefund > order.TotalAmount)
-                        throw new Exception($"O valor do reembolso ({amountToRefund:C}) não pode ser maior que o total do pedido.");
+                        throw new InvalidOperationException($"O valor do reembolso ({amountToRefund:C}) não pode ser maior que o total do pedido.");
 
                     if (order.RefundType == "Parcial" && order.RefundRequestedAmount.HasValue)
                     {
                         if (amountToRefund > order.RefundRequestedAmount.Value)
-                            throw new Exception($"O valor do reembolso ({amountToRefund:C}) excede o valor calculado dos itens solicitados ({order.RefundRequestedAmount.Value:C}).");
+                            throw new InvalidOperationException($"O valor do reembolso ({amountToRefund:C}) excede o valor calculado dos itens solicitados ({order.RefundRequestedAmount.Value:C}).");
                     }
 
                     await _paymentService.RefundPaymentAsync(order.StripePaymentIntentId, amountToRefund);
@@ -446,27 +446,27 @@ public class OrderService(
         var order = await GetUserOrderOrFail(orderId, userId);
 
         if (order.Status != OrderStatus.Entregue && order.Status != OrderStatus.Pago)
-            throw new Exception("Status do pedido não permite solicitação de reembolso.");
+            throw new InvalidOperationException("Status do pedido não permite solicitação de reembolso.");
 
         if (!string.IsNullOrEmpty(order.RefundType))
-            throw new Exception("Já existe uma solicitação de reembolso para este pedido.");
+            throw new InvalidOperationException("Já existe uma solicitação de reembolso para este pedido.");
 
         decimal calculatedRefundAmount = 0;
 
         if (dto.RefundType == "Parcial")
         {
             if (dto.Items == null || dto.Items.Count == 0)
-                throw new Exception("Nenhum item selecionado para reembolso parcial.");
+                throw new ArgumentException("Nenhum item selecionado para reembolso parcial.");
 
             decimal discountRatio = order.SubTotal > 0 ? order.Discount / order.SubTotal : 0;
 
             foreach (var itemRequest in dto.Items)
             {
                 var orderItem = order.Items.FirstOrDefault(i => i.ProductId == itemRequest.ProductId)
-                    ?? throw new Exception($"Produto {itemRequest.ProductId} não pertence a este pedido.");
+                    ?? throw new ArgumentException($"Produto {itemRequest.ProductId} não pertence a este pedido.");
 
                 if (itemRequest.Quantity > orderItem.Quantity || itemRequest.Quantity <= 0)
-                    throw new Exception($"Quantidade inválida para o produto {orderItem.ProductName}.");
+                    throw new ArgumentException($"Quantidade inválida para o produto {orderItem.ProductName}.");
 
                 orderItem.RefundQuantity = itemRequest.Quantity;
 

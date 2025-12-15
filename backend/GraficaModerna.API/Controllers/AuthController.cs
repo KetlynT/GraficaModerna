@@ -26,12 +26,6 @@ public class AuthController(
     [HttpPost("register")]
     public async Task<ActionResult> Register(RegisterDto dto)
     {
-        var settings = await _contentService.GetSettingsAsync();
-        if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
-        {
-            return StatusCode(403, new { message = "O cadastro de novos usuários está temporariamente desativado." });
-        }
-
         var result = await _authService.RegisterAsync(dto);
         SetTokenCookies(result.AccessToken, result.RefreshToken);
 
@@ -49,16 +43,6 @@ public class AuthController(
     {
         var userLoginDto = dto with { IsAdminLogin = false };
         var result = await _authService.LoginAsync(userLoginDto);
-
-        var settings = await _contentService.GetSettingsAsync();
-        if (settings.TryGetValue("purchase_enabled", out var enabled) && enabled == "false")
-        {
-            if (result.Role != Roles.Admin)
-            {
-                await _blacklistService.BlacklistTokenAsync(result.AccessToken, DateTime.UtcNow.AddDays(1));
-                return StatusCode(403, new { message = "Loja em modo orçamento. Login restrito a administradores." });
-            }
-        }
 
         SetTokenCookies(result.AccessToken, result.RefreshToken);
 
@@ -161,17 +145,10 @@ public class AuthController(
 
         var tokenModel = new TokenModel(accessToken, refreshToken);
 
-        try
-        {
-            var result = await _authService.RefreshTokenAsync(tokenModel);
-            SetTokenCookies(result.AccessToken, result.RefreshToken);
+        var result = await _authService.RefreshTokenAsync(tokenModel);
+        SetTokenCookies(result.AccessToken, result.RefreshToken);
 
-            return Ok(new { result.Email, result.Role });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(ex.Message);
-        }
+        return Ok(new { result.Email, result.Role });
     }
 
     [HttpPost("confirm-email")]
