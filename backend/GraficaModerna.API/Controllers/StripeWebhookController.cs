@@ -75,8 +75,15 @@ public class StripeWebhookController(
                 _logger.LogInformation("[Webhook] Evento não tratado recebido: {EventType}. ID: {EventId}", stripeEvent.Type, stripeEvent.Id);
             }
 
-            _context.ProcessedWebhookEvents.Add(new ProcessedWebhookEvent { EventId = stripeEvent.Id });
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.ProcessedWebhookEvents.Add(new ProcessedWebhookEvent { EventId = stripeEvent.Id });
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException dbEx)
+            {
+                _logger.LogWarning(dbEx, "Evento {EventId} processado, mas falhou ao salvar registro de duplicidade (provável Race Condition).", stripeEvent.Id);
+            }
 
             return Ok();
         }

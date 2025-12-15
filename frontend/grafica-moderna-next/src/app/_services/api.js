@@ -25,6 +25,16 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+const retryRequest = async (fn, retries = 3, delay = 1000) => {
+  try {
+    return await fn();
+  } catch (err) {
+    if (retries <= 1) throw err;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return retryRequest(fn, retries - 1, delay * 2);
+  }
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -54,14 +64,16 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        await api.post('/auth/refresh-token');
+        await retryRequest(() => api.post('/auth/refresh-token'), 3, 1000);
 
         processQueue(null);
         return api(originalRequest);
 
       } catch (refreshError) {
+        processQueue(refreshError, null);
+        
         if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+           window.location.href = '/login';
         }
         return Promise.reject(refreshError);
       } finally {
@@ -76,6 +88,10 @@ api.interceptors.response.use(
         : 'Muitas tentativas consecutivas. Aguarde um momento antes de tentar novamente.';
       toast.error(message);
       return Promise.reject(error);
+    }
+
+    if (!error.response) {
+      console.error('Erro de conexão:', error);
     }
 
     return Promise.reject(error);

@@ -67,31 +67,55 @@ public class MelhorEnvioShippingService(
 
         try
         {
-            var token = await GetAccessTokenAsync();
             var client = _httpClientFactory.CreateClient("MelhorEnvio");
 
-            var response = await SendCalculateRequestAsync(client, token, requestPayload);
+            const int maxRetries = 3;
+            int currentRetry = 0;
+            HttpResponseMessage? response = null;
 
-            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            while (currentRetry < maxRetries)
             {
-                _logger.LogWarning("Token Melhor Envio expirado (401). Tentando renovação...");
-
-                var newToken = await RefreshAccessTokenAsync();
-                if (!string.IsNullOrEmpty(newToken))
+                try
                 {
-                    response = await SendCalculateRequestAsync(client, newToken, requestPayload);
+                    var token = await GetAccessTokenAsync();
+                    response = await SendCalculateRequestAsync(client, token, requestPayload);
+
+                    if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    {
+                        _logger.LogWarning("Token Melhor Envio expirado (401). Tentando renovação...");
+                        var newToken = await RefreshAccessTokenAsync();
+                        if (!string.IsNullOrEmpty(newToken))
+                        {
+                            response = await SendCalculateRequestAsync(client, newToken, requestPayload);
+                        }
+                    }
+
+                    if (response.IsSuccessStatusCode || (int)response.StatusCode < 500)
+                    {
+                        break;
+                    }
+
+                    throw new HttpRequestException($"Erro de servidor: {response.StatusCode}");
+                }
+                catch (HttpRequestException ex)
+                {
+                    currentRetry++;
+                    _logger.LogWarning(ex, "Falha na conexão com Melhor Envio. Tentativa {Retry}/{Max}", currentRetry, maxRetries);
+
+                    if (currentRetry >= maxRetries) throw;
+
+                    await Task.Delay(1000 * currentRetry);
                 }
             }
 
-            if (!response.IsSuccessStatusCode)
+            if (response == null || !response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Erro API Melhor Envio ({StatusCode}): {Body}", response.StatusCode, errorBody);
+                var errorBody = response != null ? await response.Content.ReadAsStringAsync() : "Sem resposta";
+                _logger.LogError("Erro API Melhor Envio ({StatusCode}): {Body}", response?.StatusCode, errorBody);
                 return [];
             }
 
             var responseBody = await response.Content.ReadAsStringAsync();
-
             var meOptions = JsonSerializer.Deserialize<List<MelhorEnvioResponse>>(responseBody, _jsonOptions);
 
             if (meOptions == null) return [];
@@ -122,7 +146,7 @@ public class MelhorEnvioShippingService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro crítico ao calcular frete Melhor Envio.");
+            _logger.LogError(ex, "Erro crítico ou esgotamento de tentativas ao calcular frete Melhor Envio.");
             return [];
         }
     }
@@ -149,7 +173,6 @@ public class MelhorEnvioShippingService(
         {
             return dbToken.Value;
         }
-
         return _configuration["MELHOR_ENVIO_TOKEN"] ?? "";
     }
 
