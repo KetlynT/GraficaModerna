@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -12,9 +12,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
-  X
+  X,
+  PlayCircle
 } from 'lucide-react';
-import { getProxyImageUrl } from '@/lib/imageHelper';
+import { getProxyImageUrl, isVideo } from '@/app/lib/imageHelper';
 import { ProductService } from '@/app/(website)/(shop)/_services/productService';
 import * as ContentService from '@/app/(website)/_services/contentService';
 import { useCart } from '@/app/(website)/_context/CartContext';
@@ -35,6 +36,7 @@ export default function ProductDetails() {
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [purchaseEnabled, setPurchaseEnabled] = useState(true);
+  const videoRef = useRef(null);
 
   const user =
     typeof window !== 'undefined'
@@ -72,6 +74,12 @@ export default function ProductDetails() {
     loadData();
   }, [id]);
 
+  useEffect(() => {
+    if (videoRef.current) {
+        videoRef.current.load();
+    }
+  }, [selectedImageIndex]);
+
   const rawImages = product?.imageUrls?.length
     ? product.imageUrls
     : ['https://placehold.co/600x400?text=Sem+Imagem'];
@@ -82,6 +90,8 @@ export default function ProductDetails() {
     () => images[selectedImageIndex] || images[0],
     [images, selectedImageIndex]
   );
+  
+  const currentIsVideo = isVideo(currentImage);
 
   const handleAddToCart = async () => {
     await addToCart(product, quantity);
@@ -128,67 +138,88 @@ export default function ProductDetails() {
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
       {showZoomModal && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
           <button
             onClick={() => setShowZoomModal(false)}
-            className="absolute top-4 right-4 text-white"
+            className="absolute top-4 right-4 text-white z-50 hover:text-gray-300 transition-colors"
           >
             <X size={40} />
           </button>
 
           {images.length > 1 && (
             <>
-              <button onClick={prevImage} className="absolute left-4 text-white">
-                <ChevronLeft size={40} />
+              <button onClick={prevImage} className="absolute left-4 text-white z-50 hover:text-gray-300">
+                <ChevronLeft size={50} />
               </button>
-              <button onClick={nextImage} className="absolute right-4 text-white">
-                <ChevronRight size={40} />
+              <button onClick={nextImage} className="absolute right-4 text-white z-50 hover:text-gray-300">
+                <ChevronRight size={50} />
               </button>
             </>
           )}
 
-          <div className="relative w-full h-full max-w-5xl max-h-[90vh]">
-            <Image
-              src={currentImage}
-              alt={product.name}
-              fill
-              className="object-contain"
-              unoptimized
-            />
+          <div className="relative w-full h-full max-w-6xl max-h-[90vh] flex items-center justify-center">
+            {currentIsVideo ? (
+                <video 
+                   controls 
+                   autoPlay 
+                   className="max-w-full max-h-full object-contain"
+                   src={currentImage}
+                />
+            ) : (
+                <Image
+                src={currentImage}
+                alt={product.name}
+                fill
+                className="object-contain"
+                unoptimized
+                />
+            )}
           </div>
         </div>
       )}
 
       <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden md:flex">
-        <div className="md:w-1/2 bg-gray-100">
-          <div className="relative h-96 w-full group">
-            <Image
-              src={currentImage}
-              alt={product.name}
-              fill
-              className="object-cover cursor-zoom-in"
-              onClick={() => setShowZoomModal(true)}
-              unoptimized
-            />
+        <div className="md:w-1/2 bg-gray-100 flex flex-col">
+          <div className="relative h-96 w-full group bg-black">
+            {currentIsVideo ? (
+                <video 
+                    ref={videoRef}
+                    controls
+                    className="w-full h-full object-contain"
+                    src={currentImage}
+                    poster={images.find(u => !isVideo(u))}
+                />
+            ) : (
+                <>
+                    <Image
+                    src={currentImage}
+                    alt={product.name}
+                    fill
+                    className="object-contain cursor-zoom-in"
+                    onClick={() => setShowZoomModal(true)}
+                    unoptimized
+                    />
 
-            <button
-              onClick={() => setShowZoomModal(true)}
-              className="absolute top-2 right-2 bg-white/80 p-2 rounded-full opacity-0 group-hover:opacity-100"
-            >
-              <Maximize2 size={20} />
-            </button>
+                    <button
+                    onClick={() => setShowZoomModal(true)}
+                    className="absolute top-2 right-2 bg-white/80 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                    <Maximize2 size={20} />
+                    </button>
+                </>
+            )}
 
             {images.length > 1 && (
               <>
                 <button
                   onClick={prevImage}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full hover:bg-white transition-colors"
                 >
                   <ChevronLeft size={20} />
                 </button>
                 <button
                   onClick={nextImage}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 p-2 rounded-full hover:bg-white transition-colors"
                 >
                   <ChevronRight size={20} />
                 </button>
@@ -197,26 +228,35 @@ export default function ProductDetails() {
           </div>
 
           {images.length > 1 && (
-            <div className="flex gap-2 p-4 overflow-x-auto">
-              {images.map((url, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => setSelectedImageIndex(idx)}
-                  className={`relative w-20 h-20 cursor-pointer border-2 rounded-md ${
-                    selectedImageIndex === idx
-                      ? 'border-primary'
-                      : 'border-transparent'
-                  }`}
-                >
-                  <Image src={url} alt="" fill className="object-cover" unoptimized />
-                </div>
-              ))}
+            <div className="flex gap-2 p-4 overflow-x-auto bg-white border-t">
+              {images.map((url, idx) => {
+                const isVid = isVideo(url);
+                return (
+                    <div
+                    key={idx}
+                    onClick={() => setSelectedImageIndex(idx)}
+                    className={`relative w-20 h-20 shrink-0 cursor-pointer border-2 rounded-md overflow-hidden ${
+                        selectedImageIndex === idx
+                        ? 'border-primary'
+                        : 'border-transparent'
+                    }`}
+                    >
+                    {isVid ? (
+                        <div className="w-full h-full bg-gray-900 flex items-center justify-center text-white">
+                            <PlayCircle size={24} />
+                        </div>
+                    ) : (
+                        <Image src={url} alt="" fill className="object-cover" unoptimized />
+                    )}
+                    </div>
+                );
+              })}
             </div>
           )}
         </div>
 
         <div className="md:w-1/2 p-8 flex flex-col">
-          <Link href="/" className="text-primary text-sm mb-4">
+          <Link href="/" className="text-primary text-sm mb-4 hover:underline">
             ← Voltar para o catálogo
           </Link>
 
@@ -225,20 +265,20 @@ export default function ProductDetails() {
             {formattedPrice}
           </div>
 
-          <p className="text-gray-500 mb-8 whitespace-pre-line">
+          <p className="text-gray-500 mb-8 whitespace-pre-line leading-relaxed">
             {product.description}
           </p>
 
           {!isAdmin && purchaseEnabled && (
             <div className="flex gap-4 mb-6">
               <div className="flex border rounded-lg">
-                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-3">
+                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-3 hover:bg-gray-100 transition-colors">
                   <Minus size={16} />
                 </button>
                 <span className="w-12 flex items-center justify-center font-bold">
                   {quantity}
                 </span>
-                <button onClick={() => setQuantity(q => q + 1)} className="p-3">
+                <button onClick={() => setQuantity(q => q + 1)} className="p-3 hover:bg-gray-100 transition-colors">
                   <Plus size={16} />
                 </button>
               </div>
@@ -248,26 +288,26 @@ export default function ProductDetails() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {!isAdmin && purchaseEnabled && (
               <>
-                <Button onClick={handleAddToCart} variant="outline">
-                  <ShoppingCart size={20} /> Adicionar
+                <Button onClick={handleAddToCart} variant="outline" className="w-full justify-center">
+                  <ShoppingCart size={20} className="mr-2" /> Adicionar
                 </Button>
 
-                <Button onClick={handleBuyNow}>
-                  <Zap size={20} /> Comprar Agora
+                <Button onClick={handleBuyNow} className="w-full justify-center">
+                  <Zap size={20} className="mr-2" /> Comprar Agora
                 </Button>
               </>
             )}
 
             <button
               onClick={handleCustomQuote}
-              className="sm:col-span-2 bg-[#25D366] hover:bg-[#1EBE5A] text-white font-bold py-3 rounded-lg"
+              className={`sm:col-span-2 bg-[#25D366] hover:bg-[#1EBE5A] text-white font-bold py-3 rounded-lg transition-colors shadow-md flex items-center justify-center gap-2 ${(!purchaseEnabled || isAdmin) ? 'mt-0' : ''}`}
             >
               Orçamento Personalizado
             </button>
           </div>
 
           {purchaseEnabled && (
-            <div className="mt-6">
+            <div className="mt-8 border-t pt-6">
               <ShippingCalculator productId={product.id} />
             </div>
           )}

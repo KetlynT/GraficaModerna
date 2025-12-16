@@ -9,6 +9,7 @@ import { ProductService } from '@/app/(website)/(shop)/_services/productService'
 import * as ContentService from '@/app/(website)/_services/contentService';
 import { ProductCard } from '@/app/(website)/_components/ProductCard';
 import { Button } from '@/app/_components/ui/Button';
+import { isVideo } from '@/app/lib/imageHelper';
 
 export default function Home() {
   const router = useRouter();
@@ -93,15 +94,31 @@ export default function Home() {
     if (section) section.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const heroBgUrl = settings.hero_bg_url || 'https://images.unsplash.com/photo-1562564055-71e051d33c19?q=80&w=2070';
+  const isHeroVideo = isVideo(heroBgUrl);
+
   return (
     <>
       <div className="relative bg-secondary text-white overflow-hidden transition-all duration-500">
-        <div 
-            className="absolute inset-0 bg-cover bg-center opacity-20 transform scale-105"
-            style={{ 
-                backgroundImage: `url('${settings.hero_bg_url || 'https://images.unsplash.com/photo-1562564055-71e051d33c19?q=80&w=2070'}' )` 
-            }}
-        ></div>
+        {isHeroVideo ? (
+            <div className="absolute inset-0 opacity-20 overflow-hidden">
+                <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover transform scale-105"
+                    src={heroBgUrl}
+                />
+            </div>
+        ) : (
+            <div 
+                className="absolute inset-0 bg-cover bg-center opacity-20 transform scale-105"
+                style={{ 
+                    backgroundImage: `url('${heroBgUrl}')` 
+                }}
+            ></div>
+        )}
         
         <div className="relative max-w-7xl mx-auto px-4 py-24 sm:px-6 lg:px-8 flex flex-col items-center text-center">
           <motion.div 

@@ -17,10 +17,14 @@ public class ProductValidator : AbstractValidator<CreateProductDto>
         RuleFor(x => x.Description)
             .MaximumLength(1000).WithMessage("A descrição é muito longa.");
 
-        RuleForEach(x => x.ImageUrls)
-            .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out _))
-            .When(x => x.ImageUrls != null && x.ImageUrls.Count > 0)
-            .WithMessage("Uma das URLs da imagem é inválida.");
+        RuleForEach(x => x.ImageUrls).Must(url =>
+        {
+            if (string.IsNullOrEmpty(url)) return true;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out _)) return false;
+
+            var extension = Path.GetExtension(url).ToLower();
+            return extension is ".jpg" or ".jpeg" or ".png" or ".webp" or ".mp4" or ".webm" or ".mov";
+        }).WithMessage("Uma ou mais URLs são inválidas. Formatos permitidos: Imagens (jpg, png, webp) e Vídeos (mp4, webm, mov).");
     }
 }
 
@@ -38,9 +42,13 @@ public class UpdateProductValidator : AbstractValidator<UpdateProductDto>
         RuleFor(x => x.Description)
             .MaximumLength(1000).WithMessage("A descrição é muito longa.");
 
-        RuleForEach(x => x.ImageUrls)
-            .Must(uri => Uri.TryCreate(uri, UriKind.Absolute, out _))
-            .When(x => x.ImageUrls != null && x.ImageUrls.Count > 0)
-            .WithMessage("Uma das URLs da imagem é inválida.");
+        RuleForEach(x => x.ImageUrls).Must(url =>
+        {
+            if (string.IsNullOrEmpty(url)) return true;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out _)) return false;
+
+            var extension = Path.GetExtension(url).ToLower();
+            return extension is ".jpg" or ".jpeg" or ".png" or ".webp" or ".mp4" or ".webm" or ".mov";
+        }).WithMessage("Uma ou mais URLs são inválidas. Formatos permitidos: Imagens (jpg, png, webp) e Vídeos (mp4, webm, mov).");
     }
 }

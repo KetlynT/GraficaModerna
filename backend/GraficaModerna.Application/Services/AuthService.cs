@@ -250,8 +250,12 @@ public class AuthService(
 
     public async Task ResetPasswordAsync(ResetPasswordDto dto)
     {
-        var user = await _userManager.FindByEmailAsync(dto.Email)
-                   ?? throw new KeyNotFoundException("Usuário não encontrado.");
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null)
+        {
+            await Task.Delay(new Random().Next(100, 300));
+            throw new InvalidOperationException("Não foi possível redefinir a senha. Verifique os dados.");
+        }
 
         var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
 
