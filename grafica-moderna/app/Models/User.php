@@ -3,19 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Laravel\Sanctum\HasApiTokens; // Recomendado para Tokens API
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasUuids, Notifiable;
+    use HasUuids;
 
     protected $fillable = [
-        'full_name', 'email', 'password', 'cpf_cnpj', 'phone_number', 'role'
+        'full_name', 'email', 'password', 'cpf_cnpj', 'phone_number', 'role',
+        'refresh_token_hash', 'refresh_token_expiry'
     ];
 
-    protected $hidden = [
-        'password', 'remember_token', 'refresh_token_hash'
-    ];
+    protected $hidden = ['password', 'refresh_token_hash'];
 }
