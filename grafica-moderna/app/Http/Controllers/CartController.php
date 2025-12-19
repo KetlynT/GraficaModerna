@@ -9,73 +9,102 @@ use Illuminate\Support\Facades\Auth;
 
 class CartController extends Controller
 {
-    protected $service;
-    protected $contentService;
+    protected CartService $service;
+    protected ContentService $contentService;
 
     public function __construct(CartService $service, ContentService $contentService)
     {
+        $this->middleware(['auth:api', 'role:user']);
         $this->service = $service;
         $this->contentService = $contentService;
     }
 
-    private function checkPurchaseEnabled()
+    private function checkPurchaseEnabled(): void
     {
         $settings = $this->contentService->getSettings();
+
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
-            abort(403, "Compras temporariamente desativadas.");
+            abort(403, 'Funcionalidade de compra indisponível temporariamente.');
         }
     }
 
     public function index()
     {
+        $this->checkPurchaseEnabled();
+
         try {
-            $this->checkPurchaseEnabled();
-            return response()->json($this->service->getCart(Auth::id()));
+            return response()->json(
+                $this->service->getCart(Auth::id())
+            );
         } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         }
     }
 
     public function addItem(Request $request)
     {
         $this->checkPurchaseEnabled();
+
         $data = $request->validate([
             'productId' => 'required|uuid',
-            'quantity' => 'required|integer|min:1'
+            'quantity'  => 'required|integer|min:1'
         ]);
 
         try {
             $this->service->addItem(Auth::id(), $data);
-            return response()->noContent(); // 204 OK
+            return response()->noContent();
         } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         }
     }
 
-    public function updateItem(Request $request, $itemId)
+    public function updateItem(Request $request, string $itemId)
     {
         $this->checkPurchaseEnabled();
-        $data = $request->validate(['quantity' => 'required|integer']);
+
+        $data = $request->validate([
+            'quantity' => 'required|integer|min:1'
+        ]);
 
         try {
             $this->service->updateItemQuantity(Auth::id(), $itemId, $data['quantity']);
             return response()->noContent();
         } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         }
     }
 
-    public function removeItem($itemId)
+    public function removeItem(string $itemId)
     {
         $this->checkPurchaseEnabled();
-        $this->service->removeItem(Auth::id(), $itemId);
-        return response()->noContent();
+
+        try {
+            $this->service->removeItem(Auth::id(), $itemId);
+            return response()->noContent();
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
 
     public function clear()
     {
         $this->checkPurchaseEnabled();
-        $this->service->clearCart(Auth::id());
-        return response()->noContent();
+
+        try {
+            $this->service->clearCart(Auth::id());
+            return response()->noContent();
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
 }

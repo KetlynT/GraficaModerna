@@ -22,6 +22,9 @@ Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
     Route::post('register', [AuthController::class, 'register']);
     Route::post('refresh-token', [AuthController::class, 'refreshToken']);
+    Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('auth/confirm-email', [AuthController::class, 'confirmEmail']);
 });
 
 Route::get('products', [ProductController::class, 'index']);
@@ -56,7 +59,8 @@ Route::middleware('jwt.auth')->group(function () {
     // Pagamentos (NOVO)
     // Se o seu front chama 'api/payments/checkout' passando orderId:
     Route::post('payments/checkout', [PaymentsController::class, 'createCheckoutSession']);
-
+    Route::middleware(['jwt.auth', 'throttle:payment'])->post('payments/checkout', [PaymentsController::class, 'createCheckoutSession']);
+    Route::middleware(['jwt.auth', 'throttle:shipping'])->post('shipping/calculate', [ShippingController::class, 'calculate']);
     // Endereços e Frete
     Route::apiResource('addresses', AddressController::class);
     Route::post('shipping/calculate', [ShippingController::class, 'calculate']);
@@ -69,6 +73,7 @@ Route::middleware('jwt.auth')->group(function () {
     Route::middleware('admin')->prefix('admin')->group(function () {
         
         Route::get('dashboard', [AdminController::class, 'getDashboardData']);
+        Route::post('upload', [AdminController::class, 'upload']);
 
         // Produtos
         Route::post('products', [AdminController::class, 'createProduct']);

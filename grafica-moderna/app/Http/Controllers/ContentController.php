@@ -7,49 +7,52 @@ use Illuminate\Http\Request;
 
 class ContentController extends Controller
 {
-    protected $service;
+    protected ContentService $service;
 
     public function __construct(ContentService $service)
     {
         $this->service = $service;
     }
 
-    // Público: Pegar configurações (banner, flags)
-    public function getSettings()
+    /**
+     * GET /api/content/pages
+     * Público – lista todas as páginas
+     */
+    public function getAllPages()
     {
-        return response()->json($this->service->getSettings());
+        $pages = $this->service->getAllPages();
+        return response()->json($pages);
     }
 
-    // Público: Pegar página (termos, etc)
-    public function getPage($slug)
+    /**
+     * GET /api/content/pages/{slug}
+     * Público – obtém página por slug
+     */
+    public function getPage(string $slug)
     {
-        try {
-            return response()->json($this->service->getPageBySlug($slug));
-        } catch (\Exception $e) {
+        $page = $this->service->getPageBySlug($slug);
+
+        if (!$page) {
             return response()->json(['message' => 'Página não encontrada'], 404);
         }
+
+        return response()->json($page);
     }
 
-    // Admin: Atualizar Configurações
-    public function updateSettings(Request $request)
+    /**
+     * GET /api/content/settings
+     * Público – retorna configurações como dicionário key => value
+     */
+    public function getSettings()
     {
-        $data = $request->all();
-        foreach ($data as $key => $value) {
-            $this->service->updateSetting($key, $value);
+        $settingsList = $this->service->getSettings();
+
+        // Garante o mesmo comportamento do ToDictionary do .NET
+        $settingsDict = [];
+        foreach ($settingsList as $setting) {
+            $settingsDict[$setting['key']] = $setting['value'];
         }
-        return response()->noContent();
-    }
-    
-    // Admin: Atualizar Páginas
-    public function savePage(Request $request)
-    {
-        $data = $request->validate([
-            'slug' => 'required',
-            'title' => 'required',
-            'content' => 'required'
-        ]);
-        
-        $this->service->savePage($data);
-        return response()->noContent();
+
+        return response()->json($settingsDict);
     }
 }

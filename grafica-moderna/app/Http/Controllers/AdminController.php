@@ -4,215 +4,354 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+
+use App\Services\AuthService;
 use App\Services\DashboardService;
 use App\Services\ProductService;
 use App\Services\OrderService;
 use App\Services\ContentService;
 use App\Services\CouponService;
-use App\Models\Order;
-use App\Models\Coupon;
-use App\Models\Product;
-use App\Models\EmailTemplate;
+use App\Services\UnitOfWork;
 
-use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
+use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
+use Intervention\Image\Facades\Image;
 
 class AdminController extends Controller
 {
-    protected $dashboardService;
-    protected $productService;
-    protected $orderService;
-    protected $contentService;
-    protected $couponService;
-    protected $sanitizer;
-    
+    private const MAX_FILE_SIZE = 52428800; // 50MB
+    private const MAX_IMAGE_DIMENSION = 2048;
+
+    protected AuthService $authService;
+    protected DashboardService $dashboardService;
+    protected ProductService $productService;
+    protected OrderService $orderService;
+    protected ContentService $contentService;
+    protected CouponService $couponService;
+    protected UnitOfWork $uow;
+    protected HtmlSanitizer $sanitizer;
+
     public function __construct(
+        AuthService $authService,
         DashboardService $dashboardService,
         ProductService $productService,
         OrderService $orderService,
         ContentService $contentService,
-        CouponService $couponService
+        CouponService $couponService,
+        UnitOfWork $uow
     ) {
-        // Middleware 'admin' é aplicado na rota
+        $this->middleware(['auth:api', 'role:admin', 'throttle:admin'])->except('login');
+
+        $this->authService = $authService;
         $this->dashboardService = $dashboardService;
         $this->productService = $productService;
         $this->orderService = $orderService;
         $this->contentService = $contentService;
         $this->couponService = $couponService;
+        $this->uow = $uow;
 
         $config = (new HtmlSanitizerConfig())
             ->allowSafeElements()
             ->allowRelativeLinks()
             ->allowRelativeMedias()
-            ->allowAttribute('class', '*') // Permite classes CSS (ex: Tailwind)
-            ->allowAttribute('style', '*') // Cuidado com style, mas às vezes necessário em CMS
-            ->allowElements(['img', 'iframe', 'figure', 'figcaption']); // Tags extras permitidas
+            ->allowAttribute('class', '*')
+            ->allowAttribute('style', '*')
+            ->allowElements(['img', 'iframe', 'figure', 'figcaption']);
 
         $this->sanitizer = new HtmlSanitizer($config);
     }
 
-    // ==========================================
-    // DASHBOARD
-    // ==========================================
-    public function getDashboardData(Request $request)
+    // ======================================================
+    // AUTH & DASHBOARD
+    // ======================================================
+
+    public function login(Request $request)
     {
-        $range = $request->query('range', '7d');
-        return response()->json($this->dashboardService->getAnalytics($range));
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required'
+        ]);
+
+        $result = $this->authService->login([
+            'email' => $request->email,
+            'password' => $request->password,
+            'isAdminLogin' => true
+        ]);
+
+        $this->setTokenCookies($result->accessToken, $result->refreshToken);
+
+        return response()->json([
+            'email' => $result->email,
+            'role' => $result->role,
+            'message' => 'Login administrativo realizado com sucesso.'
+        ]);
     }
 
-    // ==========================================
-    // PRODUTOS
-    // ==========================================
+    public function dashboardStats()
+    {
+        return response()->json(
+            $this->dashboardService->getStats()
+        );
+    }
+
+    // ======================================================
+    // UPLOAD
+    // ======================================================
+
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|max:51200'
+        ]);
+
+        $file = $request->file('file');
+
+        if ($file->getSize() > self::MAX_FILE_SIZE) {
+            return response()->json([
+                'message' => 'Arquivo excede o limite de 50MB.'
+            ], 400);
+        }
+
+        $extension = $this->detectExtensionFromSignature($file->getRealPath());
+        if (!$extension) {
+            return response()->json([
+                'message' => 'Formato de arquivo inválido ou corrompido.'
+            ], 400);
+        }
+
+        $filename = Str::uuid() . $extension;
+        $path = storage_path("app/public/uploads/{$filename}");
+
+        if ($this->isVideo($extension)) {
+            $file->move(dirname($path), $filename);
+        } else {
+            $image = Image::make($file->getRealPath());
+            if ($image->width() > self::MAX_IMAGE_DIMENSION || $image->height() > self::MAX_IMAGE_DIMENSION) {
+                $image->resize(
+                    self::MAX_IMAGE_DIMENSION,
+                    self::MAX_IMAGE_DIMENSION,
+                    fn ($c) => $c->aspectRatio()->upsize()
+                );
+            }
+            $image->save($path);
+        }
+
+        return response()->json([
+            'url' => asset("storage/uploads/{$filename}")
+        ]);
+    }
+
+    // ======================================================
+    // ORDERS
+    // ======================================================
+
+    public function getOrders(Request $request)
+    {
+        return response()->json(
+            $this->orderService->getAll(
+                $request->query('page', 1),
+                $request->query('pageSize', 10)
+            )
+        );
+    }
+
+    public function updateOrderStatus(string $id, Request $request)
+    {
+        $request->validate([
+            'status' => 'required|string'
+        ]);
+
+        try {
+            $this->orderService->updateAdminOrder($id, $request->status);
+            return response()->noContent();
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    // ======================================================
+    // PRODUCTS
+    // ======================================================
+
+    public function getProducts(Request $request)
+    {
+        return response()->json(
+            $this->productService->getCatalog(
+                $request->query('search'),
+                $request->query('sort'),
+                $request->query('order'),
+                $request->query('page', 1),
+                $request->query('pageSize', 8)
+            )
+        );
+    }
+
+    public function getProductById(string $id)
+    {
+        $product = $this->productService->getById($id);
+        if (!$product) {
+            return response()->json(['message' => 'Produto não encontrado.'], 404);
+        }
+        return response()->json($product);
+    }
+
     public function createProduct(Request $request)
     {
-        $data = $request->validate([
-            'name' => 'required',
-            'description' => 'required',
-            'price' => 'required|numeric',
-            'weight' => 'required|numeric',
-            'width' => 'required|integer',
-            'height' => 'required|integer',
-            'length' => 'required|integer',
-            'stock_quantity' => 'required|integer',
-            'images.*' => 'image|max:2048' // Validação de array de imagens
-        ]);
+        return response()->json(
+            $this->productService->create($request->all()),
+            201
+        );
+    }
 
-        // Upload
-        $imageUrls = [];
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $file) {
-                $path = $file->store('products', 'public');
-                $imageUrls[] = asset('storage/' . $path);
-            }
+    public function updateProduct(string $id, Request $request)
+    {
+        try {
+            $this->productService->update($id, $request->all());
+            return response()->noContent();
+        } catch (ModelNotFoundException) {
+            return response()->json(['message' => 'Produto não encontrado.'], 404);
         }
-        $data['image_urls'] = $imageUrls;
-        $data['is_active'] = true;
-
-        return response()->json($this->productService->create($data), 201);
     }
 
-    public function updateProduct(Request $request, $id)
+    public function deleteProduct(string $id)
     {
-        $data = $request->all();
-        // Lógica simplificada de atualização
-        // Num cenário real, você verificaria se enviou novas imagens para substituir ou adicionar
-        
-        $this->productService->update($id, $data);
-        return response()->noContent();
-    }
-
-    public function deleteProduct($id)
-    {
-        $this->productService->delete($id);
-        return response()->noContent();
-    }
-
-    // ==========================================
-    // PEDIDOS
-    // ==========================================
-    public function getAllOrders(Request $request)
-    {
-        $query = Order::with('user')->orderBy('created_at', 'desc');
-        
-        // Filtros simples
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+        try {
+            $this->productService->delete($id);
+            return response()->noContent();
+        } catch (ModelNotFoundException) {
+            return response()->json(['message' => 'Produto não encontrado.'], 404);
         }
-
-        return response()->json($query->paginate(20));
     }
 
-    public function updateOrderStatus(Request $request, $id)
-    {
-        $request->validate(['status' => 'required|string']);
-        
-        $order = Order::findOrFail($id);
-        $oldStatus = $order->status;
-        $order->update(['status' => $request->status]);
+    // ======================================================
+    // COUPONS
+    // ======================================================
 
-        // Registrar Histórico
-        $order->history()->create([
-            'status' => $request->status,
-            'message' => "Status alterado de '$oldStatus' para '{$request->status}' pelo Admin.",
-            'changed_by' => Auth::user()->full_name ?? 'Admin'
-        ]);
-
-        return response()->json($order);
-    }
-
-    // ==========================================
-    // CUPONS
-    // ==========================================
     public function getCoupons()
     {
-        return response()->json(Coupon::all());
+        return response()->json(
+            $this->couponService->getAll()
+        );
     }
 
     public function createCoupon(Request $request)
     {
-        $data = $request->validate([
-            'code' => 'required|unique:coupons',
-            'discountPercentage' => 'required|numeric',
-            'validityDays' => 'required|integer'
-        ]);
-
-        $coupon = Coupon::create([
-            'code' => strtoupper($data['code']),
-            'discount_percentage' => $data['discountPercentage'],
-            'expiry_date' => now()->addDays($data['validityDays']),
-            'is_active' => true
-        ]);
-
-        return response()->json($coupon, 201);
+        try {
+            return response()->json(
+                $this->couponService->create($request->all())
+            );
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
     }
 
-    public function deleteCoupon($id)
+    public function deleteCoupon(string $id)
     {
-        Coupon::destroy($id);
+        $this->couponService->delete($id);
         return response()->noContent();
     }
 
-    // ==========================================
-    // CONTEÚDO E SETTINGS
-    // ==========================================
-    public function updateSettings(Request $request)
+    // ======================================================
+    // CONTENT & SETTINGS
+    // ======================================================
+
+    public function createPage(Request $request)
     {
         $data = $request->all();
-        foreach ($data as $key => $value) {
-            $this->contentService->updateSetting($key, $value);
-        }
-        return response()->noContent();
-    }
-
-    public function savePage(Request $request)
-    {
-        $data = $request->validate([
-            'slug' => 'required',
-            'title' => 'required',
-            'content' => 'required'
-        ]);
         $data['content'] = $this->sanitizer->sanitize($data['content']);
-        $this->contentService->savePage($data);
-        return response()->noContent();
+
+        return response()->json(
+            $this->contentService->createPage($data)
+        );
     }
 
-    // ==========================================
-    // EMAIL TEMPLATES
-    // ==========================================
+    public function updatePage(string $slug, Request $request)
+    {
+        $data = $request->all();
+        $data['content'] = $this->sanitizer->sanitize($data['content']);
+
+        $this->contentService->updatePage($slug, $data);
+        return response()->ok();
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $this->contentService->updateSettings($request->all());
+        return response()->ok();
+    }
+
     public function getEmailTemplates()
     {
-        return response()->json(EmailTemplate::all());
+        return response()->json(
+            $this->uow->emailTemplates()->all()
+        );
     }
 
-    public function updateEmailTemplate(Request $request, $id)
+    public function updateEmailTemplate(string $id, Request $request)
     {
-        $template = EmailTemplate::findOrFail($id);
-        $data = $request->validate([
-            'subject' => 'required',
-            'html_content' => 'required'
-        ]);
-        $data['html_content'] = $this->sanitizer->sanitize($data['html_content']);
-        $template->update($data);
-        return response()->json($template);
+        $template = $this->uow->emailTemplates()->find($id);
+        if (!$template) {
+            return response()->json(['message' => 'Template não encontrado.'], 404);
+        }
+
+        $template->subject = $request->subject;
+        $template->body_content = $request->body_content;
+        $template->updated_at = now();
+
+        $this->uow->emailTemplates()->save($template);
+        $this->uow->commit();
+
+        return response()->noContent();
+    }
+
+    // ======================================================
+    // HELPERS
+    // ======================================================
+
+    private function setTokenCookies(string $access, string $refresh): void
+    {
+        cookie()->queue(cookie(
+            'accessToken',
+            $access,
+            15,
+            null,
+            null,
+            true,
+            true,
+            false,
+            'Lax'
+        ));
+
+        cookie()->queue(cookie(
+            'refreshToken',
+            $refresh,
+            10080,
+            null,
+            null,
+            true,
+            true,
+            false,
+            'Lax'
+        ));
+    }
+
+    private function isVideo(string $ext): bool
+    {
+        return in_array($ext, ['.mp4', '.webm', '.mov']);
+    }
+
+    private function detectExtensionFromSignature(string $path): ?string
+    {
+        $bytes = file_get_contents($path, false, null, 0, 16);
+        return match (true) {
+            str_starts_with($bytes, "\xFF\xD8\xFF") => '.jpg',
+            str_starts_with($bytes, "\x89PNG") => '.png',
+            str_starts_with($bytes, "\x1A\x45\xDF\xA3") => '.webm',
+            substr($bytes, 4, 4) === 'ftyp' => '.mp4',
+            default => null
+        };
     }
 }

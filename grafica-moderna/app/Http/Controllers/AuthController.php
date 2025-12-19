@@ -2,152 +2,264 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\AuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Log;
+
+use App\Services\AuthService;
+use App\Services\TokenBlacklistService;
+use App\Services\ContentService;
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 class AuthController extends Controller
 {
-    protected $authService;
+    protected AuthService $authService;
+    protected TokenBlacklistService $blacklistService;
+    protected ContentService $contentService;
 
-    public function __construct(AuthService $authService)
-    {
+    public function __construct(
+        AuthService $authService,
+        TokenBlacklistService $blacklistService,
+        ContentService $contentService
+    ) {
+        $this->middleware('throttle:auth')->only([
+            'register',
+            'login'
+        ]);
+
         $this->authService = $authService;
+        $this->blacklistService = $blacklistService;
+        $this->contentService = $contentService;
     }
+
+    // ======================================================
+    // REGISTER
+    // ======================================================
 
     public function register(Request $request)
     {
-        // Valide os dados aqui ou use um FormRequest
         $data = $request->validate([
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
-            'fullName' => 'required',
-            'cpfCnpj' => 'required',
-            'phoneNumber' => 'nullable'
+            'email'       => 'required|email|unique:users',
+            'password'    => 'required|min:6',
+            'fullName'    => 'required|string',
+            'cpfCnpj'     => 'required|string',
+            'phoneNumber' => 'nullable|string'
         ]);
 
-        try {
-            $result = $this->authService->register($data);
-            $this->setTokenCookies($result['accessToken'], $result['refreshToken']);
+        $result = $this->authService->register($data);
 
-            return response()->json([
-                'email' => $result['email'],
-                'role' => $result['role'],
-                'message' => 'Cadastro realizado com sucesso.'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
-        }
+        $this->setTokenCookies(
+            $result->accessToken,
+            $result->refreshToken
+        );
+
+        return response()->json([
+            'email'   => $result->email,
+            'role'    => $result->role,
+            'message' => 'Cadastro realizado com sucesso.'
+        ]);
     }
+
+    // ======================================================
+    // LOGIN (USER)
+    // ======================================================
 
     public function login(Request $request)
     {
         $data = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-            'isAdminLogin' => 'boolean'
+            'email'    => 'required|email',
+            'password' => 'required'
         ]);
 
-        try {
-            $result = $this->authService->login($data);
-            $this->setTokenCookies($result['accessToken'], $result['refreshToken']);
+        $data['isAdminLogin'] = false;
 
-            return response()->json([
-                'email' => $result['email'],
-                'role' => $result['role'],
-                'message' => 'Login realizado com sucesso.'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 401);
-        }
+        $result = $this->authService->login($data);
+
+        $this->setTokenCookies(
+            $result->accessToken,
+            $result->refreshToken
+        );
+
+        return response()->json([
+            'email'   => $result->email,
+            'role'    => $result->role,
+            'message' => 'Login realizado com sucesso.'
+        ]);
     }
+
+    // ======================================================
+    // LOGOUT
+    // ======================================================
 
     public function logout(Request $request)
     {
         $token = $request->cookie('jwt') ?? $request->bearerToken();
-        
+
         if ($token) {
             try {
-                // Decodifica só para pegar a expiração (exp)
-                $decoded = JWT::decode($token, new Key(env('JWT_SECRET'), 'HS256'));
-                $minutesLeft = ($decoded->exp - time()) / 60;
-                
-                if ($minutesLeft > 0) {
-                    $this->blacklistService->blacklist($token, (int)ceil($minutesLeft));
+                $decoded = JWT::decode(
+                    $token,
+                    new Key(config('app.jwt_secret'), 'HS256')
+                );
+
+                if (isset($decoded->exp)) {
+                    $this->blacklistService->blacklist(
+                        $token,
+                        $decoded->exp
+                    );
                 }
             } catch (\Exception $e) {
-                // Token já inválido, ignora
+                Log::warning(
+                    'Erro ao processar blacklist no logout',
+                    ['message' => $e->getMessage()]
+                );
             }
         }
 
-        Auth::guard('web')->logout(); // Se estiver usando guard padrão também
-
-        return response()->json(['message' => 'Deslogado com sucesso'])
-            ->withCookie(cookie()->forget('jwt'))
-            ->withCookie(cookie()->forget('refreshToken'));
+        return response()->json([
+            'message' => 'Deslogado com sucesso'
+        ])
+        ->withCookie(cookie()->forget('jwt'))
+        ->withCookie(cookie()->forget('refreshToken'));
     }
 
-    public function checkAuth()
+    // ======================================================
+    // CHECK AUTH
+    // ======================================================
+
+    public function checkAuth(Request $request)
     {
-        if (Auth::check()) {
+        if (!$request->user()) {
             return response()->json([
-                'isAuthenticated' => true, 
-                'role' => Auth::user()->role
+                'isAuthenticated' => false,
+                'role' => null
             ]);
         }
-        return response()->json(['isAuthenticated' => false, 'role' => null]);
+
+        return response()->json([
+            'isAuthenticated' => true,
+            'role' => $request->user()->role
+        ]);
     }
 
-    public function getProfile()
+    // ======================================================
+    // PROFILE
+    // ======================================================
+
+    public function getProfile(Request $request)
     {
-        return response()->json(Auth::user());
+        if (!$request->user()) {
+            return response()->json([], 401);
+        }
+
+        return response()->json(
+            $this->authService->getProfile($request->user()->id)
+        );
     }
 
     public function updateProfile(Request $request)
     {
+        $settings = $this->contentService->getSettings();
+
+        if (
+            isset($settings['purchase_enabled']) &&
+            $settings['purchase_enabled'] === 'false'
+        ) {
+            if ($request->user()->role !== 'Admin') {
+                return response()->json([
+                    'message' => 'Edição de perfil desativada temporariamente.'
+                ], 403);
+            }
+        }
+
         $data = $request->validate([
-            'fullName' => 'required',
-            'cpfCnpj' => 'required',
-            'phoneNumber' => 'nullable'
+            'fullName'    => 'required|string',
+            'cpfCnpj'     => 'required|string',
+            'phoneNumber' => 'nullable|string'
         ]);
-        
-        $this->authService->updateProfile(Auth::id(), $data);
+
+        $this->authService->updateProfile(
+            $request->user()->id,
+            $data
+        );
+
         return response()->noContent();
     }
 
-    private function setTokenCookies($accessToken, $refreshToken)
-    {
-        // Cookies HttpOnly
-        Cookie::queue('jwt', $accessToken, 15, null, null, true, true);
-        Cookie::queue('refreshToken', $refreshToken, 60 * 24 * 7, null, null, true, true);
-    }
+    // ======================================================
+    // REFRESH TOKEN
+    // ======================================================
+
     public function refreshToken(Request $request)
-{
-    // Tenta pegar do Cookie, se não, tenta do Body (fallback)
-    $refreshToken = $request->cookie('refreshToken') ?? $request->input('refreshToken');
+    {
+        $accessToken  = $request->cookie('jwt');
+        $refreshToken = $request->cookie('refreshToken');
 
-    if (!$refreshToken) {
-        return response()->json(['message' => 'Refresh Token não fornecido'], 401);
-    }
+        if (!$accessToken || !$refreshToken) {
+            return response()->json([
+                'message' => 'Tokens não encontrados nos cookies.'
+            ], 400);
+        }
 
-    try {
-        $result = $this->authService->refreshToken($refreshToken);
-        
-        // Define os novos cookies
-        $cookieJwt = cookie('jwt', $result['accessToken'], 15, null, null, true, true); // 15 min
-        $cookieRefresh = cookie('refreshToken', $result['refreshToken'], 7 * 24 * 60, null, null, true, true); // 7 dias
+        $result = $this->authService->refreshToken([
+            'accessToken'  => $accessToken,
+            'refreshToken' => $refreshToken
+        ]);
+
+        $this->setTokenCookies(
+            $result->accessToken,
+            $result->refreshToken
+        );
 
         return response()->json([
-            'message' => 'Token renovado',
-            'accessToken' => $result['accessToken']
-        ])->withCookie($cookieJwt)->withCookie($cookieRefresh);
-
-    } catch (\Exception $e) {
-        // Se falhar, limpa os cookies
-        return response()->json(['message' => $e->getMessage()], 401)
-            ->withoutCookie('jwt')
-            ->withoutCookie('refreshToken');
+            'email' => $result->email,
+            'role'  => $result->role
+        ]);
     }
-}
+
+    // ======================================================
+    // EMAIL / PASSWORD
+    // ======================================================
+
+    public function confirmEmail(Request $request)
+    {
+        $this->authService->confirmEmail($request->all());
+        return response()->json([
+            'message' => 'Email confirmado com sucesso!'
+        ]);
+    }
+
+    public function forgotPassword(Request $request)
+    {
+        $this->authService->forgotPassword($request->all());
+        return response()->json([
+            'message' => 'Se o e-mail estiver cadastrado, você receberá um link de recuperação.'
+        ]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $this->authService->resetPassword($request->all());
+        return response()->json([
+            'message' => 'Senha redefinida com sucesso. Faça login com a nova senha.'
+        ]);
+    }
+
+    // ======================================================
+    // HELPERS
+    // ======================================================
+
+    private function setTokenCookies(string $access, string $refresh): void
+    {
+        Cookie::queue(
+            cookie('jwt', $access, 15, null, null, true, true, false, 'Lax')
+        );
+
+        Cookie::queue(
+            cookie('refreshToken', $refresh, 60 * 24 * 7, null, null, true, true, false, 'Lax')
+        );
+    }
 }
