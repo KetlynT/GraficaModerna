@@ -17,7 +17,6 @@ class CouponController extends Controller
         $this->contentService = $contentService;
     }
 
-    // [HttpGet("validate/{code}")]
     public function validateCode($code)
     {
         // Checagem de configurações (Feature Flag)
@@ -36,7 +35,4 @@ class CouponController extends Controller
             'discountPercentage' => $coupon->discount_percentage
         ]);
     }
-
-    // Métodos administrativos (Create, Delete, GetAll) seriam adicionados aqui
-    // seguindo a mesma lógica do seu código original, protegidos por middleware 'admin'
 }

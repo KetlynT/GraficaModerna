@@ -8,13 +8,12 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
-use Exception;
 
 class JwtMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
-        // 1. Tenta pegar do Cookie (prioridade) ou Header Bearer
+        // Aceita Cookie ou Header
         $token = $request->cookie('jwt') ?? $request->bearerToken();
 
         if (!$token) {
@@ -22,24 +21,18 @@ class JwtMiddleware
         }
 
         try {
-            // 2. Decodifica e Valida
-            $credentials = JWT::decode($token, new Key(env('JWT_SECRET'), env('JWT_ALGO', 'HS256')));
+            $credentials = JWT::decode($token, new Key(env('JWT_SECRET', 'secret'), 'HS256'));
             
-            // 3. Busca o usuário (Opcional: para performance, pode confiar só no token, 
-            // mas buscar no banco garante que o user não foi deletado)
+            // Otimização: Se quiser evitar consulta ao banco em toda requisição, 
+            // hidrate um User genérico apenas com o ID/Role do token.
             $user = User::find($credentials->sub);
 
-            if (!$user) {
-                return response()->json(['message' => 'Usuário não encontrado'], 401);
-            }
+            if (!$user) throw new \Exception();
 
-            // 4. Autentica o usuário na requisição atual do Laravel
             Auth::login($user);
 
-        } catch (\Firebase\JWT\ExpiredException $e) {
-            return response()->json(['message' => 'Token expirado'], 401);
-        } catch (Exception $e) {
-            return response()->json(['message' => 'Token inválido'], 401);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Token inválido ou expirado'], 401);
         }
 
         return $next($request);
