@@ -110,4 +110,32 @@ class AuthController extends Controller
         Cookie::queue('jwt', $accessToken, 15, null, null, true, true);
         Cookie::queue('refreshToken', $refreshToken, 60 * 24 * 7, null, null, true, true);
     }
+    public function refreshToken(Request $request)
+{
+    // Tenta pegar do Cookie, se não, tenta do Body (fallback)
+    $refreshToken = $request->cookie('refreshToken') ?? $request->input('refreshToken');
+
+    if (!$refreshToken) {
+        return response()->json(['message' => 'Refresh Token não fornecido'], 401);
+    }
+
+    try {
+        $result = $this->authService->refreshToken($refreshToken);
+        
+        // Define os novos cookies
+        $cookieJwt = cookie('jwt', $result['accessToken'], 15, null, null, true, true); // 15 min
+        $cookieRefresh = cookie('refreshToken', $result['refreshToken'], 7 * 24 * 60, null, null, true, true); // 7 dias
+
+        return response()->json([
+            'message' => 'Token renovado',
+            'accessToken' => $result['accessToken']
+        ])->withCookie($cookieJwt)->withCookie($cookieRefresh);
+
+    } catch (\Exception $e) {
+        // Se falhar, limpa os cookies
+        return response()->json(['message' => $e->getMessage()], 401)
+            ->withoutCookie('jwt')
+            ->withoutCookie('refreshToken');
+    }
+}
 }
