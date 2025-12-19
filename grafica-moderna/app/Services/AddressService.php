@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\UserAddress;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use App\Services\InputCleaner;
 
 class AddressService
 {
@@ -19,9 +20,10 @@ class AddressService
 
     public function create(string $userId, array $data)
     {
+        $cleanData = InputCleaner::clean($data);
         // Se for o primeiro endereço ou marcado como padrão, remove o padrão dos outros
         $isFirst = !UserAddress::where('user_id', $userId)->exists();
-        $isDefault = $data['isDefault'] ?? false;
+        $isDefault = $cleanData['isDefault'] ?? false;
 
         if ($isDefault || $isFirst) {
             $this->unsetDefaultAddress($userId);
@@ -29,17 +31,17 @@ class AddressService
 
         return UserAddress::create([
             'user_id' => $userId,
-            'name' => $data['name'],
-            'receiver_name' => $data['receiverName'],
-            'zip_code' => $data['zipCode'],
-            'street' => $data['street'],
-            'number' => $data['number'],
-            'complement' => $data['complement'] ?? '',
-            'neighborhood' => $data['neighborhood'],
-            'city' => $data['city'],
-            'state' => $data['state'],
-            'reference' => $data['reference'] ?? '',
-            'phone_number' => $data['phoneNumber'],
+            'name' => $cleanData['name'],
+            'receiver_name' => $cleanData['receiverName'],
+            'zip_code' => $cleanData['zipCode'],
+            'street' => $cleanData['street'],
+            'number' => $cleanData['number'],
+            'complement' => $cleanData['complement'] ?? '',
+            'neighborhood' => $cleanData['neighborhood'],
+            'city' => $cleanData['city'],
+            'state' => $cleanData['state'],
+            'reference' => $cleanData['reference'] ?? '',
+            'phone_number' => $cleanData['phoneNumber'],
             'is_default' => $isDefault || $isFirst
         ]);
     }
@@ -47,25 +49,25 @@ class AddressService
     public function update(string $id, string $userId, array $data)
     {
         $address = $this->getById($id, $userId);
-        
-        if ($data['isDefault'] ?? false) {
+        $cleanData = InputCleaner::clean($data);
+        if ($cleanData['isDefault'] ?? false) {
             $this->unsetDefaultAddress($userId);
         }
 
         // Mapeamento de camelCase (JSON) para snake_case (DB)
         $address->update([
-            'name' => $data['name'],
-            'receiver_name' => $data['receiverName'],
-            'zip_code' => $data['zipCode'],
-            'street' => $data['street'],
-            'number' => $data['number'],
-            'complement' => $data['complement'] ?? '',
-            'neighborhood' => $data['neighborhood'],
-            'city' => $data['city'],
-            'state' => $data['state'],
-            'reference' => $data['reference'] ?? '',
-            'phone_number' => $data['phoneNumber'],
-            'is_default' => $data['isDefault']
+            'name' => $cleanData['name'],
+            'receiver_name' => $cleanData['receiverName'],
+            'zip_code' => $cleanData['zipCode'],
+            'street' => $cleanData['street'],
+            'number' => $cleanData['number'],
+            'complement' => $cleanData['complement'] ?? '',
+            'neighborhood' => $cleanData['neighborhood'],
+            'city' => $cleanData['city'],
+            'state' => $cleanData['state'],
+            'reference' => $cleanData['reference'] ?? '',
+            'phone_number' => $cleanData['phoneNumber'],
+            'is_default' => $cleanData['isDefault']
         ]);
 
         return $address;

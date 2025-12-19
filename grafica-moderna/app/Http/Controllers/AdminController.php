@@ -14,6 +14,9 @@ use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\EmailTemplate;
 
+use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
+use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
+
 class AdminController extends Controller
 {
     protected $dashboardService;
@@ -21,7 +24,8 @@ class AdminController extends Controller
     protected $orderService;
     protected $contentService;
     protected $couponService;
-
+    protected $sanitizer;
+    
     public function __construct(
         DashboardService $dashboardService,
         ProductService $productService,
@@ -35,6 +39,16 @@ class AdminController extends Controller
         $this->orderService = $orderService;
         $this->contentService = $contentService;
         $this->couponService = $couponService;
+
+        $config = (new HtmlSanitizerConfig())
+            ->allowSafeElements()
+            ->allowRelativeLinks()
+            ->allowRelativeMedias()
+            ->allowAttribute('class', '*') // Permite classes CSS (ex: Tailwind)
+            ->allowAttribute('style', '*') // Cuidado com style, mas às vezes necessário em CMS
+            ->allowElements(['img', 'iframe', 'figure', 'figcaption']); // Tags extras permitidas
+
+        $this->sanitizer = new HtmlSanitizer($config);
     }
 
     // ==========================================
@@ -177,7 +191,7 @@ class AdminController extends Controller
             'title' => 'required',
             'content' => 'required'
         ]);
-        
+        $data['content'] = $this->sanitizer->sanitize($data['content']);
         $this->contentService->savePage($data);
         return response()->noContent();
     }
@@ -197,7 +211,7 @@ class AdminController extends Controller
             'subject' => 'required',
             'html_content' => 'required'
         ]);
-        
+        $data['html_content'] = $this->sanitizer->sanitize($data['html_content']);
         $template->update($data);
         return response()->json($template);
     }

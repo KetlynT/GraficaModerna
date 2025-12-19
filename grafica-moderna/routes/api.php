@@ -30,7 +30,7 @@ Route::get('content/settings', [ContentController::class, 'getSettings']);
 Route::get('content/pages/{slug}', [ContentController::class, 'getPage']);
 Route::post('webhooks/stripe', [StripeWebhookController::class, 'handle']);
 Route::get('coupons/validate/{code}', [CouponController::class, 'validateCode']);
-
+Route::middleware('throttle:3,1')->post('contact', [ContactController::class, 'sendMessage']);
 /*
 |--------------------------------------------------------------------------
 | Rotas Protegidas (JWT) - Usuário Logado

@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use App\Services\InputCleaner;
 
 class AuthService
 {
@@ -36,20 +37,26 @@ class AuthService
         return $this->generateAuthResponse($user);
     }
 
-    public function register(array $data)
+public function register(array $data)
     {
+        // Limpa o nome antes de criar
+        $fullNameClean = InputCleaner::clean($data['fullName']);
+        
+        // CPF e Telefone também, só por garantia
+        $phoneClean = isset($data['phoneNumber']) ? InputCleaner::clean($data['phoneNumber']) : null;
+
         $user = User::create([
-            'full_name' => $data['fullName'],
-            'email' => $data['email'],
-            'password' => Hash::make($this->pepperPassword($data['password'])), // Hash(Senha + Pepper)
-            'cpf_cnpj' => $data['cpfCnpj'],
-            'phone_number' => $data['phoneNumber'] ?? null,
+            'full_name' => $fullNameClean,
+            'email' => $data['email'], // Email já é validado pelo Laravel como formato de email
+            'password' => Hash::make($this->pepperPassword($data['password'])),
+            'cpf_cnpj' => InputCleaner::clean($data['cpfCnpj']),
+            'phone_number' => $phoneClean,
             'role' => 'User'
         ]);
 
         return $this->generateAuthResponse($user);
     }
-
+    
     public function refreshToken(string $refreshTokenRaw)
     {
         // Busca usuário pelo hash do refresh token (igual ao C# Identity)

@@ -14,19 +14,17 @@ class ProductController extends Controller
         $this->service = $service;
     }
 
-    public function index(Request $request)
+public function index(Request $request)
     {
         $page = $request->input('page', 1);
         $pageSize = $request->input('pageSize', 8);
-
-        // Validação simples
-        $pageSize = min($pageSize, 50);
-        $page = max($page, 1);
 
         $result = $this->service->getCatalog(
             $request->input('search'),
             $request->input('sort'),
             $request->input('order'),
+            $request->input('minPrice'), // Recebe ?minPrice=10
+            $request->input('maxPrice'), // Recebe ?maxPrice=100
             $page,
             $pageSize
         );

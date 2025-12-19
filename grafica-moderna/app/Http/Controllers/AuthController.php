@@ -63,17 +63,29 @@ class AuthController extends Controller
         }
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
-        // Revoga tokens do usuário atual
-        if (Auth::check()) {
-            Auth::user()->tokens()->delete();
+        $token = $request->cookie('jwt') ?? $request->bearerToken();
+        
+        if ($token) {
+            try {
+                // Decodifica só para pegar a expiração (exp)
+                $decoded = JWT::decode($token, new Key(env('JWT_SECRET'), 'HS256'));
+                $minutesLeft = ($decoded->exp - time()) / 60;
+                
+                if ($minutesLeft > 0) {
+                    $this->blacklistService->blacklist($token, (int)ceil($minutesLeft));
+                }
+            } catch (\Exception $e) {
+                // Token já inválido, ignora
+            }
         }
 
-        // Limpa cookies
+        Auth::guard('web')->logout(); // Se estiver usando guard padrão também
+
         return response()->json(['message' => 'Deslogado com sucesso'])
-            ->withCookie(Cookie::forget('jwt'))
-            ->withCookie(Cookie::forget('refreshToken'));
+            ->withCookie(cookie()->forget('jwt'))
+            ->withCookie(cookie()->forget('refreshToken'));
     }
 
     public function checkAuth()

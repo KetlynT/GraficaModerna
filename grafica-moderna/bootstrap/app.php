@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'jwt.auth' => JwtMiddleware::class, // Novo
             'admin' => AdminMiddleware::class,
         ]);
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
