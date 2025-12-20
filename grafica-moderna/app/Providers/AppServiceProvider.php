@@ -15,8 +15,6 @@ use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 // Interfaces e Serviços
 use App\Application\Interfaces as I;
 use App\Services as S;
-use App\Infrastructure\Repositories as R;
-use App\Domain\Interfaces as DI;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,31 +23,6 @@ class AppServiceProvider extends ServiceProvider
         // =================================================================
         // DEPENDENCY INJECTION (DI)
         // =================================================================
-        
-        // Repositories
-        $this->app->scoped(DI\IProductRepository::class, R\ProductRepository::class);
-        $this->app->scoped(DI\ICartRepository::class, R\CartRepository::class);
-        $this->app->scoped(DI\IOrderRepository::class, R\OrderRepository::class);
-        $this->app->scoped(DI\IAddressRepository::class, R\AddressRepository::class);
-        $this->app->scoped(DI\ICouponRepository::class, R\CouponRepository::class);
-        $this->app->scoped(DI\IContentRepository::class, R\ContentRepository::class);
-        $this->app->scoped(DI\IDashboardRepository::class, R\DashboardRepository::class);
-        $this->app->scoped(DI\IUnitOfWork::class, R\UnitOfWork::class);
-
-        // Services
-        $this->app->scoped(I\IProductService::class, S\ProductService::class);
-        $this->app->scoped(I\IAuthService::class, S\AuthService::class);
-        $this->app->scoped(I\ITokenBlacklistService::class, S\TokenBlacklistService::class);
-        $this->app->scoped(I\ICartService::class, S\CartService::class);
-        $this->app->scoped(I\IOrderService::class, S\OrderService::class);
-        $this->app->scoped(I\ICouponService::class, S\CouponService::class);
-        $this->app->scoped(I\IAddressService::class, S\AddressService::class);
-        $this->app->scoped(I\IPaymentService::class, S\StripePaymentService::class);
-        $this->app->scoped(I\IContentService::class, S\ContentService::class);
-        $this->app->scoped(I\IDashboardService::class, S\DashboardService::class);
-        $this->app->scoped(I\IShippingService::class, S\MelhorEnvioService::class); // Atenção ao nome da classe concreta
-        $this->app->scoped(I\IEmailService::class, S\SmtpEmailService::class);
-        $this->app->scoped(I\ITemplateService::class, S\TemplateService::class);
         
         // Security Services
         $this->app->scoped(S\MetadataSecurityService::class);

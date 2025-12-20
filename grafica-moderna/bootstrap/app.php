@@ -4,18 +4,19 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Support\Facades\Route;
+
+use App\Http\Middleware\JwtAuthMiddleware;
 use App\Http\Middleware\JwtBlacklistMiddleware;
-use App\Http\Middleware\ExceptionMiddleware;
-use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\SecurityHeaders;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        // Substituímos o carregamento padrão 'api' para aplicar o prefixo dinâmico do .env
+        // --- MANTENDO SUA LÓGICA DE PREFIXO ---
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
-            $prefix = env('API_PREFIX', 'api/v1'); // Pega API_SEGMENT_KEY
+            $prefix = env('API_PREFIX', 'api/v1'); // Mantém sua lógica original
             
             Route::middleware('api')
                 ->prefix($prefix)
@@ -26,27 +27,20 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // 1. Middlewares Globais (Rodam em toda requisição, igual ao app.Use... no C#)
-        $middleware->append(SecurityHeaders::class); // CSP, X-Frame, etc.
+        // 1. Middlewares Globais (já existentes no seu código)
+        $middleware->append(SecurityHeaders::class);
 
-        // 2. Aliases para uso nas rotas (middleware('role:admin'))
+        // 2. Registrando os Aliases (Apelidos) para usar no api.php
         $middleware->alias([
-            'auth.jwt'   => JwtBlacklistMiddleware::class, // Validação JWT customizada
-            'role'       => AdminMiddleware::class,        // Validação de Role
-            'throttle'   => \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            'auth.jwt'      => JwtAuthMiddleware::class,      // Autentica (Lê o token)
+            'jwt.blacklist' => JwtBlacklistMiddleware::class, // Segurança (Checa blacklist)
+            'admin'         => AdminMiddleware::class,        // Permissão (Checa role)
+            'throttle'      => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         ]);
 
-        // 3. Configuração de Proxies (app.UseForwardedHeaders no C#)
+        // 3. Proxies (Mantido do seu arquivo)
         $middleware->trustProxies(at: '*');
-        
-        // 4. Middlewares de API padrão
-        $middleware->api(prepend: [
-            \Illuminate\Routing\Middleware\SubstituteBindings::class,
-        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // Registra o middleware de tratamento de erro global customizado
-        // No Laravel 11, o ideal é customizar o render ou usar reportable, 
-        // mas para manter a lógica do seu ExceptionMiddleware.php existente:
-    })
-    ->create();
+        //
+    })->create();

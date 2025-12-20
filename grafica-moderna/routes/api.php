@@ -12,7 +12,8 @@ use App\Http\Controllers\CouponsController;
 use App\Http\Controllers\ShippingController;
 use App\Http\Controllers\PaymentsController;
 use App\Http\Controllers\ContentController;
-use App\Http\Controllers\Webhook\StripeWebhookController;
+use App\Http\Controllers\AddressController;
+use App\Http\Controllers\StripeWebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,21 +26,22 @@ use App\Http\Controllers\Webhook\StripeWebhookController;
 // ==============================================================================
 
 Route::controller(AuthController::class)->group(function () {
-    // Rotas com limitação de taxa (throttle:auth definido no controller)
+    // Autenticação
     Route::post('/auth/register', 'register');
     Route::post('/auth/login', 'login');
+    Route::post('/auth/refresh-token', 'refreshToken');
     
     // Recuperação de conta
     Route::post('/auth/forgot-password', 'forgotPassword');
     Route::post('/auth/reset-password', 'resetPassword');
     Route::post('/auth/confirm-email', 'confirmEmail');
     
-    // Gestão de Sessão
-    Route::post('/auth/refresh-token', 'refreshToken');
+    // Checagem simples (usada pelo front para verificar estado)
     Route::get('/auth/check', 'checkAuth');
-    
-    // Rotas Autenticadas de Auth
-    Route::middleware('auth:api')->group(function () {
+
+    // Rotas que exigem login (Logout e Perfil)
+    // Usamos auth.jwt para validar e jwt.blacklist para impedir tokens antigos
+    Route::middleware(['auth.jwt', 'jwt.blacklist'])->group(function () {
         Route::post('/auth/logout', 'logout');
         Route::get('/auth/profile', 'getProfile');
         Route::put('/auth/profile', 'updateProfile');
@@ -56,14 +58,14 @@ Route::controller(ProductsController::class)->group(function () {
     Route::get('/products/{id}', 'show');
 });
 
-// Conteúdo (Páginas e Configurações)
+// Conteúdo (Páginas Institucionais e Configurações)
 Route::controller(ContentController::class)->group(function () {
     Route::get('/content/pages', 'getAllPages');
     Route::get('/content/pages/{slug}', 'getPage');
     Route::get('/content/settings', 'getSettings');
 });
 
-// Validação de Cupons
+// Validação de Cupons (Público para cálculo no carrinho)
 Route::get('/coupons/validate/{code}', [CouponsController::class, 'validateCode']);
 
 // Cálculo de Frete
@@ -73,12 +75,12 @@ Route::controller(ShippingController::class)->group(function () {
 });
 
 // ==============================================================================
-// 3. ÁREA DO CLIENTE (Requer auth:api)
+// 3. ÁREA DO CLIENTE (Requer Login)
 // ==============================================================================
 
-Route::middleware(['auth:api'])->group(function () {
+Route::middleware(['auth.jwt', 'jwt.blacklist'])->group(function () {
 
-    // Carrinho (Middleware 'role:user' aplicado no construtor do controller)
+    // Carrinho
     Route::controller(CartController::class)->prefix('cart')->group(function () {
         Route::get('/', 'index');
         Route::post('/items', 'addItem');
@@ -87,7 +89,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::delete('/', 'clear');
     });
 
-    // Endereços (Middleware 'throttle:user-actions' aplicado no construtor)
+    // Endereços
     Route::controller(AddressController::class)->prefix('addresses')->group(function () {
         Route::get('/', 'index');
         Route::post('/', 'store');
@@ -97,24 +99,25 @@ Route::middleware(['auth:api'])->group(function () {
     });
 
     // Pedidos
-    Route::controller(OrderController::class)->prefix('orders')->group(function () {
-        Route::post('/', 'checkout');           // Criar pedido (Checkout)
-        Route::get('/', 'index');               // Listar pedidos do usuário
+    Route::controller(OrdersController::class)->prefix('orders')->group(function () {
+        Route::post('/', 'checkout');           // Criar pedido
+        Route::get('/', 'index');               // Meus pedidos
         Route::post('/{id}/request-refund', 'requestRefund');
     });
 
-    // Pagamentos
+    // Pagamentos (Sessão do Stripe)
     Route::post('/payments/checkout-session', [PaymentsController::class, 'createCheckoutSession']);
 });
 
 // ==============================================================================
-// 4. ÁREA ADMINISTRATIVA (Requer auth:api e role:admin)
+// 4. ÁREA ADMINISTRATIVA (Requer Login + Role Admin)
 // ==============================================================================
 
-// Login Administrativo (Público, mas específico para admin)
+// Login Administrativo (Separado se necessário, ou usa o login padrão)
 Route::post('/admin/login', [AdminController::class, 'login']);
 
-Route::middleware(['auth:api', 'role:admin', 'throttle:admin'])
+// Grupo protegido por Auth + Admin Middleware
+Route::middleware(['auth.jwt', 'jwt.blacklist', 'admin', 'throttle:admin'])
     ->prefix('admin')
     ->controller(AdminController::class)
     ->group(function () {
@@ -122,7 +125,7 @@ Route::middleware(['auth:api', 'role:admin', 'throttle:admin'])
         // Dashboard
         Route::get('/dashboard', 'dashboardStats');
         
-        // Uploads
+        // Uploads (Imagens de produtos/site)
         Route::post('/upload', 'upload');
         
         // Gestão de Pedidos
@@ -130,7 +133,7 @@ Route::middleware(['auth:api', 'role:admin', 'throttle:admin'])
         Route::put('/orders/{id}/status', 'updateOrderStatus');
         
         // Gestão de Produtos
-        Route::get('/products', 'getProducts'); // Lista versão admin (pode incluir inativos, etc)
+        Route::get('/products', 'getProducts');
         Route::get('/products/{id}', 'getProductById');
         Route::post('/products', 'createProduct');
         Route::put('/products/{id}', 'updateProduct');
@@ -155,5 +158,5 @@ Route::middleware(['auth:api', 'role:admin', 'throttle:admin'])
 // 5. WEBHOOKS (Externo)
 // ==============================================================================
 
-// Stripe Webhook (Geralmente requer configuração no VerifyCsrfToken para exceção se fosse web, mas aqui é API)
+// Webhook do Stripe (Não usa auth, validado pela assinatura do Stripe no Controller)
 Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handleStripe']);
