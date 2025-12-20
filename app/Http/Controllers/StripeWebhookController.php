@@ -63,9 +63,10 @@ class StripeWebhookController extends Controller
             // Marca evento como processado
             try {
                 ProcessedWebhookEvent::create(['event_id' => $event->id]);
-            } catch (\Exception $e) {
+            } catch (\Illuminate\Database\QueryException $e) {
                 // Se der erro ao salvar (race condition), apenas loga
-                Log::warning('Erro ao salvar ProcessedWebhookEvent', ['id' => $event->id]);
+                if ($e->getCode() === '23000') return response()->json(null, 200);
+                throw $e;
             }
 
             return response()->json(null, 200);

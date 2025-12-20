@@ -11,7 +11,7 @@ class TokenBlacklistService
     public function blacklist(string $token, int $expiresInMinutes)
     {
         // Usamos o hash do token como chave para economizar espaço
-        $key = 'blacklist_' . md5($token);
+        $key = 'blacklist_' . hash('sha256', $token);
         
         // Cache::put(chave, valor, tempo_em_minutos)
         Cache::put($key, true, $expiresInMinutes);
@@ -19,7 +19,7 @@ class TokenBlacklistService
 
     public function isBlacklisted(string $token): bool
     {
-        $key = 'blacklist_' . md5($token);
+        $key = 'blacklist_' . hash('sha256', $token);
         return Cache::has($key);
     }
 }
