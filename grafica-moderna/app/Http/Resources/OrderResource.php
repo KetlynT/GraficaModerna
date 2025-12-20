@@ -9,13 +9,14 @@ class OrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Mapeamento exato do OrderDto.cs
         return [
             'id' => $this->id,
-            'orderDate' => $this->order_date, // Laravel casta para data automaticamente
+            'orderNumber' => $this->order_number,
+            'orderDate' => $this->order_date,
             'deliveryDate' => $this->delivery_date,
             'subTotal' => (float) $this->sub_total,
             'discount' => (float) $this->discount,
+            'address' => new AddressResource($this->whenLoaded('address')),
             'shippingCost' => (float) $this->shipping_cost,
             'totalAmount' => (float) $this->total_amount,
             'status' => $this->status,
@@ -27,8 +28,6 @@ class OrderResource extends JsonResource
             'shippingAddress' => $this->shipping_address,
             'customerName' => $this->user->full_name ?? 'Cliente',
             'items' => OrderItemResource::collection($this->items),
-            // O campo 'paymentWarning' é passado via 'additional' no controller se necessário, 
-            // ou incluído aqui se estiver no objeto temporário.
             'paymentWarning' => $this->when($this->payment_warning, $this->payment_warning),
         ];
     }

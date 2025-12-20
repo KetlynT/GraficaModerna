@@ -6,7 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cookie;
-use Intervention\Image\Facades\Image;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 
@@ -32,7 +33,6 @@ use App\Http\Resources\CouponResource;
 use App\Http\Resources\ContentPageResource;
 use App\Http\Resources\EmailTemplateResource;
 
-// Models diretos (Substituindo UnitOfWork para ser mais idiomático Laravel neste controller)
 use App\Models\EmailTemplate;
 
 class AdminController extends Controller
@@ -68,8 +68,12 @@ class AdminController extends Controller
             ->allowRelativeLinks()
             ->allowRelativeMedias()
             ->allowAttribute('class', '*')
-            ->allowAttribute('style', '*')
-            ->allowElements(['img', 'iframe', 'figure', 'figcaption']);
+            ->allowAttribute('style', '*');
+
+        // Método allowElements não existe, deve-se usar allowElement individualmente
+        foreach (['img', 'iframe', 'figure', 'figcaption'] as $element) {
+            $config->allowElement($element);
+        }
 
         $this->sanitizer = new HtmlSanitizer($config);
     }
@@ -130,13 +134,13 @@ class AdminController extends Controller
             if ($this->isVideo($extension)) {
                 $file->storeAs('public/uploads', $fileName);
             } else {
-                $image = Image::make($file->getRealPath());
+                // Instancia o Manager para Intervention Image v3
+                $manager = new ImageManager(new Driver());
+                $image = $manager->read($file->getRealPath());
                 
+                // scaleDown: redimensiona proporcionalmente apenas se for maior que o limite
                 if ($image->width() > self::MAX_IMAGE_DIMENSION || $image->height() > self::MAX_IMAGE_DIMENSION) {
-                    $image->resize(self::MAX_IMAGE_DIMENSION, self::MAX_IMAGE_DIMENSION, function ($constraint) {
-                        $constraint->aspectRatio();
-                        $constraint->upsize();
-                    });
+                    $image->scaleDown(width: self::MAX_IMAGE_DIMENSION, height: self::MAX_IMAGE_DIMENSION);
                 }
                 
                 Storage::disk('public')->put($path, (string) $image->encode());
@@ -154,7 +158,7 @@ class AdminController extends Controller
     }
 
     // ======================================================
-    // ORDERS (Gestão Completa)
+    // ORDERS
     // ======================================================
 
     public function getOrders(Request $request)
@@ -162,7 +166,6 @@ class AdminController extends Controller
         $page = (int) $request->query('page', 1);
         $pageSize = (int) $request->query('pageSize', 10);
 
-        // Chama método administrativo que vê tudo
         $orders = $this->orderService->getAllOrders($page, $pageSize);
         
         return OrderResource::collection($orders);
@@ -170,8 +173,6 @@ class AdminController extends Controller
 
     public function updateOrderStatus(string $id, Request $request)
     {
-        // Aqui usamos Request genérico para pegar todos os dados opcionais (refundAmount, etc)
-        // A validação detalhada pode ser feita no Service ou via FormRequest injetado
         $request->validate([
             'status' => 'required|string',
             'refundAmount' => 'nullable|numeric|min:0',
@@ -313,7 +314,7 @@ class AdminController extends Controller
         if (!$template) return response()->json(['message' => 'Template não encontrado.'], 404);
 
         $template->subject = $request->input('subject');
-        $template->body_content = $request->input('bodyContent'); // Frontend manda camelCase
+        $template->body_content = $request->input('bodyContent'); 
         $template->updated_at = now();
         $template->save();
 

@@ -155,6 +155,14 @@ class OrderService
             ->paginate($pageSize, ['*'], 'page', $page);
     }
 
+    public function getOrderById(string $orderId, string $userId)
+    {
+        return Order::with(['items.product', 'address']) // Carrega itens, produtos e endereço
+            ->where('id', $orderId)
+            ->where('user_id', $userId)
+            ->firstOrFail(); // Retorna 404 se não achar ou não for do usuário
+    }
+
     public function getUserOrders($userId, $page, $pageSize)
     {
         return Order::with(['items', 'history'])

@@ -4,11 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Services\OrderService;
 use App\Services\ContentService;
-use App\Http\Requests\CheckoutRequest; // Assumindo namespace correto
-use App\Http\Requests\RefundRequest;   // Assumindo namespace correto
-use App\Http\Resources\OrderResource;  // Importante!
+use App\Http\Requests\CheckoutRequest;
+use App\Http\Requests\RefundRequest;
+use App\Http\Resources\OrderResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class OrdersController extends Controller
 {
@@ -69,5 +70,17 @@ class OrdersController extends Controller
         $this->orderService->requestRefund($id, $userId, $validated);
 
         return response()->json([], 200);
+    }
+
+    public function show(string $id)
+    {
+        try {
+            $userId = Auth::id();
+            $order = $this->orderService->getOrderById($id, $userId);
+            
+            return new OrderResource($order);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Pedido não encontrado.'], 404);
+        }
     }
 }

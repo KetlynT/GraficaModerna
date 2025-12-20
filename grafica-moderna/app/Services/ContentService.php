@@ -24,7 +24,6 @@ class ContentService
         Cache::forget('site_settings');
     }
 
-    // Adicionado para compatibilidade com AdminController
     public function updateSettings(array $settings)
     {
         foreach ($settings as $key => $value) {
@@ -32,21 +31,23 @@ class ContentService
         }
     }
 
+    public function getAllPages()
+    {
+        return ContentPage::all();
+    }
+
     public function getPageBySlug(string $slug)
     {
         return ContentPage::where('slug', $slug)->where('is_visible', true)->firstOrFail();
     }
     
-    // Adicionado: createPage chama savePage
     public function createPage(array $data)
     {
         return $this->savePage($data);
     }
 
-    // Adicionado: updatePage chama savePage preservando o slug se necessário
     public function updatePage(string $slug, array $data)
     {
-        // Garante que estamos atualizando o slug correto
         $data['slug'] = $slug; 
         return $this->savePage($data);
     }
