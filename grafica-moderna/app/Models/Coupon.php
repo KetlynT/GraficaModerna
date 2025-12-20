@@ -20,6 +20,6 @@ class Coupon extends Model
     // Método de domínio IsValid()
     public function isValid(): bool
     {
-        return $this->is_active && $this->expiry_date->isFuture();
+        return $this->is_active && $this->expiry_date > now();
     }
 }

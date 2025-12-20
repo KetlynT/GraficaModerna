@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Services\AddressService;
 use App\Services\ContentService;
-use App\Http\Requests\Address\AddressRequest;
+use App\Http\Requests\AddressRequest;
+use App\Http\Resources\AddressResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -18,7 +19,6 @@ class AddressController extends Controller
         AddressService $service,
         ContentService $contentService
     ) {
-        // Middlewares aplicados nas rotas
         $this->service = $service;
         $this->contentService = $contentService;
     }
@@ -27,30 +27,24 @@ class AddressController extends Controller
     {
         $settings = $this->contentService->getSettings();
 
-        if (
-            isset($settings['purchase_enabled']) &&
-            $settings['purchase_enabled'] === 'false'
-        ) {
-            abort(
-                400,
-                'Gerenciamento de endereços indisponível no modo orçamento.'
-            );
+        if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
+            // Lança exceção para retornar 400 (conforme ExceptionMiddleware)
+            throw new \Exception('Gerenciamento de endereços indisponível no modo orçamento.');
         }
     }
 
     public function index()
     {
-        return response()->json(
-            $this->service->getUserAddresses(Auth::id())
-        );
+        $addresses = $this->service->getUserAddresses(Auth::id());
+        // Retorna collection formatada em camelCase via Resource
+        return AddressResource::collection($addresses);
     }
 
     public function show(string $id)
     {
         try {
-            return response()->json(
-                $this->service->getById($id, Auth::id())
-            );
+            $address = $this->service->getById($id, Auth::id());
+            return new AddressResource($address);
         } catch (ModelNotFoundException) {
             return response()->json(null, 404);
         }
@@ -61,10 +55,10 @@ class AddressController extends Controller
         try {
             $this->checkPurchaseEnabled();
 
-            // Validação via AddressRequest
+            // create retorna o Model, envolvemos no Resource
             $created = $this->service->create(Auth::id(), $request->validated());
 
-            return response()->json($created, 201);
+            return response()->json(new AddressResource($created), 201);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => $e->getMessage()
@@ -77,7 +71,6 @@ class AddressController extends Controller
         try {
             $this->checkPurchaseEnabled();
 
-            // Validação via AddressRequest
             $this->service->update($id, Auth::id(), $request->validated());
 
             return response()->noContent();

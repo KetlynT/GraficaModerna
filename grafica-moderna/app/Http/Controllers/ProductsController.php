@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ProductService;
+use App\Http\Resources\ProductResource; // Importar o Resource
 use Illuminate\Http\Request;
 
 class ProductsController extends Controller
@@ -14,18 +15,15 @@ class ProductsController extends Controller
         $this->service = $service;
     }
 
-    /**
-     * GET /api/products
-     */
     public function index(Request $request)
     {
         $search = $request->query('search');
         $sort = $request->query('sort');
         $order = $request->query('order');
         $page = max((int)$request->query('page', 1), 1);
-        $pageSize = min((int)$request->query('pageSize', 8), 50);
+        $pageSize = min((int)$request->query('pageSize', 8), 50); // C# limita a 50
 
-        $result = $this->service->getCatalog(
+        $paginator = $this->service->getCatalog(
             $search,
             $sort,
             $order,
@@ -33,20 +31,14 @@ class ProductsController extends Controller
             $pageSize
         );
 
-        return response()->json($result);
+        // Transforma a coleção paginada usando o Resource para garantir camelCase
+        // Isso gera uma estrutura { data: [...], meta: ..., links: ... }
+        return ProductResource::collection($paginator);
     }
 
-    /**
-     * GET /api/products/{id}
-     */
     public function show(string $id)
     {
         $product = $this->service->getById($id);
-
-        if (!$product) {
-            return response()->json(['message' => 'Produto não encontrado.'], 404);
-        }
-
-        return response()->json($product);
+        return new ProductResource($product);
     }
 }

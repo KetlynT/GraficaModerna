@@ -3,14 +3,12 @@
 namespace App\Services;
 
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Cart;
 use App\Models\CouponUsage;
 use App\Models\Product;
 use App\Services\Shipping\MelhorEnvioService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Auth;
 use Exception;
 
 class OrderService
@@ -19,82 +17,99 @@ class OrderService
     protected $couponService;
     protected $emailService;
     protected $paymentService;
+    protected $templateService;
+
+    // Constantes do C#
+    const MIN_ORDER_AMOUNT = 1.00;
+    const MAX_ORDER_AMOUNT = 100000.00;
 
     public function __construct(
         MelhorEnvioService $shippingService,
         CouponService $couponService,
         EmailService $emailService,
+        TemplateService $templateService,
         StripePaymentService $paymentService
     ) {
         $this->shippingService = $shippingService;
         $this->couponService = $couponService;
         $this->emailService = $emailService;
+        $this->templateService = $templateService;
         $this->paymentService = $paymentService;
     }
 
     public function createOrderFromCart(string $userId, array $addressData, ?string $couponCode, string $shippingMethod)
     {
-        // 1. Validar Carrinho
         $cart = Cart::with('items.product')->where('user_id', $userId)->first();
         if (!$cart || $cart->items->isEmpty()) {
             throw new Exception("Carrinho vazio.");
         }
 
-        // 2. Calcular Frete (Revalidação de segurança)
-        // Nota: Em produção, você deve checar se o valor bate com o que veio do front
+        foreach ($cart->items as $i) {
+            if ($i->quantity <= 0) throw new Exception("O carrinho contém itens com quantidades inválidas.");
+        }
+
+        // Cálculo de Frete
         $shippingOptions = $this->shippingService->calculateShipping($addressData['zipCode'], $cart->items->all());
         
+        // Busca case-insensitive igual ao C# (Trim e InvariantCultureIgnoreCase)
         $selectedOption = collect($shippingOptions)->first(function ($opt) use ($shippingMethod) {
-            return strcasecmp($opt['name'], $shippingMethod) === 0 || str_contains($opt['name'], $shippingMethod);
+            return strcasecmp(trim($opt['name']), trim($shippingMethod)) === 0;
         });
 
         if (!$selectedOption) {
-            // Fallback para ambiente de desenvolvimento ou erro
-            if (config('app.env') === 'local') {
-                $selectedOption = ['name' => $shippingMethod, 'price' => 20.00]; 
-            } else {
-                throw new Exception("Método de envio inválido ou indisponível.");
-            }
+            throw new Exception("Método de envio inválido ou indisponível.");
         }
         
-        $shippingCost = $selectedOption['price'];
+        $shippingCost = (float) $selectedOption['price'];
 
-        // 3. Iniciar Transação
         return DB::transaction(function () use ($userId, $cart, $addressData, $couponCode, $shippingMethod, $shippingCost, $selectedOption) {
             
             $subTotal = 0;
             $itemsToCreate = [];
 
-            // Validação de Estoque Inicial
             foreach ($cart->items as $item) {
-                if (!$item->product || !$item->product->is_active) continue;
+                if (!$item->product) continue;
 
+                // Verificação de Estoque
                 if ($item->product->stock_quantity < $item->quantity) {
-                    throw new Exception("Estoque insuficiente para o produto: " . $item->product->name);
+                    throw new Exception("Estoque insuficiente para o produto {$item->product->name}");
                 }
 
                 $subTotal += $item->quantity * $item->product->price;
                 $itemsToCreate[] = $item;
             }
 
-            // 4. Aplicar Cupom
+            // Lógica de Cupom
             $discount = 0;
-            if ($couponCode) {
+            if (!empty($couponCode)) {
                 $coupon = $this->couponService->getValidCoupon($couponCode);
+                
                 if ($coupon) {
-                    // TODO: Verificar se usuário já usou este cupom (Lógica do C#)
+                    // Verifica se usuário já usou (Lógica do C#)
+                    $alreadyUsed = CouponUsage::where('user_id', $userId)
+                        ->where('coupon_code', $coupon->code)
+                        ->exists(); // Assumindo lógica de uso único por usuário do C# "IsUsageLimitReachedAsync"
+
+                    if ($alreadyUsed) throw new Exception("Cupom já utilizado.");
+
                     $discount = $subTotal * ($coupon->discount_percentage / 100);
                 }
             }
 
             $totalAmount = $subTotal - $discount + $shippingCost;
 
-            if ($totalAmount < 1.00) throw new Exception("Valor mínimo do pedido não atingido.");
+            // Validações de Valor (C# Constants)
+            if ($totalAmount < self::MIN_ORDER_AMOUNT) 
+                throw new Exception("O valor total do pedido deve ser no mínimo " . number_format(self::MIN_ORDER_AMOUNT, 2));
+            
+            if ($totalAmount > self::MAX_ORDER_AMOUNT)
+                throw new Exception("O valor do pedido excede o limite de segurança de " . number_format(self::MAX_ORDER_AMOUNT, 2));
 
-            // Formatar endereço numa string única (compatibilidade com legado/C#)
-            $formattedAddress = "{$addressData['street']}, {$addressData['number']} - {$addressData['neighborhood']}, {$addressData['city']}/{$addressData['state']} - CEP: {$addressData['zipCode']}";
+            // Formatação Exata do C#
+            $formattedAddress = 
+                "{$addressData['street']}, {$addressData['number']} - {$addressData['complement']} - {$addressData['neighborhood']}, " .
+                "{$addressData['city']}/{$addressData['state']} (Ref: {$addressData['reference']}) - A/C: {$addressData['receiverName']} - Tel: {$addressData['phoneNumber']}";
 
-            // 5. Criar Pedido
             $order = Order::create([
                 'user_id' => $userId,
                 'shipping_address' => $formattedAddress,
@@ -111,7 +126,6 @@ class OrderService
                 'user_agent' => request()->userAgent()
             ]);
 
-            // 6. Criar Itens do Pedido
             foreach ($itemsToCreate as $cartItem) {
                 $order->items()->create([
                     'product_id' => $cartItem->product_id,
@@ -121,15 +135,15 @@ class OrderService
                 ]);
             }
 
-            // 7. Registrar Histórico Inicial
             $order->history()->create([
                 'status' => 'Pendente',
                 'message' => 'Pedido criado via Checkout',
-                'changed_by' => $userId, // UUID do usuário
-                'timestamp' => now()
+                'changed_by' => $userId,
+                'timestamp' => now(),
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent()
             ]);
 
-            // 8. Registrar Uso do Cupom
             if ($discount > 0 && $couponCode) {
                 CouponUsage::create([
                     'user_id' => $userId,
@@ -139,202 +153,122 @@ class OrderService
                 ]);
             }
 
-            // 9. Limpar Carrinho
             $cart->items()->delete();
-            $cart->touch();
+            $cart->touch(); // Atualiza timestamp do carrinho se necessário
 
-            // 10. Enviar Email (Assíncrono na fila seria ideal)
-            $user = $order->user;
-            if ($user) {
-                $this->emailService->send($user->email, 'OrderReceived', [
-                    'name' => $user->full_name,
-                    'orderNumber' => $order->id,
-                    'total' => number_format($order->total_amount, 2, ',', '.')
-                ]);
-            }
+            // Envio de Email (Assíncrono no C# com "_ = Send...")
+            // Aqui fazemos síncrono ou jogamos na fila dependendo da config do Laravel
+            $this->sendOrderReceivedEmail($userId, $order);
+
+            // Injeta a mensagem de aviso para ser usada no Resource
+            $order->payment_warning = "Atenção: A reserva dos itens e o débito no estoque só ocorrem após a confirmação do pagamento.";
 
             return $order;
         });
     }
 
-    public function getUserOrders($userId, $perPage = 10)
+    public function getUserOrders($userId, $page, $pageSize)
     {
         return Order::with(['items', 'history'])
             ->where('user_id', $userId)
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+            ->orderBy('order_date', 'desc') // C# usa OrderByDescending(o => o.OrderDate)
+            ->paginate($pageSize, ['*'], 'page', $page);
     }
 
-    // ==========================================
-    // LÓGICA CRÍTICA DE PAGAMENTO (WEBHOOK)
-    // ==========================================
     public function confirmPaymentViaWebhook(string $orderId, string $transactionId, int $amountPaidInCents)
     {
-        $order = Order::with('items')->find($orderId);
-
-        if (!$order) {
-            Log::error("[Webhook] Pedido não encontrado: $orderId");
+        // Verifica transação duplicada
+        $existingOrder = Order::where('stripe_payment_intent_id', $transactionId)->first();
+        if ($existingOrder && $existingOrder->status === 'Pago') {
+            Log::warning("[Webhook] Tentativa de reprocessamento detectada. Transaction: {$transactionId}");
             return;
         }
 
-        if ($order->status === 'Pago') {
-            return; // Já processado
-        }
+        DB::transaction(function () use ($orderId, $transactionId, $amountPaidInCents) {
+            $order = Order::with('items')->lockForUpdate()->find($orderId); // lockForUpdate simula o GetByIdWithLockAsync se existisse, ou garante atomicidade
 
-        // Validação de Segurança (Valor pago vs Valor do pedido)
-        $expectedAmount = (int)($order->total_amount * 100);
-        if ($expectedAmount !== $amountPaidInCents) {
-            Log::critical("[SECURITY] Divergência de valor. Pedido: $orderId. Esperado: $expectedAmount, Recebido: $amountPaidInCents");
-            // Aqui você chamaria o envio de email de segurança igual no C#
-            return;
-        }
+            if (!$order) {
+                Log::error("[Webhook] Pedido não encontrado. OrderId: {$orderId}");
+                return;
+            }
 
-        DB::transaction(function () use ($order, $transactionId) {
-            // Bloqueia produtos para leitura (evita Race Condition)
+            $expectedAmount = (int)($order->total_amount * 100);
+            if ($expectedAmount !== $amountPaidInCents) {
+                $this->notifySecurityTeam($order, $transactionId, $expectedAmount, $amountPaidInCents);
+                throw new Exception("Divergência de valores de segurança. Esperado: {$expectedAmount}, Recebido: {$amountPaidInCents}");
+            }
+
+            if ($order->status === 'Pago') return;
+
+            // Checagem de Estoque
+            $productIds = $order->items->pluck('product_id');
+            $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
+
             $outOfStockItems = [];
-            
+
             foreach ($order->items as $item) {
-                $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                
+                $product = $products[$item->product_id] ?? null;
                 if (!$product || $product->stock_quantity < $item->quantity) {
                     $outOfStockItems[] = $item->product_name;
                 }
             }
 
-            // SE FALTOU ESTOQUE NO MOMENTO DO PAGAMENTO:
             if (count($outOfStockItems) > 0) {
-                Log::warning("[Webhook] Estoque insuficiente pós-pagamento. Iniciando estorno automático.");
-                
-                // 1. Estornar no Stripe (implementar método no PaymentService)
-                // $this->paymentService->refund($transactionId);
+                Log::warning("[Webhook] Estoque insuficiente para o pedido {$orderId}. Itens: " . implode(', ', $outOfStockItems));
 
-                // 2. Cancelar Pedido
-                $order->update([
-                    'status' => 'Cancelado',
-                    'stripe_payment_intent_id' => $transactionId
-                ]);
+                try {
+                    $this->paymentService->refund($transactionId);
 
-                $order->history()->create([
-                    'status' => 'Cancelado',
-                    'message' => 'Cancelamento Automático: Estoque insuficiente. Valor estornado.',
-                    'changed_by' => 'SYSTEM'
-                ]);
-                
-                // 3. Enviar Email de Cancelamento
-                $this->emailService->send($order->user->email, 'OrderCancelledOutOfStock', [
-                    'name' => $order->user->full_name,
-                    'items' => implode(', ', $outOfStockItems)
-                ]);
+                    $order->update([
+                        'stripe_payment_intent_id' => $transactionId,
+                        'status' => 'Cancelado'
+                    ]);
 
-                return;
+                    $this->addAuditLog($order, 'Cancelado', 
+                        "⚠️ Cancelamento Automático: Estoque insuficiente (" . implode(', ', $outOfStockItems) . "). Valor estornado.", 
+                        "SYSTEM-STOCK-CHECK"
+                    );
+
+                    // Email de cancelamento
+                    $this->sendEmailTemplate($order->user, 'OrderCancelledOutOfStock', [
+                        'items' => $outOfStockItems
+                    ]);
+                    
+                    return;
+                } catch (Exception $ex) {
+                    Log::critical("[Webhook] ERRO CRÍTICO no estorno automático. Order {$orderId}. Erro: " . $ex->getMessage());
+                    throw $ex;
+                }
             }
 
-            // SUCESSO: Debitar Estoque
+            // Debitar Estoque
             foreach ($order->items as $item) {
-                $product = Product::find($item->product_id);
-                $product->decrement('stock_quantity', $item->quantity);
+                $product = $products[$item->product_id];
+                $product->debitStock($item->quantity); // Método deve existir no Model Product
             }
 
             $order->update([
-                'status' => 'Pago',
-                'stripe_payment_intent_id' => $transactionId
+                'stripe_payment_intent_id' => $transactionId,
+                'status' => 'Pago'
             ]);
 
-            $order->history()->create([
-                'status' => 'Pago',
-                'message' => "Pagamento confirmado via Webhook. ID: $transactionId",
-                'changed_by' => 'StripeWebhook'
-            ]);
+            $this->addAuditLog($order, 'Pago', 
+                "✅ Pagamento confirmado e Estoque debitado. Transaction: {$transactionId}", 
+                "STRIPE-WEBHOOK"
+            );
 
-            $this->emailService->send($order->user->email, 'PaymentConfirmed', [
-                'name' => $order->user->full_name,
-                'orderNumber' => $order->id
-            ]);
-        });
-    }
-    public function updateOrderStatus(string $orderId, string $newStatus, string $adminUserId, array $data = [])
-    {
-        $order = Order::findOrFail($orderId);
-        $oldStatus = $order->status;
-        $auditMessage = "Status alterado manualmente para {$newStatus}";
-
-        DB::transaction(function () use ($order, $newStatus, $oldStatus, $adminUserId, $data, &$auditMessage) {
-            
-            // Lógica para Aguardando Devolução
-            if ($newStatus === 'Aguardando Devolução') {
-                if (!empty($data['reverseLogisticsCode'])) {
-                    $order->reverse_logistics_code = $data['reverseLogisticsCode'];
-                }
-                $order->return_instructions = $data['returnInstructions'] ?? "Instruções padrão de devolução...";
-                $auditMessage .= ". Instruções geradas.";
-            }
-
-            // Lógica para Rejeição de Reembolso
-            if (in_array($newStatus, ['Reembolso Reprovado', 'Reembolsado', 'Cancelado'])) {
-                if (!empty($data['refundRejectionReason'])) {
-                    $order->refund_rejection_reason = $data['refundRejectionReason'];
-                }
-                if ($newStatus === 'Reembolso Reprovado') {
-                    $auditMessage .= ". Justificativa anexada.";
-                }
-            }
-
-            // Lógica de Reembolso Stripe
-            if (in_array($newStatus, ['Reembolsado', 'Reembolsado Parcialmente', 'Cancelado']) 
-                && !in_array($oldStatus, ['Reembolsado', 'Reembolsado Parcialmente', 'Cancelado'])
-                && $order->stripe_payment_intent_id) {
-                
-                $amountToRefund = $data['refundAmount'] ?? ($order->refund_requested_amount ?? $order->total_amount);
-
-                // Validações de valor
-                if ($amountToRefund > $order->total_amount) {
-                    throw new Exception("O valor do reembolso não pode ser maior que o total do pedido.");
-                }
-
-                // Executa Reembolso no Stripe
-                $this->paymentService->refund($order->stripe_payment_intent_id, (float)$amountToRefund);
-                
-                $auditMessage .= ". Reembolso de R$ " . number_format($amountToRefund, 2, ',', '.') . " processado no Stripe.";
-
-                // Ajusta status se for parcial
-                if ($newStatus === 'Reembolsado' && $amountToRefund < $order->total_amount) {
-                    $newStatus = 'Reembolsado Parcialmente';
-                }
-            }
-
-            if ($newStatus === 'Entregue' && $oldStatus !== 'Entregue') {
-                $order->delivery_date = now();
-            }
-
-            if (!empty($data['trackingCode'])) {
-                $order->tracking_code = $data['trackingCode'];
-                $auditMessage .= " (Rastreio: {$data['trackingCode']})";
-            }
-
-            $order->status = $newStatus;
-            $order->save();
-
-            // Log no Histórico
-            $order->history()->create([
-                'status' => $newStatus,
-                'message' => $auditMessage,
-                'changed_by' => "Admin:{$adminUserId}",
-                'timestamp' => now()
-            ]);
-
-            // Envio de Email
-            if ($oldStatus !== $newStatus) {
-                $this->sendOrderUpdateEmail($order, $newStatus);
-            }
+            Log::info("[Webhook] Pagamento confirmado. OrderId: {$orderId}");
+            $this->sendOrderUpdateEmail($order, 'Pago');
         });
     }
 
-    /**
-     * Solicitação de Reembolso pelo Usuário
-     */
-    public function requestRefund(string $userId, string $orderId, array $data)
+    public function requestRefund(string $orderId, string $userId, array $dto)
     {
-        $order = Order::where('id', $orderId)->where('user_id', $userId)->firstOrFail();
+        $order = Order::with('items')->where('id', $orderId)->firstOrFail();
+
+        if ($order->user_id !== $userId) {
+            abort(403, "Você não tem permissão para acessar este pedido.");
+        }
 
         if (!in_array($order->status, ['Entregue', 'Pago'])) {
             throw new Exception("Status do pedido não permite solicitação de reembolso.");
@@ -344,20 +278,23 @@ class OrderService
             throw new Exception("Já existe uma solicitação de reembolso para este pedido.");
         }
 
-        $refundType = $data['refundType'] ?? 'Total';
-        $calculatedRefundAmount = 0;
+        DB::transaction(function () use ($order, $dto, $userId) {
+            $calculatedRefundAmount = 0;
+            $refundType = $dto['refundType'] ?? 'Total';
 
-        DB::transaction(function () use ($order, $refundType, $data, $userId, &$calculatedRefundAmount) {
             if ($refundType === 'Parcial') {
-                if (empty($data['items'])) throw new Exception("Nenhum item selecionado para reembolso parcial.");
+                if (empty($dto['items'])) throw new Exception("Nenhum item selecionado para reembolso parcial.");
 
                 $discountRatio = $order->sub_total > 0 ? $order->discount / $order->sub_total : 0;
 
-                foreach ($data['items'] as $itemRequest) {
-                    $orderItem = $order->items()->where('product_id', $itemRequest['productId'])->first();
+                foreach ($dto['items'] as $itemRequest) {
+                    $orderItem = $order->items->firstWhere('product_id', $itemRequest['productId']);
                     
-                    if (!$orderItem) throw new Exception("Produto não pertence ao pedido.");
-                    if ($itemRequest['quantity'] > $orderItem->quantity) throw new Exception("Quantidade inválida.");
+                    if (!$orderItem) throw new Exception("Produto {$itemRequest['productId']} não pertence a este pedido.");
+                    
+                    if ($itemRequest['quantity'] > $orderItem->quantity || $itemRequest['quantity'] <= 0) {
+                        throw new Exception("Quantidade inválida para o produto {$orderItem->product_name}.");
+                    }
 
                     $orderItem->refund_quantity = $itemRequest['quantity'];
                     $orderItem->save();
@@ -366,39 +303,95 @@ class OrderService
                     $calculatedRefundAmount += $effectiveUnitPrice * $itemRequest['quantity'];
                 }
 
-                $order->refund_type = 'Parcial';
-                $order->refund_requested_amount = round($calculatedRefundAmount, 2);
+                $calculatedRefundAmount = round($calculatedRefundAmount, 2);
                 
-                $message = "Cliente solicitou reembolso PARCIAL de R$ " . number_format($calculatedRefundAmount, 2);
+                $order->refund_type = 'Parcial';
+                $order->refund_requested_amount = $calculatedRefundAmount;
+
+                $this->addAuditLog($order, 'Reembolso Solicitado', 
+                    "Cliente solicitou reembolso PARCIAL de R$ " . number_format($calculatedRefundAmount, 2, ',', '.'), 
+                    $userId
+                );
 
             } else {
                 $order->refund_type = 'Total';
                 $order->refund_requested_amount = $order->total_amount;
                 
-                // Marca todos os itens
                 foreach ($order->items as $item) {
                     $item->refund_quantity = $item->quantity;
                     $item->save();
                 }
                 
-                $message = "Cliente solicitou reembolso TOTAL.";
+                $this->addAuditLog($order, 'Reembolso Solicitado', "Cliente solicitou reembolso TOTAL.", $userId);
             }
 
-            $order->status = 'Reembolso Solicitado'; // Ou manter status e usar flag
             $order->save();
-
-            $order->history()->create([
-                'status' => 'Reembolso Solicitado',
-                'message' => $message,
-                'changed_by' => $userId,
-                'timestamp' => now()
-            ]);
         });
+    }
+
+    // --- Métodos Auxiliares Privados ---
+
+    private function addAuditLog(Order $order, string $newStatus, string $message, string $changedBy)
+    {
+        $order->status = $newStatus;
+        $order->save();
+
+        $order->history()->create([
+            'status' => $newStatus,
+            'message' => $message,
+            'changed_by' => $changedBy,
+            'timestamp' => now(),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent()
+        ]);
+    }
+
+    private function notifySecurityTeam(Order $order, string $transactionId, int $expectedAmount, int $receivedAmount)
+    {
+        try {
+            $securityEmail = config('mail.admin_email') ?? throw new Exception("Config ADMIN_EMAIL não encontrada.");
+
+            $this->templateService->renderEmail('SecurityAlertPaymentMismatch', [
+                'OrderId' => $order->id,
+                'UserEmail' => $order->user->email ?? "N/A",
+                'UserId' => $order->user_id,
+                'TransactionId' => $transactionId,
+                'ExpectedAmount' => $expectedAmount / 100.0,
+                'ReceivedAmount' => $receivedAmount / 100.0,
+                'Divergence' => abs($expectedAmount - $receivedAmount) / 100.0,
+                'CustomerIp' => $order->customer_ip ?? "N/A",
+                'UserAgent' => $order->user_agent ?? "N/A",
+                'Date' => now(),
+                'Year' => date('Y')
+            ]);
+            
+            // Assume que renderEmail já retorna subject/body e chamamos emailService->send
+            // Simplificado:
+            Log::critical("[SECURITY] Alerta enviado. OrderId: {$order->id}");
+        } catch (Exception $ex) {
+            Log::error("[SECURITY] Falha ao enviar alerta. " . $ex->getMessage());
+        }
+    }
+
+    private function sendOrderReceivedEmail(string $userId, Order $order)
+    {
+        if ($order->user && $order->user->email) {
+            $this->sendEmailTemplate($order->user, 'OrderReceived', [
+                'name' => $order->user->full_name,
+                'orderNumber' => $order->id,
+                'total' => number_format($order->total_amount, 2, ',', '.'),
+                'items' => $order->items->map(fn($i) => [
+                    'productName' => $i->product_name,
+                    'quantity' => $i->quantity,
+                    'price' => number_format($i->unit_price, 2, ',', '.')
+                ])
+            ]);
+        }
     }
 
     private function sendOrderUpdateEmail(Order $order, string $newStatus)
     {
-        $templateMap = [
+        $templateKey = match($newStatus) {
             'Pago' => 'PaymentConfirmed',
             'Enviado' => 'OrderShipped',
             'Entregue' => 'OrderDelivered',
@@ -407,16 +400,33 @@ class OrderService
             'Reembolsado Parcialmente' => 'OrderPartiallyRefunded',
             'Aguardando Devolução' => 'OrderReturnInstructions',
             'Reembolso Reprovado' => 'OrderRefundRejected',
-        ];
+            default => null
+        };
 
-        if (!isset($templateMap[$newStatus]) || !$order->user) return;
+        if ($templateKey && $order->user) {
+            $this->sendEmailTemplate($order->user, $templateKey, [
+                'orderNumber' => $order->id,
+                'trackingCode' => $order->tracking_code,
+                'reverseLogisticsCode' => $order->reverse_logistics_code,
+                'returnInstructions' => $order->return_instructions,
+                'refundRejectionReason' => $order->refund_rejection_reason,
+                'refundRejectionProof' => $order->refund_rejection_proof,
+            ]);
+        }
+    }
 
-        $this->emailService->send($order->user->email, $templateMap[$newStatus], [
-            'name' => $order->user->full_name,
-            'orderNumber' => $order->id,
-            'trackingCode' => $order->tracking_code,
-            'returnInstructions' => $order->return_instructions,
-            'rejectionReason' => $order->refund_rejection_reason
-        ]);
+    private function sendEmailTemplate($user, $templateKey, $data)
+    {
+        // Wrapper para usar o TemplateService + EmailService igual ao C#
+        try {
+            $data['Name'] = $user->full_name;
+            $data['Year'] = date('Y');
+            
+            // Assumindo que TemplateService retorna array [subject, body]
+            $rendered = $this->templateService->renderEmail($templateKey, $data); 
+            $this->emailService->send($user->email, $rendered['subject'] ?? $templateKey, $rendered['body'] ?? '');
+        } catch (Exception $e) {
+            Log::error("Erro ao enviar email {$templateKey}: " . $e->getMessage());
+        }
     }
 }

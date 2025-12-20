@@ -1,120 +1,189 @@
 <?php
 
-namespace App\Services\Shipping;
+namespace App\Services;
 
+use App\Models\SiteSetting;
+use App\Services\Interfaces\ShippingServiceInterface;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Exception;
 
-class MelhorEnvioService
+class MelhorEnvioService implements ShippingServiceInterface
 {
     protected $baseUrl;
-    protected $token;
-    protected $fromPostalCode;
+    protected $userAgent;
 
     public function __construct()
     {
+        // Ambiente de Sandbox ou Produção baseado no .env
         $this->baseUrl = config('services.melhorenvio.url', 'https://www.melhorenvio.com.br/api/v2');
-        $this->token = config('services.melhorenvio.token');
-        $this->fromPostalCode = config('services.melhorenvio.from_zip', '15700000'); // CEP da Gráfica (Jales-SP)
+        $this->userAgent = config('services.melhorenvio.user_agent', 'GraficaModernaAPI/1.0 (suporte@graficamoderna.com.br)');
     }
 
-    public function calculateShipping(string $toPostalCode, array $items)
+    public function calculate(string $destinationCep, array $items): array
     {
-        // Simulação de resposta caso não tenha token configurado (para desenvolvimento)
-        if (empty($this->token) || config('app.env') === 'local') {
-            return $this->getMockShipping($toPostalCode);
+        if (empty($items)) return [];
+
+        // 1. Busca CEP de origem no Banco (Igual C#)
+        $originCepSetting = SiteSetting::where('key', 'sender_cep')->first();
+        $originCep = $originCepSetting ? str_replace('-', '', trim($originCepSetting->value)) : null;
+
+        if (empty($originCep)) {
+            throw new Exception("CEP de origem não configurado. Entre em contato com a administração.");
         }
 
-        // Montagem do Payload real da API
+        // Payload exato da API Melhor Envio
         $payload = [
-            'from' => [
-                'postal_code' => $this->fromPostalCode
-            ],
-            'to' => [
-                'postal_code' => $toPostalCode
-            ],
-            'products' => array_map(function ($item) {
-                return [
-                    'id' => $item->product_id, // ou SKU
-                    'width' => $item->product->width ?? 10,
-                    'height' => $item->product->height ?? 10,
-                    'length' => $item->product->length ?? 10,
-                    'weight' => $item->product->weight ?? 0.5,
-                    'insurance_value' => $item->product->price,
-                    'quantity' => $item->quantity
-                ];
-            }, $items)
+            'from' => ['postal_code' => $originCep],
+            'to' => ['postal_code' => str_replace('-', '', trim($destinationCep))],
+            'products' => array_map(fn($i) => [
+                'width' => $i['width'],
+                'height' => $i['height'],
+                'length' => $i['length'],
+                'weight' => $i['weight'],
+                'insurance_value' => 0, // Regra do C# (fixo em 0 no código enviado)
+                'quantity' => $i['quantity']
+            ], $items)
         ];
 
         try {
-            $response = Http::withToken($this->token)
-                ->withHeaders(['Accept' => 'application/json'])
-                ->post("{$this->baseUrl}/me/shipment/calculate", $payload);
+            $maxRetries = 3;
+            $attempt = 0;
+            $response = null;
 
-            if ($response->failed()) {
-                throw new Exception("Erro na API de frete: " . $response->body());
+            while ($attempt < $maxRetries) {
+                try {
+                    $token = $this->getAccessToken();
+                    
+                    $response = Http::withToken($token)
+                        ->withHeaders([
+                            'Accept' => 'application/json',
+                            'User-Agent' => $this->userAgent
+                        ])
+                        ->post("{$this->baseUrl}/me/shipment/calculate", $payload);
+
+                    // Se 401, tenta refresh (Igual C#)
+                    if ($response->status() === 401) {
+                        Log::warning("Token Melhor Envio expirado (401). Tentando renovação...");
+                        $newToken = $this->refreshAccessToken();
+                        if ($newToken) {
+                            $response = Http::withToken($newToken)
+                                ->withHeaders([
+                                    'Accept' => 'application/json',
+                                    'User-Agent' => $this->userAgent
+                                ])
+                                ->post("{$this->baseUrl}/me/shipment/calculate", $payload);
+                        }
+                    }
+
+                    if ($response->successful() || $response->status() < 500) {
+                        break;
+                    }
+
+                    throw new Exception("Erro de servidor: " . $response->status());
+
+                } catch (Exception $ex) {
+                    $attempt++;
+                    Log::warning("Falha na conexão com Melhor Envio. Tentativa {$attempt}/{$maxRetries}");
+                    
+                    if ($attempt >= $maxRetries) throw $ex;
+                    sleep(1 * $attempt); // Backoff simples
+                }
             }
 
-            return $this->formatResponse($response->json());
+            if (!$response || !$response->successful()) {
+                Log::error("Erro API Melhor Envio ({$response?->status()}): " . $response?->body());
+                return [];
+            }
 
-        } catch (Exception $e) {
-            // Fallback ou log de erro
-            throw new Exception("Serviço de cálculo de frete indisponível.");
+            $json = $response->json();
+            return $this->formatResponse($json);
+
+        } catch (Exception $ex) {
+            Log::error("Erro crítico ao calcular frete Melhor Envio: " . $ex->getMessage());
+            return [];
         }
     }
 
-    private function formatResponse(array $services)
+    private function getAccessToken(): string
     {
-        // Filtra apenas PAC e SEDEX (Correios) ou Jadlog
-        $allowedServices = ['SEDEX', 'PAC', '.Com', 'Jadlog Package'];
-        
-        $options = [];
-        foreach ($services as $service) {
-            if (isset($service['error'])) continue;
+        $dbToken = SiteSetting::where('key', 'melhor_envio_access_token')->first();
+        if ($dbToken && !empty($dbToken->value)) {
+            return $dbToken->value;
+        }
+        return config('services.melhorenvio.token', '');
+    }
+
+    private function refreshAccessToken(): ?string
+    {
+        try {
+            $clientId = config('services.melhorenvio.client_id');
+            $clientSecret = config('services.melhorenvio.client_secret');
             
-            if (in_array($service['name'], $allowedServices) || in_array($service['company']['name'], $allowedServices)) {
-                $options[] = [
-                    'name' => $service['name'] . ' (' . $service['company']['name'] . ')',
-                    'price' => (float) $service['price'],
-                    'currency' => $service['currency'] ?? 'BRL',
-                    'delivery_time' => (int) $service['delivery_time'], // Dias úteis
-                    'company_logo' => $service['company']['picture'] ?? null
-                ];
+            $dbRefreshToken = SiteSetting::where('key', 'melhor_envio_refresh_token')->first();
+            $refreshToken = $dbRefreshToken ? $dbRefreshToken->value : config('services.melhorenvio.refresh_token');
+
+            if (empty($clientId) || empty($clientSecret) || empty($refreshToken)) {
+                Log::error("Credenciais para refresh do Melhor Envio incompletas.");
+                return null;
             }
+
+            $response = Http::asForm()->post("{$this->baseUrl}/oauth/token", [
+                'grant_type' => 'refresh_token',
+                'client_id' => $clientId,
+                'client_secret' => $clientSecret,
+                'refresh_token' => $refreshToken
+            ]);
+
+            if (!$response->successful()) {
+                Log::critical("Falha ao renovar token Melhor Envio: " . $response->body());
+                return null;
+            }
+
+            $data = $response->json();
+            
+            $this->updateTokenInDb('melhor_envio_access_token', $data['access_token'] ?? null);
+            $this->updateTokenInDb('melhor_envio_refresh_token', $data['refresh_token'] ?? null);
+
+            return $data['access_token'] ?? null;
+
+        } catch (Exception $ex) {
+            Log::error("Erro ao executar refresh token do Melhor Envio: " . $ex->getMessage());
+            return null;
         }
-        
-        // Ordena pelo preço menor
-        usort($options, fn($a, $b) => $a['price'] <=> $b['price']);
-        
-        return $options;
     }
 
-    // Mock para desenvolvimento sem API Key
-    private function getMockShipping($cep)
+    private function updateTokenInDb(string $key, ?string $value)
     {
-        // Preços fictícios baseados no CEP
-        $basePrice = (intval(substr($cep, 0, 2)) * 0.5) + 15.00; 
+        if (empty($value)) return;
+        SiteSetting::updateOrCreate(['key' => $key], ['value' => $value]);
+    }
 
-        return [
-            [
-                'name' => 'PAC (Correios)',
-                'price' => $basePrice,
-                'delivery_time' => 7,
-                'company_logo' => 'https://melhorenvio.com.br/images/shipping-companies/correios.png'
-            ],
-            [
-                'name' => 'SEDEX (Correios)',
-                'price' => $basePrice * 1.8,
-                'delivery_time' => 2,
-                'company_logo' => 'https://melhorenvio.com.br/images/shipping-companies/correios.png'
-            ],
-            [
-                'name' => 'Jadlog Package',
-                'price' => $basePrice * 0.9,
-                'delivery_time' => 5,
-                'company_logo' => 'https://melhorenvio.com.br/images/shipping-companies/jadlog.png'
-            ]
-        ];
+    private function formatResponse(array $data): array
+    {
+        $options = [];
+        foreach ($data as $item) {
+            if (!empty($item['error'])) continue;
+
+            $price = 0;
+            // Lógica de parsing igual ao C# (NumberStyles.Any)
+            if (isset($item['price'])) $price = (float) $item['price'];
+            elseif (isset($item['custom_price'])) $price = (float) $item['custom_price'];
+
+            if ($price <= 0) continue;
+
+            $deliveryDays = $item['delivery_range']['max'] ?? $item['delivery_time'];
+
+            $options[] = [
+                'name' => ($item['company']['name'] ?? '') . ' - ' . ($item['name'] ?? ''),
+                'price' => $price,
+                'deliveryDays' => (int) $deliveryDays,
+                'provider' => 'Melhor Envio'
+            ];
+        }
+
+        // Ordena por preço
+        usort($options, fn($a, $b) => $a['price'] <=> $b['price']);
+        return $options;
     }
 }

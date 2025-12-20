@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Services\CartService;
 use App\Services\ContentService;
-use App\Http\Requests\Cart\CartOrderRequest;
+use App\Http\Resources\CartResource;
+use App\Http\Requests\CartOrderRequest; // Nome do request no Laravel
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -22,84 +23,70 @@ class CartController extends Controller
     private function checkPurchaseEnabled(): void
     {
         $settings = $this->contentService->getSettings();
-
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
-            abort(403, 'Funcionalidade de compra indisponível temporariamente.');
+            // Lança exceção para ser capturada pelo bloco try/catch e retornar 400
+            throw new \Exception("Funcionalidade de compra indisponível temporariamente.");
         }
     }
 
     public function index()
     {
-        $this->checkPurchaseEnabled();
-
         try {
-            return response()->json(
-                $this->service->getCart(Auth::id())
-            );
+            $this->checkPurchaseEnabled();
+            $cart = $this->service->getCart(Auth::id());
+            return new CartResource($cart); // Retorna CartDto
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
     public function addItem(CartOrderRequest $request)
     {
-        $this->checkPurchaseEnabled();
-
         try {
-            // Validação via CartOrderRequest
+            $this->checkPurchaseEnabled();
             $this->service->addItem(Auth::id(), $request->validated());
-            return response()->noContent();
+            return response()->json([], 200); // Ok()
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
-    public function updateItem(CartOrderRequest $request, string $itemId)
+    public function updateItem(Request $request, string $itemId)
     {
-        $this->checkPurchaseEnabled();
-
-        // Reutiliza CartOrderRequest, mas focamos na quantidade
-        $data = $request->validated();
+        // O C# usa [FromBody] UpdateCartItemDto dto, que só tem Quantity
+        // Aqui podemos validar inline ou criar um Request específico
+        $request->validate([
+            'quantity' => 'required|integer|min:0'
+        ]);
 
         try {
-            $this->service->updateItemQuantity(Auth::id(), $itemId, $data['quantity']);
-            return response()->noContent();
+            $this->checkPurchaseEnabled();
+            $this->service->updateItemQuantity(Auth::id(), $itemId, $request->input('quantity'));
+            return response()->json([], 200);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
     public function removeItem(string $itemId)
     {
-        $this->checkPurchaseEnabled();
-
         try {
+            $this->checkPurchaseEnabled();
             $this->service->removeItem(Auth::id(), $itemId);
-            return response()->noContent();
+            return response()->json([], 200);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
-    public function clear()
+    public function clearCart()
     {
-        $this->checkPurchaseEnabled();
-
         try {
+            $this->checkPurchaseEnabled();
             $this->service->clearCart(Auth::id());
-            return response()->noContent();
+            return response()->json([], 200);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 400);
+            return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 }

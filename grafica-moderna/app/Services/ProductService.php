@@ -11,43 +11,45 @@ class ProductService
         ?string $search, 
         ?string $sort, 
         ?string $order, 
-        ?float $minPrice, // Novo
-        ?float $maxPrice, // Novo
         int $page, 
         int $pageSize
     ): LengthAwarePaginator
     {
-        // Cache Key precisa incluir os novos filtros para não mostrar dados errados
-        $cacheKey = "catalog_{$search}_{$sort}_{$order}_{$minPrice}_{$maxPrice}_{$page}_{$pageSize}";
+        // Cache Key idêntica à lógica do C# (sem minPrice/maxPrice)
+        $cacheKey = "catalog_{$search}_{$sort}_{$order}_{$page}_{$pageSize}";
 
-        return Cache::remember($cacheKey, 15, function () use ($search, $sort, $order, $minPrice, $maxPrice, $pageSize, $page) {
+        // Cache de 15 segundos (igual ao C# TimeSpan.FromSeconds(15))
+        return Cache::remember($cacheKey, 15, function () use ($search, $sort, $order, $pageSize, $page) {
             $query = Product::where('is_active', true);
 
-            // 1. Busca Inteligente (Nome OU Descrição)
-            if ($search) {
-                $query->where(function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('description', 'like', "%{$search}%");
+            // 1. Busca (Réplica do ProductRepository.cs)
+            if (!empty($search)) {
+                $term = trim($search);
+                // Sanitização manual para escapar caracteres especiais do LIKE, igual ao C#
+                $sanitizedTerm = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term);
+
+                $query->where(function($q) use ($sanitizedTerm) {
+                    $q->where('name', 'like', "%{$sanitizedTerm}%")
+                      ->orWhere('description', 'like', "%{$sanitizedTerm}%");
                 });
             }
 
-            // 2. Filtro de Preço
-            if (!is_null($minPrice)) {
-                $query->where('price', '>=', $minPrice);
-            }
-            if (!is_null($maxPrice)) {
-                $query->where('price', '<=', $maxPrice);
-            }
+            // 2. Ordenação (Restrita aos campos permitidos no C#)
+            // C# allowedSortColumns: "price", "name", "stockquantity"
+            $validSorts = [
+                'price' => 'price',
+                'name' => 'name',
+                'stockquantity' => 'stock_quantity' // Mapeia DTO -> Coluna DB
+            ];
 
-            // 3. Ordenação
-            if ($sort) {
-                // Mapeia termos do front para colunas do banco, se necessário
-                $validSorts = ['price', 'name', 'created_at', 'sales_count'];
-                if (in_array($sort, $validSorts)) {
-                    $query->orderBy($sort, $order === 'desc' ? 'desc' : 'asc');
-                }
+            $sortLower = strtolower($sort ?? '');
+            
+            if (array_key_exists($sortLower, $validSorts)) {
+                $column = $validSorts[$sortLower];
+                $direction = strtolower($order ?? '') === 'desc' ? 'desc' : 'asc';
+                $query->orderBy($column, $direction);
             } else {
-                // Padrão: Mais recentes primeiro
+                // Padrão C#: OrderByDescending(p => p.CreatedAt)
                 $query->orderBy('created_at', 'desc');
             }
 
@@ -57,23 +59,26 @@ class ProductService
 
     public function getById(string $id): Product
     {
-        return Product::findOrFail($id);
+        // C# lança KeyNotFoundException, Laravel lança ModelNotFoundException (404)
+        return Product::where('id', $id)->where('is_active', true)->firstOrFail();
     }
 
     public function create(array $data): Product
     {
+        // Mapeamento DTO -> Model deve ser feito no Controller ou aqui se os nomes diferirem.
+        // Assumindo que o array $data já venha com as chaves corretas (snake_case) do Controller.
         return Product::create($data);
     }
 
     public function update(string $id, array $data): void
     {
-        $product = Product::findOrFail($id);
+        $product = $this->getById($id);
         $product->update($data);
     }
 
     public function delete(string $id): void
     {
-        $product = Product::findOrFail($id);
-        $product->deactivate(); // Soft delete lógico conforme seu código C#
+        $product = $this->getById($id);
+        $product->deactivate();
     }
 }

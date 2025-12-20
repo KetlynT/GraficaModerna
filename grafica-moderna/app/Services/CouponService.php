@@ -10,6 +10,7 @@ class CouponService
 {
     public function create(array $data)
     {
+        // GetByCodeAsync check
         if (Coupon::where('code', $data['code'])->exists()) {
             throw new Exception("Cupom já existe.");
         }
@@ -24,18 +25,19 @@ class CouponService
 
     public function getAll()
     {
-        return Coupon::all();
+        return Coupon::all(); // GetAllAsync
     }
 
     public function delete(string $id)
     {
-        Coupon::destroy($id);
+        Coupon::destroy($id); // DeleteAsync
     }
 
     public function getValidCoupon(string $code)
     {
         $coupon = Coupon::where('code', $code)->first();
 
+        // O método isValid() deve estar no Model Coupon, igual ao C#
         if (!$coupon || !$coupon->isValid()) {
             return null;
         }

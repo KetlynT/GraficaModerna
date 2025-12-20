@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Services\ContentService;
 use App\Services\ProductService;
-use App\Services\Shipping\ShippingServiceInterface;
-use App\Http\Requests\Shipping\CalculateShippingRequest;
+// Certifique-se de registrar o MelhorEnvioService no AppServiceProvider como ShippingServiceInterface
+use App\Services\Interfaces\ShippingServiceInterface; 
+use App\Http\Requests\CalculateShippingRequest; // Nome corrigido
+use App\Http\Resources\ShippingOptionResource; // Resource novo
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -13,19 +15,29 @@ class ShippingController extends Controller
 {
     private const MAX_ITEMS_PER_CALCULATION = 50;
 
-    public function __construct(
-        protected iterable $shippingServices,
-        protected ProductService $productService,
-        protected ContentService $contentService
-    ) {}
+    // Injeta array de serviços (MelhorEnvio, etc)
+    protected $shippingServices; 
+    protected ProductService $productService;
+    protected ContentService $contentService;
 
-    protected function checkPurchaseEnabled(): void
+    public function __construct(
+        ProductService $productService,
+        ContentService $contentService,
+        // No Laravel, para injetar array de interfaces, você configura no ServiceProvider tagged services
+        // ou injeta classe concreta se for apenas uma. Assumindo injeção via Tag 'shipping.services'
+        iterable $shippingServices 
+    ) {
+        $this->productService = $productService;
+        $this->contentService = $contentService;
+        $this->shippingServices = $shippingServices;
+    }
+
+    private function checkPurchaseEnabled(): void
     {
         $settings = $this->contentService->getSettings();
-        if (($settings['purchase_enabled'] ?? 'true') === 'false') {
-            throw new \Exception(
-                'Cálculo de frete temporariamente indisponível. Utilize o orçamento personalizado.'
-            );
+        // PHP array key access
+        if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
+            throw new \Exception('Cálculo de frete temporariamente indisponível. Utilize o orçamento personalizado.');
         }
     }
 
@@ -33,46 +45,47 @@ class ShippingController extends Controller
     {
         try {
             $this->checkPurchaseEnabled();
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
+            
+            $data = $request->validated();
+            // Limpeza de CEP igual ao C#
+            $cleanCep = preg_replace('/\D/', '', $data['destinationCep']);
 
-        // Validação e limpeza via CalculateShippingRequest
-        $data = $request->validated();
-        $cep = $data['destinationCep']; // Já limpo pelo prepareForValidation
+            $validatedItems = [];
+            foreach ($data['items'] as $item) {
+                // Validações de qtd (C# logic)
+                if ($item['quantity'] <= 0) throw new \Exception("Item {$item['productId']} possui quantidade inválida.");
+                if ($item['quantity'] > 1000) throw new \Exception("Quantidade excessiva para o item {$item['productId']}.");
 
-        $validatedItems = [];
-
-        foreach ($data['items'] as $item) {
-            $product = $this->productService->getById($item['productId']);
-            if ($product) {
-                $validatedItems[] = [
-                    'productId' => $product->id,
-                    'weight' => $product->weight,
-                    'width' => $product->width,
-                    'height' => $product->height,
-                    'length' => $product->length,
-                    'quantity' => $item['quantity'],
-                ];
+                $product = $this->productService->getById($item['productId']);
+                if ($product) {
+                    $validatedItems[] = [
+                        'productId' => $product->id,
+                        'weight' => $product->weight,
+                        'width' => $product->width,
+                        'height' => $product->height,
+                        'length' => $product->length,
+                        'quantity' => $item['quantity'],
+                    ];
+                }
             }
-        }
 
-        if (empty($validatedItems)) {
-            return response()->json(['message' => 'Nenhum produto válido encontrado para cálculo.'], 400);
-        }
+            if (empty($validatedItems)) return response()->json(['message' => 'Nenhum produto válido encontrado.'], 400);
 
-        try {
-            $options = [];
+            $allOptions = [];
+            // Executa em série (PHP não tem Task.WhenAll nativo fácil sem bibliotecas async, manter loop simples)
             foreach ($this->shippingServices as $service) {
-                /** @var ShippingServiceInterface $service */
-                $options = array_merge($options, $service->calculate($cep, $validatedItems));
+                $allOptions = array_merge($allOptions, $service->calculate($cleanCep, $validatedItems));
             }
 
-            usort($options, fn ($a, $b) => $a['price'] <=> $b['price']);
-            return response()->json($options);
-        } catch (\Throwable $e) {
-            Log::error('Erro crítico ao calcular frete', ['cep' => $cep, 'exception' => $e]);
-            return response()->json(['message' => 'Erro ao calcular frete.'], 500);
+            // Ordenação
+            usort($allOptions, fn ($a, $b) => $a['price'] <=> $b['price']);
+
+            // Usa Resource
+            return ShippingOptionResource::collection($allOptions);
+
+        } catch (\Exception $e) {
+            Log::error("Erro no cálculo de frete: " . $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500);
         }
     }
 

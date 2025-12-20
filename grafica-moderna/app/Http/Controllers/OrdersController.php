@@ -4,8 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Services\OrderService;
 use App\Services\ContentService;
-use App\Http\Requests\Order\CheckoutRequest;
-use App\Http\Requests\Order\RefundRequest;
+use App\Http\Requests\CheckoutRequest; // Assumindo namespace correto
+use App\Http\Requests\RefundRequest;   // Assumindo namespace correto
+use App\Http\Resources\OrderResource;  // Importante!
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -16,79 +17,57 @@ class OrdersController extends Controller
 
     public function __construct(OrderService $orderService, ContentService $contentService)
     {
-        // Auth middleware via routes
         $this->orderService = $orderService;
         $this->contentService = $contentService;
     }
 
     private function checkPurchaseEnabled(): void
     {
-        $settings = $this->contentService->getSettings();
-
+        $settings = $this->contentService->getSettings(); // Adapte se seu ContentService retornar array direto
+        // Em PHP array 'false' string pode ser tricky, verifique se vem booleano ou string
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
-            abort(
-                403,
-                'Novos pedidos estão desativados temporariamente. Entre em contato para orçamento.'
-            );
+             // throw new Exception igual ao C# InvalidOperationException, que o Handler transforma em erro
+             abort(403, "Novos pedidos estão desativados temporariamente. Entre em contato para orçamento.");
         }
     }
 
-    /**
-     * POST /api/orders (Checkout)
-     */
     public function checkout(CheckoutRequest $request)
     {
         $this->checkPurchaseEnabled();
 
-        // Validação complexa aninhada via CheckoutRequest
         $validated = $request->validated();
-
         $userId = Auth::id();
-        if (!$userId) {
-            return response()->json(['message' => 'Usuário não autenticado.'], 401);
-        }
 
         $order = $this->orderService->createOrderFromCart(
             $userId,
-            $validated['address'],
+            $validated['address'], // Certifique-se que o Request valida AddressDto structure
             $validated['couponCode'] ?? null,
             $validated['shippingMethod']
         );
 
-        return response()->json($order);
+        // Retorna usando o Resource para garantir camelCase e estrutura correta
+        return new OrderResource($order);
     }
 
-    /**
-     * GET /api/orders
-     */
     public function index(Request $request)
     {
         $userId = Auth::id();
-        if (!$userId) {
-            return response()->json(['message' => 'Usuário não autenticado.'], 401);
-        }
-
         $page = (int) $request->query('page', 1);
         $pageSize = (int) $request->query('pageSize', 10);
 
-        $orders = $this->orderService->getUserOrders($userId, $page, $pageSize);
-        return response()->json($orders);
+        $paginator = $this->orderService->getUserOrders($userId, $page, $pageSize);
+
+        // Resource::collection lida com o paginator automaticamente (meta, links, data)
+        return OrderResource::collection($paginator);
     }
 
-    /**
-     * POST /api/orders/{id}/request-refund
-     */
     public function requestRefund(RefundRequest $request, string $id)
     {
         $userId = Auth::id();
-        if (!$userId) {
-            return response()->json(['message' => 'Usuário não autenticado.'], 401);
-        }
-
-        // Validação condicional via RefundRequest
         $validated = $request->validated();
 
         $this->orderService->requestRefund($id, $userId, $validated);
-        return response()->json();
+
+        return response()->json([], 200);
     }
 }
