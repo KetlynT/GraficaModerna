@@ -3,19 +3,17 @@
 namespace App\Services;
 
 use App\Models\SiteSetting;
-use App\Services\Interfaces\ShippingServiceInterface;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
-class MelhorEnvioService implements ShippingServiceInterface
+class MelhorEnvioService
 {
     protected $baseUrl;
     protected $userAgent;
 
     public function __construct()
     {
-        // Ambiente de Sandbox ou Produção baseado no .env
         $this->baseUrl = config('services.melhorenvio.url', 'https://www.melhorenvio.com.br/api/v2');
         $this->userAgent = config('services.melhorenvio.user_agent', 'GraficaModernaAPI/1.0 (suporte@graficamoderna.com.br)');
     }
@@ -24,7 +22,6 @@ class MelhorEnvioService implements ShippingServiceInterface
     {
         if (empty($items)) return [];
 
-        // 1. Busca CEP de origem no Banco (Igual C#)
         $originCepSetting = SiteSetting::where('key', 'sender_cep')->first();
         $originCep = $originCepSetting ? str_replace('-', '', trim($originCepSetting->value)) : null;
 
@@ -32,7 +29,6 @@ class MelhorEnvioService implements ShippingServiceInterface
             throw new Exception("CEP de origem não configurado. Entre em contato com a administração.");
         }
 
-        // Payload exato da API Melhor Envio
         $payload = [
             'from' => ['postal_code' => $originCep],
             'to' => ['postal_code' => str_replace('-', '', trim($destinationCep))],
@@ -41,7 +37,7 @@ class MelhorEnvioService implements ShippingServiceInterface
                 'height' => $i['height'],
                 'length' => $i['length'],
                 'weight' => $i['weight'],
-                'insurance_value' => 0, // Regra do C# (fixo em 0 no código enviado)
+                'insurance_value' => 0,
                 'quantity' => $i['quantity']
             ], $items)
         ];
@@ -62,9 +58,8 @@ class MelhorEnvioService implements ShippingServiceInterface
                         ])
                         ->post("{$this->baseUrl}/me/shipment/calculate", $payload);
 
-                    // Se 401, tenta refresh (Igual C#)
+                    /** @var \Illuminate\Http\Client\Response $response */
                     if ($response->status() === 401) {
-                        Log::warning("Token Melhor Envio expirado (401). Tentando renovação...");
                         $newToken = $this->refreshAccessToken();
                         if ($newToken) {
                             $response = Http::withToken($newToken)
@@ -76,6 +71,7 @@ class MelhorEnvioService implements ShippingServiceInterface
                         }
                     }
 
+                    /** @var \Illuminate\Http\Client\Response $response */
                     if ($response->successful() || $response->status() < 500) {
                         break;
                     }
@@ -84,13 +80,12 @@ class MelhorEnvioService implements ShippingServiceInterface
 
                 } catch (Exception $ex) {
                     $attempt++;
-                    Log::warning("Falha na conexão com Melhor Envio. Tentativa {$attempt}/{$maxRetries}");
-                    
                     if ($attempt >= $maxRetries) throw $ex;
-                    sleep(1 * $attempt); // Backoff simples
+                    sleep(1 * $attempt);
                 }
             }
 
+            /** @var \Illuminate\Http\Client\Response $response */
             if (!$response || !$response->successful()) {
                 Log::error("Erro API Melhor Envio ({$response?->status()}): " . $response?->body());
                 return [];
@@ -124,7 +119,6 @@ class MelhorEnvioService implements ShippingServiceInterface
             $refreshToken = $dbRefreshToken ? $dbRefreshToken->value : config('services.melhorenvio.refresh_token');
 
             if (empty($clientId) || empty($clientSecret) || empty($refreshToken)) {
-                Log::error("Credenciais para refresh do Melhor Envio incompletas.");
                 return null;
             }
 
@@ -135,8 +129,8 @@ class MelhorEnvioService implements ShippingServiceInterface
                 'refresh_token' => $refreshToken
             ]);
 
+            /** @var \Illuminate\Http\Client\Response $response */
             if (!$response->successful()) {
-                Log::critical("Falha ao renovar token Melhor Envio: " . $response->body());
                 return null;
             }
 
@@ -148,7 +142,6 @@ class MelhorEnvioService implements ShippingServiceInterface
             return $data['access_token'] ?? null;
 
         } catch (Exception $ex) {
-            Log::error("Erro ao executar refresh token do Melhor Envio: " . $ex->getMessage());
             return null;
         }
     }
@@ -166,7 +159,6 @@ class MelhorEnvioService implements ShippingServiceInterface
             if (!empty($item['error'])) continue;
 
             $price = 0;
-            // Lógica de parsing igual ao C# (NumberStyles.Any)
             if (isset($item['price'])) $price = (float) $item['price'];
             elseif (isset($item['custom_price'])) $price = (float) $item['custom_price'];
 
@@ -182,7 +174,6 @@ class MelhorEnvioService implements ShippingServiceInterface
             ];
         }
 
-        // Ordena por preço
         usort($options, fn($a, $b) => $a['price'] <=> $b['price']);
         return $options;
     }

@@ -6,20 +6,18 @@ use App\Models\Order;
 use App\Models\Cart;
 use App\Models\CouponUsage;
 use App\Models\Product;
-use App\Services\Shipping\MelhorEnvioService;
+use App\Services\MelhorEnvioService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
 class OrderService
 {
-    protected $shippingService;
-    protected $couponService;
-    protected $emailService;
-    protected $paymentService;
-    protected $templateService;
+    protected MelhorEnvioService $shippingService;
+    protected CouponService $couponService;
+    protected EmailService $emailService;
+    protected StripePaymentService $paymentService;
 
-    // Constantes do C#
     const MIN_ORDER_AMOUNT = 1.00;
     const MAX_ORDER_AMOUNT = 100000.00;
 
@@ -27,13 +25,11 @@ class OrderService
         MelhorEnvioService $shippingService,
         CouponService $couponService,
         EmailService $emailService,
-        TemplateService $templateService,
         StripePaymentService $paymentService
     ) {
         $this->shippingService = $shippingService;
         $this->couponService = $couponService;
         $this->emailService = $emailService;
-        $this->templateService = $templateService;
         $this->paymentService = $paymentService;
     }
 
@@ -48,10 +44,8 @@ class OrderService
             if ($i->quantity <= 0) throw new Exception("O carrinho contém itens com quantidades inválidas.");
         }
 
-        // Cálculo de Frete
-        $shippingOptions = $this->shippingService->calculateShipping($addressData['zipCode'], $cart->items->all());
+        $shippingOptions = $this->shippingService->calculate($addressData['zipCode'], $cart->items->all());
         
-        // Busca case-insensitive igual ao C# (Trim e InvariantCultureIgnoreCase)
         $selectedOption = collect($shippingOptions)->first(function ($opt) use ($shippingMethod) {
             return strcasecmp(trim($opt['name']), trim($shippingMethod)) === 0;
         });
@@ -70,7 +64,6 @@ class OrderService
             foreach ($cart->items as $item) {
                 if (!$item->product) continue;
 
-                // Verificação de Estoque
                 if ($item->product->stock_quantity < $item->quantity) {
                     throw new Exception("Estoque insuficiente para o produto {$item->product->name}");
                 }
@@ -79,16 +72,14 @@ class OrderService
                 $itemsToCreate[] = $item;
             }
 
-            // Lógica de Cupom
             $discount = 0;
             if (!empty($couponCode)) {
                 $coupon = $this->couponService->getValidCoupon($couponCode);
                 
                 if ($coupon) {
-                    // Verifica se usuário já usou (Lógica do C#)
                     $alreadyUsed = CouponUsage::where('user_id', $userId)
                         ->where('coupon_code', $coupon->code)
-                        ->exists(); // Assumindo lógica de uso único por usuário do C# "IsUsageLimitReachedAsync"
+                        ->exists();
 
                     if ($alreadyUsed) throw new Exception("Cupom já utilizado.");
 
@@ -98,14 +89,12 @@ class OrderService
 
             $totalAmount = $subTotal - $discount + $shippingCost;
 
-            // Validações de Valor (C# Constants)
             if ($totalAmount < self::MIN_ORDER_AMOUNT) 
                 throw new Exception("O valor total do pedido deve ser no mínimo " . number_format(self::MIN_ORDER_AMOUNT, 2));
             
             if ($totalAmount > self::MAX_ORDER_AMOUNT)
                 throw new Exception("O valor do pedido excede o limite de segurança de " . number_format(self::MAX_ORDER_AMOUNT, 2));
 
-            // Formatação Exata do C#
             $formattedAddress = 
                 "{$addressData['street']}, {$addressData['number']} - {$addressData['complement']} - {$addressData['neighborhood']}, " .
                 "{$addressData['city']}/{$addressData['state']} (Ref: {$addressData['reference']}) - A/C: {$addressData['receiverName']} - Tel: {$addressData['phoneNumber']}";
@@ -154,13 +143,10 @@ class OrderService
             }
 
             $cart->items()->delete();
-            $cart->touch(); // Atualiza timestamp do carrinho se necessário
+            $cart->touch();
 
-            // Envio de Email (Assíncrono no C# com "_ = Send...")
-            // Aqui fazemos síncrono ou jogamos na fila dependendo da config do Laravel
             $this->sendOrderReceivedEmail($userId, $order);
 
-            // Injeta a mensagem de aviso para ser usada no Resource
             $order->payment_warning = "Atenção: A reserva dos itens e o débito no estoque só ocorrem após a confirmação do pagamento.";
 
             return $order;
@@ -171,24 +157,21 @@ class OrderService
     {
         return Order::with(['items', 'history'])
             ->where('user_id', $userId)
-            ->orderBy('order_date', 'desc') // C# usa OrderByDescending(o => o.OrderDate)
+            ->orderBy('order_date', 'desc')
             ->paginate($pageSize, ['*'], 'page', $page);
     }
 
     public function confirmPaymentViaWebhook(string $orderId, string $transactionId, int $amountPaidInCents)
     {
-        // Verifica transação duplicada
         $existingOrder = Order::where('stripe_payment_intent_id', $transactionId)->first();
         if ($existingOrder && $existingOrder->status === 'Pago') {
-            Log::warning("[Webhook] Tentativa de reprocessamento detectada. Transaction: {$transactionId}");
             return;
         }
 
         DB::transaction(function () use ($orderId, $transactionId, $amountPaidInCents) {
-            $order = Order::with('items')->lockForUpdate()->find($orderId); // lockForUpdate simula o GetByIdWithLockAsync se existisse, ou garante atomicidade
+            $order = Order::with('items')->lockForUpdate()->find($orderId);
 
             if (!$order) {
-                Log::error("[Webhook] Pedido não encontrado. OrderId: {$orderId}");
                 return;
             }
 
@@ -200,7 +183,6 @@ class OrderService
 
             if ($order->status === 'Pago') return;
 
-            // Checagem de Estoque
             $productIds = $order->items->pluck('product_id');
             $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
@@ -214,8 +196,6 @@ class OrderService
             }
 
             if (count($outOfStockItems) > 0) {
-                Log::warning("[Webhook] Estoque insuficiente para o pedido {$orderId}. Itens: " . implode(', ', $outOfStockItems));
-
                 try {
                     $this->paymentService->refund($transactionId);
 
@@ -225,26 +205,23 @@ class OrderService
                     ]);
 
                     $this->addAuditLog($order, 'Cancelado', 
-                        "⚠️ Cancelamento Automático: Estoque insuficiente (" . implode(', ', $outOfStockItems) . "). Valor estornado.", 
+                        "Cancelamento Automático: Estoque insuficiente (" . implode(', ', $outOfStockItems) . "). Valor estornado.", 
                         "SYSTEM-STOCK-CHECK"
                     );
 
-                    // Email de cancelamento
-                    $this->sendEmailTemplate($order->user, 'OrderCancelledOutOfStock', [
+                    $this->sendEmailHelper($order->user, 'OrderCancelledOutOfStock', [
                         'items' => $outOfStockItems
                     ]);
                     
                     return;
                 } catch (Exception $ex) {
-                    Log::critical("[Webhook] ERRO CRÍTICO no estorno automático. Order {$orderId}. Erro: " . $ex->getMessage());
                     throw $ex;
                 }
             }
 
-            // Debitar Estoque
             foreach ($order->items as $item) {
                 $product = $products[$item->product_id];
-                $product->debitStock($item->quantity); // Método deve existir no Model Product
+                $product->debitStock($item->quantity);
             }
 
             $order->update([
@@ -253,11 +230,10 @@ class OrderService
             ]);
 
             $this->addAuditLog($order, 'Pago', 
-                "✅ Pagamento confirmado e Estoque debitado. Transaction: {$transactionId}", 
+                "Pagamento confirmado e Estoque debitado. Transaction: {$transactionId}", 
                 "STRIPE-WEBHOOK"
             );
 
-            Log::info("[Webhook] Pagamento confirmado. OrderId: {$orderId}");
             $this->sendOrderUpdateEmail($order, 'Pago');
         });
     }
@@ -329,8 +305,6 @@ class OrderService
         });
     }
 
-    // --- Métodos Auxiliares Privados ---
-
     private function addAuditLog(Order $order, string $newStatus, string $message, string $changedBy)
     {
         $order->status = $newStatus;
@@ -349,35 +323,32 @@ class OrderService
     private function notifySecurityTeam(Order $order, string $transactionId, int $expectedAmount, int $receivedAmount)
     {
         try {
-            $securityEmail = config('mail.admin_email') ?? throw new Exception("Config ADMIN_EMAIL não encontrada.");
-
-            $this->templateService->renderEmail('SecurityAlertPaymentMismatch', [
-                'OrderId' => $order->id,
-                'UserEmail' => $order->user->email ?? "N/A",
-                'UserId' => $order->user_id,
-                'TransactionId' => $transactionId,
-                'ExpectedAmount' => $expectedAmount / 100.0,
-                'ReceivedAmount' => $receivedAmount / 100.0,
-                'Divergence' => abs($expectedAmount - $receivedAmount) / 100.0,
-                'CustomerIp' => $order->customer_ip ?? "N/A",
-                'UserAgent' => $order->user_agent ?? "N/A",
-                'Date' => now(),
-                'Year' => date('Y')
-            ]);
+            $securityEmail = config('mail.admin_email');
             
-            // Assume que renderEmail já retorna subject/body e chamamos emailService->send
-            // Simplificado:
-            Log::critical("[SECURITY] Alerta enviado. OrderId: {$order->id}");
+            if ($securityEmail) {
+                $this->emailService->send($securityEmail, 'SecurityAlertPaymentMismatch', [
+                    'OrderId' => $order->id,
+                    'UserEmail' => $order->user->email ?? "N/A",
+                    'UserId' => $order->user_id,
+                    'TransactionId' => $transactionId,
+                    'ExpectedAmount' => $expectedAmount / 100.0,
+                    'ReceivedAmount' => $receivedAmount / 100.0,
+                    'Divergence' => abs($expectedAmount - $receivedAmount) / 100.0,
+                    'CustomerIp' => $order->customer_ip ?? "N/A",
+                    'UserAgent' => $order->user_agent ?? "N/A",
+                    'Date' => now(),
+                    'Year' => date('Y')
+                ]);
+            }
         } catch (Exception $ex) {
-            Log::error("[SECURITY] Falha ao enviar alerta. " . $ex->getMessage());
+            Log::error("Erro ao notificar segurança: " . $ex->getMessage());
         }
     }
 
     private function sendOrderReceivedEmail(string $userId, Order $order)
     {
         if ($order->user && $order->user->email) {
-            $this->sendEmailTemplate($order->user, 'OrderReceived', [
-                'name' => $order->user->full_name,
+            $this->sendEmailHelper($order->user, 'OrderReceived', [
                 'orderNumber' => $order->id,
                 'total' => number_format($order->total_amount, 2, ',', '.'),
                 'items' => $order->items->map(fn($i) => [
@@ -404,7 +375,7 @@ class OrderService
         };
 
         if ($templateKey && $order->user) {
-            $this->sendEmailTemplate($order->user, $templateKey, [
+            $this->sendEmailHelper($order->user, $templateKey, [
                 'orderNumber' => $order->id,
                 'trackingCode' => $order->tracking_code,
                 'reverseLogisticsCode' => $order->reverse_logistics_code,
@@ -415,16 +386,15 @@ class OrderService
         }
     }
 
-    private function sendEmailTemplate($user, $templateKey, $data)
+    private function sendEmailHelper($user, $templateKey, $data)
     {
-        // Wrapper para usar o TemplateService + EmailService igual ao C#
         try {
+            // Adiciona dados comuns
             $data['Name'] = $user->full_name;
             $data['Year'] = date('Y');
             
-            // Assumindo que TemplateService retorna array [subject, body]
-            $rendered = $this->templateService->renderEmail($templateKey, $data); 
-            $this->emailService->send($user->email, $rendered['subject'] ?? $templateKey, $rendered['body'] ?? '');
+            // Chama o EmailService diretamente, sem renderizar aqui
+            $this->emailService->send($user->email, $templateKey, $data);
         } catch (Exception $e) {
             Log::error("Erro ao enviar email {$templateKey}: " . $e->getMessage());
         }
