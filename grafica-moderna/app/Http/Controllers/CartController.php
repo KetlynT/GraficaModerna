@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\CartService;
 use App\Services\ContentService;
+use App\Http\Requests\Cart\CartOrderRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -14,7 +15,6 @@ class CartController extends Controller
 
     public function __construct(CartService $service, ContentService $contentService)
     {
-        $this->middleware(['auth:api', 'role:user']);
         $this->service = $service;
         $this->contentService = $contentService;
     }
@@ -43,17 +43,13 @@ class CartController extends Controller
         }
     }
 
-    public function addItem(Request $request)
+    public function addItem(CartOrderRequest $request)
     {
         $this->checkPurchaseEnabled();
 
-        $data = $request->validate([
-            'productId' => 'required|uuid',
-            'quantity'  => 'required|integer|min:1'
-        ]);
-
         try {
-            $this->service->addItem(Auth::id(), $data);
+            // Validação via CartOrderRequest
+            $this->service->addItem(Auth::id(), $request->validated());
             return response()->noContent();
         } catch (\Exception $e) {
             return response()->json([
@@ -62,13 +58,12 @@ class CartController extends Controller
         }
     }
 
-    public function updateItem(Request $request, string $itemId)
+    public function updateItem(CartOrderRequest $request, string $itemId)
     {
         $this->checkPurchaseEnabled();
 
-        $data = $request->validate([
-            'quantity' => 'required|integer|min:1'
-        ]);
+        // Reutiliza CartOrderRequest, mas focamos na quantidade
+        $data = $request->validated();
 
         try {
             $this->service->updateItemQuantity(Auth::id(), $itemId, $data['quantity']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\ContentService;
 use App\Services\ProductService;
 use App\Services\Shipping\ShippingServiceInterface;
+use App\Http\Requests\Shipping\CalculateShippingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -28,7 +29,7 @@ class ShippingController extends Controller
         }
     }
 
-    public function calculate(Request $request)
+    public function calculate(CalculateShippingRequest $request)
     {
         try {
             $this->checkPurchaseEnabled();
@@ -36,17 +37,9 @@ class ShippingController extends Controller
             return response()->json(['message' => $e->getMessage()], 400);
         }
 
-        $data = $request->validate([
-            'destinationCep' => 'required|string',
-            'items' => 'required|array|min:1|max:' . self::MAX_ITEMS_PER_CALCULATION,
-            'items.*.productId' => 'required|uuid',
-            'items.*.quantity' => 'required|integer|min:1|max:1000',
-        ]);
-
-        $cep = preg_replace('/\D/', '', $data['destinationCep']);
-        if (strlen($cep) !== 8) {
-            return response()->json(['message' => 'CEP inválido. Certifique-se de informar os 8 dígitos.'], 400);
-        }
+        // Validação e limpeza via CalculateShippingRequest
+        $data = $request->validated();
+        $cep = $data['destinationCep']; // Já limpo pelo prepareForValidation
 
         $validatedItems = [];
 

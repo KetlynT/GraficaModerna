@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\AddressService;
 use App\Services\ContentService;
+use App\Http\Requests\Address\AddressRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -17,15 +18,11 @@ class AddressController extends Controller
         AddressService $service,
         ContentService $contentService
     ) {
-        $this->middleware(['auth:api', 'throttle:user-actions']);
-
+        // Middlewares aplicados nas rotas
         $this->service = $service;
         $this->contentService = $contentService;
     }
 
-    /**
-     * Equivalente ao CheckPurchaseEnabled()
-     */
     private function checkPurchaseEnabled(): void
     {
         $settings = $this->contentService->getSettings();
@@ -41,9 +38,6 @@ class AddressController extends Controller
         }
     }
 
-    /**
-     * GET api/addresses
-     */
     public function index()
     {
         return response()->json(
@@ -51,9 +45,6 @@ class AddressController extends Controller
         );
     }
 
-    /**
-     * GET api/addresses/{id}
-     */
     public function show(string $id)
     {
         try {
@@ -65,30 +56,13 @@ class AddressController extends Controller
         }
     }
 
-    /**
-     * POST api/addresses
-     */
-    public function store(Request $request)
+    public function store(AddressRequest $request)
     {
         try {
             $this->checkPurchaseEnabled();
 
-            $data = $request->validate([
-                'name'          => 'required|string|max:255',
-                'receiverName'  => 'required|string|max:255',
-                'zipCode'       => 'required|string|max:20',
-                'street'        => 'required|string|max:255',
-                'number'        => 'required|string|max:20',
-                'neighborhood'  => 'required|string|max:255',
-                'city'          => 'required|string|max:255',
-                'state'         => 'required|string|max:2',
-                'phoneNumber'   => 'required|string|max:20',
-                'isDefault'     => 'boolean',
-                'complement'    => 'nullable|string',
-                'reference'     => 'nullable|string',
-            ]);
-
-            $created = $this->service->create(Auth::id(), $data);
+            // Validação via AddressRequest
+            $created = $this->service->create(Auth::id(), $request->validated());
 
             return response()->json($created, 201);
         } catch (\Exception $e) {
@@ -98,30 +72,13 @@ class AddressController extends Controller
         }
     }
 
-    /**
-     * PUT api/addresses/{id}
-     */
-    public function update(Request $request, string $id)
+    public function update(AddressRequest $request, string $id)
     {
         try {
             $this->checkPurchaseEnabled();
 
-            $data = $request->validate([
-                'name'          => 'sometimes|required|string|max:255',
-                'receiverName'  => 'sometimes|required|string|max:255',
-                'zipCode'       => 'sometimes|required|string|max:20',
-                'street'        => 'sometimes|required|string|max:255',
-                'number'        => 'sometimes|required|string|max:20',
-                'neighborhood'  => 'sometimes|required|string|max:255',
-                'city'          => 'sometimes|required|string|max:255',
-                'state'         => 'sometimes|required|string|max:2',
-                'phoneNumber'   => 'sometimes|required|string|max:20',
-                'isDefault'     => 'boolean',
-                'complement'    => 'nullable|string',
-                'reference'     => 'nullable|string',
-            ]);
-
-            $this->service->update($id, Auth::id(), $data);
+            // Validação via AddressRequest
+            $this->service->update($id, Auth::id(), $request->validated());
 
             return response()->noContent();
         } catch (ModelNotFoundException) {
@@ -133,9 +90,6 @@ class AddressController extends Controller
         }
     }
 
-    /**
-     * DELETE api/addresses/{id}
-     */
     public function destroy(string $id)
     {
         try {

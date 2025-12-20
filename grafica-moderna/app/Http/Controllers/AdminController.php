@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -15,6 +14,10 @@ use App\Services\OrderService;
 use App\Services\ContentService;
 use App\Services\CouponService;
 use App\Services\UnitOfWork;
+
+// Form Requests
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Product\ProductRequest;
 
 use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
@@ -43,7 +46,7 @@ class AdminController extends Controller
         CouponService $couponService,
         UnitOfWork $uow
     ) {
-        $this->middleware(['auth:api', 'role:admin', 'throttle:admin'])->except('login');
+        // Auth e Role middleware aplicados nas Rotas
 
         $this->authService = $authService;
         $this->dashboardService = $dashboardService;
@@ -68,16 +71,13 @@ class AdminController extends Controller
     // AUTH & DASHBOARD
     // ======================================================
 
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required'
-        ]);
+        $data = $request->validated();
 
         $result = $this->authService->login([
-            'email' => $request->email,
-            'password' => $request->password,
+            'email' => $data['email'],
+            'password' => $data['password'],
             'isAdminLogin' => true
         ]);
 
@@ -198,18 +198,20 @@ class AdminController extends Controller
         return response()->json($product);
     }
 
-    public function createProduct(Request $request)
+    public function createProduct(ProductRequest $request)
     {
+        // Validado via ProductRequest
         return response()->json(
-            $this->productService->create($request->all()),
+            $this->productService->create($request->validated()),
             201
         );
     }
 
-    public function updateProduct(string $id, Request $request)
+    public function updateProduct(string $id, ProductRequest $request)
     {
         try {
-            $this->productService->update($id, $request->all());
+            // Validado via ProductRequest
+            $this->productService->update($id, $request->validated());
             return response()->noContent();
         } catch (ModelNotFoundException) {
             return response()->json(['message' => 'Produto não encontrado.'], 404);
@@ -239,9 +241,17 @@ class AdminController extends Controller
 
     public function createCoupon(Request $request)
     {
+        // Validação inline mantida
+        $data = $request->validate([
+            'code' => 'required|string|unique:coupons,code|max:50',
+            'discountPercentage' => 'required|integer|min:1|max:100',
+            'expirationDate' => 'nullable|date|after:today',
+            'maxUsages' => 'nullable|integer|min:1'
+        ]);
+
         try {
             return response()->json(
-                $this->couponService->create($request->all())
+                $this->couponService->create($data)
             );
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
@@ -260,7 +270,12 @@ class AdminController extends Controller
 
     public function createPage(Request $request)
     {
-        $data = $request->all();
+        $data = $request->validate([
+            'slug' => 'required|string|unique:content_pages,slug',
+            'title' => 'required|string|max:200',
+            'content' => 'required|string'
+        ]);
+
         $data['content'] = $this->sanitizer->sanitize($data['content']);
 
         return response()->json(
@@ -270,17 +285,25 @@ class AdminController extends Controller
 
     public function updatePage(string $slug, Request $request)
     {
-        $data = $request->all();
+        $data = $request->validate([
+            'title' => 'required|string|max:200',
+            'content' => 'required|string'
+        ]);
+
         $data['content'] = $this->sanitizer->sanitize($data['content']);
 
         $this->contentService->updatePage($slug, $data);
-        return response()->ok();
+        return response()->noContent();
     }
 
     public function updateSettings(Request $request)
     {
-        $this->contentService->updateSettings($request->all());
-        return response()->ok();
+        $data = $request->validate([
+            'purchase_enabled' => 'nullable|string'
+        ]);
+        
+        $this->contentService->updateSettings($data);
+        return response()->noContent();
     }
 
     public function getEmailTemplates()
@@ -296,6 +319,11 @@ class AdminController extends Controller
         if (!$template) {
             return response()->json(['message' => 'Template não encontrado.'], 404);
         }
+
+        $request->validate([
+            'subject' => 'required|string',
+            'body_content' => 'required|string'
+        ]);
 
         $template->subject = $request->subject;
         $template->body_content = $request->body_content;

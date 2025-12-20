@@ -14,20 +14,12 @@ class ContentController extends Controller
         $this->service = $service;
     }
 
-    /**
-     * GET /api/content/pages
-     * Público – lista todas as páginas
-     */
     public function getAllPages()
     {
         $pages = $this->service->getAllPages();
         return response()->json($pages);
     }
 
-    /**
-     * GET /api/content/pages/{slug}
-     * Público – obtém página por slug
-     */
     public function getPage(string $slug)
     {
         $page = $this->service->getPageBySlug($slug);
@@ -39,10 +31,6 @@ class ContentController extends Controller
         return response()->json($page);
     }
 
-    /**
-     * GET /api/content/settings
-     * Público – retorna configurações como dicionário key => value
-     */
     public function getSettings()
     {
         $settingsList = $this->service->getSettings();

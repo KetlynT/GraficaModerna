@@ -4,24 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Services\OrderService;
 use App\Services\ContentService;
+use App\Http\Requests\Order\CheckoutRequest;
+use App\Http\Requests\Order\RefundRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-class OrderController extends Controller
+class OrdersController extends Controller
 {
     protected OrderService $orderService;
     protected ContentService $contentService;
 
     public function __construct(OrderService $orderService, ContentService $contentService)
     {
-        $this->middleware('auth:api');
+        // Auth middleware via routes
         $this->orderService = $orderService;
         $this->contentService = $contentService;
     }
 
-    /**
-     * Verifica se compras estão habilitadas
-     */
     private function checkPurchaseEnabled(): void
     {
         $settings = $this->contentService->getSettings();
@@ -35,18 +34,14 @@ class OrderController extends Controller
     }
 
     /**
-     * POST /api/orders
-     * Checkout
+     * POST /api/orders (Checkout)
      */
-    public function checkout(Request $request)
+    public function checkout(CheckoutRequest $request)
     {
         $this->checkPurchaseEnabled();
 
-        $validated = $request->validate([
-            'address' => 'required|array',
-            'couponCode' => 'nullable|string',
-            'shippingMethod' => 'required|string',
-        ]);
+        // Validação complexa aninhada via CheckoutRequest
+        $validated = $request->validated();
 
         $userId = Auth::id();
         if (!$userId) {
@@ -65,7 +60,6 @@ class OrderController extends Controller
 
     /**
      * GET /api/orders
-     * Lista pedidos do usuário autenticado (paginado)
      */
     public function index(Request $request)
     {
@@ -84,19 +78,15 @@ class OrderController extends Controller
     /**
      * POST /api/orders/{id}/request-refund
      */
-    public function requestRefund(Request $request, string $id)
+    public function requestRefund(RefundRequest $request, string $id)
     {
         $userId = Auth::id();
         if (!$userId) {
             return response()->json(['message' => 'Usuário não autenticado.'], 401);
         }
 
-        $validated = $request->validate([
-            'refundType' => 'required|in:Total,Parcial',
-            'items' => 'required_if:refundType,Parcial|array',
-            'items.*.productId' => 'required_with:items|uuid',
-            'items.*.quantity' => 'required_with:items|integer|min:1',
-        ]);
+        // Validação condicional via RefundRequest
+        $validated = $request->validated();
 
         $this->orderService->requestRefund($id, $userId, $validated);
         return response()->json();

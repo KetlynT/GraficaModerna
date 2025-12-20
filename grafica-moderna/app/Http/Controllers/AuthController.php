@@ -3,13 +3,15 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Log;
 
 use App\Services\AuthService;
 use App\Services\TokenBlacklistService;
 use App\Services\ContentService;
+use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\UpdateProfileRequest;
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -25,11 +27,7 @@ class AuthController extends Controller
         TokenBlacklistService $blacklistService,
         ContentService $contentService
     ) {
-        $this->middleware('throttle:auth')->only([
-            'register',
-            'login'
-        ]);
-
+        // Rate Limiting aplicado via middleware no bootstrap ou rotas
         $this->authService = $authService;
         $this->blacklistService = $blacklistService;
         $this->contentService = $contentService;
@@ -39,15 +37,10 @@ class AuthController extends Controller
     // REGISTER
     // ======================================================
 
-    public function register(Request $request)
+    public function register(RegisterRequest $request)
     {
-        $data = $request->validate([
-            'email'       => 'required|email|unique:users',
-            'password'    => 'required|min:6',
-            'fullName'    => 'required|string',
-            'cpfCnpj'     => 'required|string',
-            'phoneNumber' => 'nullable|string'
-        ]);
+        // Validação automática via RegisterRequest
+        $data = $request->validated();
 
         $result = $this->authService->register($data);
 
@@ -67,13 +60,10 @@ class AuthController extends Controller
     // LOGIN (USER)
     // ======================================================
 
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $data = $request->validate([
-            'email'    => 'required|email',
-            'password' => 'required'
-        ]);
-
+        // Validação automática via LoginRequest
+        $data = $request->validated();
         $data['isAdminLogin'] = false;
 
         $result = $this->authService->login($data);
@@ -160,7 +150,7 @@ class AuthController extends Controller
         );
     }
 
-    public function updateProfile(Request $request)
+    public function updateProfile(UpdateProfileRequest $request)
     {
         $settings = $this->contentService->getSettings();
 
@@ -175,11 +165,8 @@ class AuthController extends Controller
             }
         }
 
-        $data = $request->validate([
-            'fullName'    => 'required|string',
-            'cpfCnpj'     => 'required|string',
-            'phoneNumber' => 'nullable|string'
-        ]);
+        // Validação automática via UpdateProfileRequest
+        $data = $request->validated();
 
         $this->authService->updateProfile(
             $request->user()->id,
@@ -226,7 +213,13 @@ class AuthController extends Controller
 
     public function confirmEmail(Request $request)
     {
-        $this->authService->confirmEmail($request->all());
+        // Validação simples inline para casos menores
+        $data = $request->validate([
+            'userId' => 'required|string',
+            'token'  => 'required|string'
+        ]);
+
+        $this->authService->confirmEmail($data);
         return response()->json([
             'message' => 'Email confirmado com sucesso!'
         ]);
@@ -234,7 +227,10 @@ class AuthController extends Controller
 
     public function forgotPassword(Request $request)
     {
-        $this->authService->forgotPassword($request->all());
+        $data = $request->validate(['email' => 'required|email']);
+        
+        $this->authService->forgotPassword($data);
+        
         return response()->json([
             'message' => 'Se o e-mail estiver cadastrado, você receberá um link de recuperação.'
         ]);
@@ -242,7 +238,14 @@ class AuthController extends Controller
 
     public function resetPassword(Request $request)
     {
-        $this->authService->resetPassword($request->all());
+        $data = $request->validate([
+            'userId' => 'required|string',
+            'token' => 'required|string',
+            'newPassword' => 'required|min:6|confirmed'
+        ]);
+
+        $this->authService->resetPassword($data);
+        
         return response()->json([
             'message' => 'Senha redefinida com sucesso. Faça login com a nova senha.'
         ]);

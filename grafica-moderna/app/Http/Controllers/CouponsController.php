@@ -16,13 +16,8 @@ class CouponsController extends Controller
         $this->contentService = $contentService;
     }
 
-    /**
-     * GET /api/coupons/validate/{code}
-     * Público – valida cupom ativo
-     */
     public function validateCode(string $code)
     {
-        // Feature flag: purchase_enabled
         $settings = $this->contentService->getSettings();
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
             return response()->json(

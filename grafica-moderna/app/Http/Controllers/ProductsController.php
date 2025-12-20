@@ -16,7 +16,6 @@ class ProductsController extends Controller
 
     /**
      * GET /api/products
-     * Lista produtos com busca, ordenação e paginação
      */
     public function index(Request $request)
     {
@@ -39,7 +38,6 @@ class ProductsController extends Controller
 
     /**
      * GET /api/products/{id}
-     * Detalhe do produto
      */
     public function show(string $id)
     {

@@ -8,7 +8,6 @@ use App\Services\MetadataSecurityService;
 use App\Models\ProcessedWebhookEvent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 use Stripe\Webhook;
 use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
@@ -123,7 +122,7 @@ class StripeWebhookController extends Controller
 
             Log::info("[Webhook] Pagamento confirmado. Order {$plainOrderId}");
         }
-        catch (\SecurityException $e) {
+        catch (\Exception $e) {
             Log::critical("[SECURITY ALERT] Violação de integridade no webhook {$event->id}");
             throw $e;
         }
