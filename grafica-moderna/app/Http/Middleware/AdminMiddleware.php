@@ -10,8 +10,12 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!$request->user() || $request->user()->role !== 'Admin') {
-            return response()->json(['message' => 'Acesso proibido. Requer privilégios de Administrador.'], 403);
+        $user = $request->user();
+
+        if (!$user || $user->role !== 'Admin') {
+            return response()->json([
+                'message' => 'Acesso negado. Apenas administradores podem acessar este recurso.'
+            ], 403);
         }
 
         return $next($request);

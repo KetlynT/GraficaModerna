@@ -4,16 +4,16 @@ use Illuminate\Support\Facades\Route;
 
 // Importação dos Controllers
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ProductsController;
 use App\Http\Controllers\CartController;
-use App\Http\Controllers\OrdersController;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\CouponsController;
 use App\Http\Controllers\ShippingController;
-use App\Http\Controllers\PaymentsController;
-use App\Http\Controllers\ContentController;
+use App\Http\Controllers\OrdersController;
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\CouponsController; // Para uso público se houver
+use App\Http\Controllers\ContentController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\PaymentsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -21,142 +21,107 @@ use App\Http\Controllers\StripeWebhookController;
 |--------------------------------------------------------------------------
 */
 
-// ==============================================================================
-// 1. ROTAS PÚBLICAS E DE AUTENTICAÇÃO
-// ==============================================================================
+// =========================================================================
+// ROTA PÚBLICA (WEBHOOK) - Sem Rate Limit restritivo, sem Auth
+// =========================================================================
+Route::post('webhook/stripe', [StripeWebhookController::class, 'handleWebhook']);
 
-Route::controller(AuthController::class)->group(function () {
-    // Autenticação
-    Route::post('/auth/register', 'register');
-    Route::post('/auth/login', 'login');
-    Route::post('/auth/refresh-token', 'refreshToken');
-    
-    // Recuperação de conta
-    Route::post('/auth/forgot-password', 'forgotPassword');
-    Route::post('/auth/reset-password', 'resetPassword');
-    Route::post('/auth/confirm-email', 'confirmEmail');
-    
-    // Checagem simples (usada pelo front para verificar estado)
-    Route::get('/auth/check', 'checkAuth');
 
-    // Rotas que exigem login (Logout e Perfil)
-    // Usamos auth.jwt para validar e jwt.blacklist para impedir tokens antigos
-    Route::middleware(['auth.jwt', 'jwt.blacklist'])->group(function () {
-        Route::post('/auth/logout', 'logout');
-        Route::get('/auth/profile', 'getProfile');
-        Route::put('/auth/profile', 'updateProfile');
+// =========================================================================
+// ROTAS PÚBLICAS GERAIS (Throttle: 60 req/min)
+// =========================================================================
+Route::middleware(['api', 'throttle:60,1'])->group(function () {
+    
+    // Auth (Login/Register precisam de Throttle mais agressivo)
+    Route::middleware('throttle:10,1')->group(function () {
+        Route::post('auth/login', [AuthController::class, 'login']);
+        Route::post('auth/register', [AuthController::class, 'register']);
+        Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
+        Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
+        Route::post('auth/refresh-token', [AuthController::class, 'refreshToken']);
+        Route::post('auth/confirm-email', [AuthController::class, 'confirmEmail']);
     });
+
+    // Catálogo
+    Route::get('products', [ProductsController::class, 'index']);
+    Route::get('products/{id}', [ProductsController::class, 'show']);
+
+    // Conteúdo
+    Route::get('content/{slug}', [ContentController::class, 'show']);
+
+    // Admin Login (Endpoint específico)
+    Route::middleware('throttle:10,1')->post('admin/auth/login', [AdminController::class, 'login']);
 });
 
-// ==============================================================================
-// 2. CATÁLOGO E CONTEÚDO (PÚBLICO)
-// ==============================================================================
 
-// Produtos
-Route::controller(ProductsController::class)->group(function () {
-    Route::get('/products', 'index');
-    Route::get('/products/{id}', 'show');
-});
+// =========================================================================
+// ROTAS PROTEGIDAS (CLIENTE) - Requer Token JWT
+// =========================================================================
+Route::middleware(['api', 'auth.jwt', 'jwt.blacklist', 'throttle:100,1'])->group(function () {
 
-// Conteúdo (Páginas Institucionais e Configurações)
-Route::controller(ContentController::class)->group(function () {
-    Route::get('/content/pages', 'getAllPages');
-    Route::get('/content/pages/{slug}', 'getPage');
-    Route::get('/content/settings', 'getSettings');
-});
-
-// Validação de Cupons (Público para cálculo no carrinho)
-Route::get('/coupons/validate/{code}', [CouponsController::class, 'validateCode']);
-
-// Cálculo de Frete
-Route::controller(ShippingController::class)->group(function () {
-    Route::post('/shipping/calculate', 'calculate');
-    Route::get('/shipping/product/{productId}/cep/{cep}', 'calculateForProduct');
-});
-
-// ==============================================================================
-// 3. ÁREA DO CLIENTE (Requer Login)
-// ==============================================================================
-
-Route::middleware(['auth.jwt', 'jwt.blacklist'])->group(function () {
+    // Perfil
+    Route::get('auth/me', [AuthController::class, 'me']);
+    Route::put('auth/profile', [AuthController::class, 'updateProfile']);
+    Route::post('auth/change-password', [AuthController::class, 'changePassword']);
 
     // Carrinho
-    Route::controller(CartController::class)->prefix('cart')->group(function () {
-        Route::get('/', 'index');
-        Route::post('/items', 'addItem');
-        Route::put('/items/{itemId}', 'updateItem');
-        Route::delete('/items/{itemId}', 'removeItem');
-        Route::delete('/', 'clear');
+    Route::prefix('cart')->group(function () {
+        Route::get('/', [CartController::class, 'getCart']);
+        Route::post('items', [CartController::class, 'addItem']);
+        Route::put('items', [CartController::class, 'updateItem']);
+        Route::delete('items/{productId}', [CartController::class, 'removeItem']);
+        Route::delete('/', [CartController::class, 'clearCart']);
     });
 
     // Endereços
-    Route::controller(AddressController::class)->prefix('addresses')->group(function () {
-        Route::get('/', 'index');
-        Route::post('/', 'store');
-        Route::get('/{id}', 'show');
-        Route::put('/{id}', 'update');
-        Route::delete('/{id}', 'destroy');
-    });
+    Route::apiResource('addresses', AddressController::class);
 
-    // Pedidos
-    Route::controller(OrdersController::class)->prefix('orders')->group(function () {
-        Route::post('/', 'checkout');           // Criar pedido
-        Route::get('/', 'index');               // Meus pedidos
-        Route::post('/{id}/request-refund', 'requestRefund');
-    });
+    // Frete
+    Route::post('shipping/calculate', [ShippingController::class, 'calculate']);
 
-    // Pagamentos (Sessão do Stripe)
-    Route::post('/payments/checkout-session', [PaymentsController::class, 'createCheckoutSession']);
+    // Pedidos (Checkout e Histórico)
+    Route::post('orders/checkout', [OrdersController::class, 'checkout']);
+    Route::get('orders', [OrdersController::class, 'index']); // Histórico do usuário
+    Route::get('orders/{id}', [OrdersController::class, 'show']);
+    Route::post('orders/{id}/refund', [OrdersController::class, 'requestRefund']);
 });
 
-// ==============================================================================
-// 4. ÁREA ADMINISTRATIVA (Requer Login + Role Admin)
-// ==============================================================================
 
-// Login Administrativo (Separado se necessário, ou usa o login padrão)
-Route::post('/admin/login', [AdminController::class, 'login']);
+// =========================================================================
+// ROTAS PROTEGIDAS (ADMINISTRADOR) - Requer Role 'Admin'
+// =========================================================================
+Route::middleware(['api', 'auth.jwt', 'jwt.blacklist', 'admin', 'throttle:100,1'])->prefix('admin')->group(function () {
 
-// Grupo protegido por Auth + Admin Middleware
-Route::middleware(['auth.jwt', 'jwt.blacklist', 'admin', 'throttle:admin'])
-    ->prefix('admin')
-    ->controller(AdminController::class)
-    ->group(function () {
-        
-        // Dashboard
-        Route::get('/dashboard', 'dashboardStats');
-        
-        // Uploads (Imagens de produtos/site)
-        Route::post('/upload', 'upload');
-        
-        // Gestão de Pedidos
-        Route::get('/orders', 'getOrders');
-        Route::put('/orders/{id}/status', 'updateOrderStatus');
-        
-        // Gestão de Produtos
-        Route::get('/products', 'getProducts');
-        Route::get('/products/{id}', 'getProductById');
-        Route::post('/products', 'createProduct');
-        Route::put('/products/{id}', 'updateProduct');
-        Route::delete('/products/{id}', 'deleteProduct');
-        
-        // Gestão de Cupons
-        Route::get('/coupons', 'getCoupons');
-        Route::post('/coupons', 'createCoupon');
-        Route::delete('/coupons/{id}', 'deleteCoupon');
-        
-        // Gestão de Conteúdo (CMS)
-        Route::post('/content/pages', 'createPage');
-        Route::put('/content/pages/{slug}', 'updatePage');
-        Route::put('/settings', 'updateSettings');
-        
-        // Templates de Email
-        Route::get('/email-templates', 'getEmailTemplates');
-        Route::put('/email-templates/{id}', 'updateEmailTemplate');
-    });
+    // Dashboard
+    Route::get('dashboard/stats', [AdminController::class, 'dashboardStats']);
 
-// ==============================================================================
-// 5. WEBHOOKS (Externo)
-// ==============================================================================
+    // Upload
+    Route::post('upload', [AdminController::class, 'upload']);
 
-// Webhook do Stripe (Não usa auth, validado pela assinatura do Stripe no Controller)
-Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handleStripe']);
+    // Pedidos (Gestão)
+    Route::get('orders', [AdminController::class, 'getOrders']);
+    Route::patch('orders/{id}/status', [AdminController::class, 'updateOrderStatus']);
+    // Route::get('orders/{id}', [AdminController::class, 'getOrderById']); // Se necessário
+
+    // Produtos (CRUD)
+    Route::get('products', [AdminController::class, 'getProducts']); // Listagem Admin pode ter filtros diferentes
+    Route::get('products/{id}', [AdminController::class, 'getProductById']);
+    Route::post('products', [AdminController::class, 'createProduct']);
+    Route::put('products/{id}', [AdminController::class, 'updateProduct']);
+    Route::delete('products/{id}', [AdminController::class, 'deleteProduct']);
+
+    // Cupons
+    Route::get('coupons', [AdminController::class, 'getCoupons']);
+    Route::post('coupons', [AdminController::class, 'createCoupon']);
+    Route::delete('coupons/{id}', [AdminController::class, 'deleteCoupon']);
+
+    // Conteúdo (CMS) & Configurações
+    Route::post('content/pages', [AdminController::class, 'createPage']);
+    Route::put('content/pages/{slug}', [AdminController::class, 'updatePage']);
+    Route::post('content/settings', [AdminController::class, 'updateSettings']);
+
+    // Templates de Email
+    Route::get('email-templates', [AdminController::class, 'getEmailTemplates']);
+    Route::get('email-templates/{id}', [AdminController::class, 'getEmailTemplateById']);
+    Route::put('email-templates/{id}', [AdminController::class, 'updateEmailTemplate']);
+});

@@ -6,9 +6,11 @@ use App\Models\Order;
 use App\Models\Cart;
 use App\Models\CouponUsage;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\MelhorEnvioService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use Exception;
 
 class OrderService
@@ -124,14 +126,7 @@ class OrderService
                 ]);
             }
 
-            $order->history()->create([
-                'status' => 'Pendente',
-                'message' => 'Pedido criado via Checkout',
-                'changed_by' => $userId,
-                'timestamp' => now(),
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent()
-            ]);
+            $this->addAuditLog($order, 'Pendente', 'Pedido criado via Checkout', $userId);
 
             if ($discount > 0 && $couponCode) {
                 CouponUsage::create([
@@ -153,6 +148,13 @@ class OrderService
         });
     }
 
+    public function getAllOrders(int $page, int $pageSize)
+    {
+        return Order::with(['items', 'history', 'user'])
+            ->orderBy('order_date', 'desc')
+            ->paginate($pageSize, ['*'], 'page', $page);
+    }
+
     public function getUserOrders($userId, $page, $pageSize)
     {
         return Order::with(['items', 'history'])
@@ -165,6 +167,7 @@ class OrderService
     {
         $existingOrder = Order::where('stripe_payment_intent_id', $transactionId)->first();
         if ($existingOrder && $existingOrder->status === 'Pago') {
+            Log::warning("[Webhook] Reprocessamento ignorado: {$transactionId}");
             return;
         }
 
@@ -172,20 +175,21 @@ class OrderService
             $order = Order::with('items')->lockForUpdate()->find($orderId);
 
             if (!$order) {
+                Log::error("[Webhook] Pedido {$orderId} não encontrado.");
                 return;
             }
 
             $expectedAmount = (int)($order->total_amount * 100);
             if ($expectedAmount !== $amountPaidInCents) {
                 $this->notifySecurityTeam($order, $transactionId, $expectedAmount, $amountPaidInCents);
-                throw new Exception("Divergência de valores de segurança. Esperado: {$expectedAmount}, Recebido: {$amountPaidInCents}");
+                throw new Exception("Divergência de valores. Esperado: {$expectedAmount}, Recebido: {$amountPaidInCents}");
             }
 
             if ($order->status === 'Pago') return;
 
+            // Validação de Estoque
             $productIds = $order->items->pluck('product_id');
             $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
-
             $outOfStockItems = [];
 
             foreach ($order->items as $item) {
@@ -196,6 +200,8 @@ class OrderService
             }
 
             if (count($outOfStockItems) > 0) {
+                Log::warning("[Webhook] Estoque insuficiente Order {$orderId}. Estornando...");
+                
                 try {
                     $this->paymentService->refund($transactionId);
 
@@ -209,16 +215,14 @@ class OrderService
                         "SYSTEM-STOCK-CHECK"
                     );
 
-                    $this->sendEmailHelper($order->user, 'OrderCancelledOutOfStock', [
-                        'items' => $outOfStockItems
-                    ]);
-                    
+                    $this->sendEmailHelper($order->user, 'OrderCancelledOutOfStock', ['items' => $outOfStockItems]);
                     return;
                 } catch (Exception $ex) {
                     throw $ex;
                 }
             }
 
+            // Debitar Estoque
             foreach ($order->items as $item) {
                 $product = $products[$item->product_id];
                 $product->debitStock($item->quantity);
@@ -238,69 +242,144 @@ class OrderService
         });
     }
 
+    public function updateAdminOrder(string $orderId, array $dto)
+    {
+        $adminUser = Auth::user();
+        if (!$adminUser || $adminUser->role !== 'Admin') {
+            throw new Exception("Acesso negado. Apenas administradores podem alterar pedidos.");
+        }
+
+        return DB::transaction(function () use ($orderId, $dto, $adminUser) {
+            $order = Order::findOrFail($orderId);
+            $oldStatus = $order->status;
+            $newStatus = $dto['status'];
+            $auditMessage = "Status alterado manualmente para {$newStatus}";
+
+            // Lógica Aguardando Devolução
+            if ($newStatus === 'Aguardando Devolução') {
+                if (!empty($dto['reverseLogisticsCode'])) 
+                    $order->reverse_logistics_code = $dto['reverseLogisticsCode'];
+                
+                $order->return_instructions = $dto['returnInstructions'] ?? "Instruções padrão de devolução...";
+                $auditMessage .= ". Instruções geradas.";
+            }
+
+            // Lógica Reprovação / Cancelamento
+            if (in_array($newStatus, ['Reembolso Reprovado', 'Reembolsado', 'Reembolsado Parcialmente', 'Cancelado'])) {
+                if (!empty($dto['refundRejectionReason'])) 
+                    $order->refund_rejection_reason = $dto['refundRejectionReason'];
+                
+                if (!empty($dto['refundRejectionProof'])) 
+                    $order->refund_rejection_proof = $dto['refundRejectionProof'];
+                
+                if ($newStatus === 'Reembolso Reprovado') 
+                    $auditMessage .= ". Justificativa anexada.";
+            }
+
+            // Lógica PROCESSAMENTO DE REEMBOLSO (Stripe)
+            if (in_array($newStatus, ['Reembolsado', 'Reembolsado Parcialmente', 'Cancelado']) 
+                && !in_array($order->status, ['Reembolsado', 'Reembolsado Parcialmente', 'Cancelado'])
+                && $order->stripe_payment_intent_id) 
+            {
+                $amountToRefund = 0;
+
+                if (isset($dto['refundAmount']) && is_numeric($dto['refundAmount'])) {
+                    $amountToRefund = (float) $dto['refundAmount'];
+                } else {
+                    $amountToRefund = $order->refund_requested_amount ?? $order->total_amount;
+                }
+
+                if ($amountToRefund > $order->total_amount)
+                    throw new Exception("O valor do reembolso (R$ {$amountToRefund}) não pode ser maior que o total do pedido.");
+
+                // Reembolso Parcial Solicitado vs Valor Informado
+                if ($order->refund_type === 'Parcial' && $order->refund_requested_amount) {
+                    if ($amountToRefund > $order->refund_requested_amount)
+                        throw new Exception("O valor do reembolso (R$ {$amountToRefund}) excede o valor calculado dos itens solicitados (R$ {$order->refund_requested_amount}).");
+                }
+
+                // Chama Stripe Service
+                try {
+                    $this->paymentService->refund($order->stripe_payment_intent_id, $amountToRefund);
+                    $auditMessage .= ". Reembolso de R$ " . number_format($amountToRefund, 2, ',', '.') . " processado no Stripe.";
+
+                    // Ajusta status se foi parcial automático
+                    if ($newStatus === 'Reembolsado' && $amountToRefund < $order->total_amount) {
+                        $newStatus = 'Reembolsado Parcialmente';
+                    }
+                } catch (Exception $ex) {
+                    throw new Exception("Erro no reembolso Stripe: " . $ex->getMessage());
+                }
+            }
+
+            // Entrega
+            if ($newStatus === 'Entregue' && $order->status !== 'Entregue') {
+                $order->delivery_date = now();
+            }
+
+            // Rastreio
+            if (!empty($dto['trackingCode'])) {
+                $order->tracking_code = $dto['trackingCode'];
+                $auditMessage .= " (Rastreio: {$dto['trackingCode']})";
+            }
+
+            $this->addAuditLog($order, $newStatus, $auditMessage, "Admin:{$adminUser->id}");
+            
+            if ($oldStatus !== $newStatus) {
+                $this->sendOrderUpdateEmail($order, $newStatus);
+            }
+        });
+    }
+
     public function requestRefund(string $orderId, string $userId, array $dto)
     {
         $order = Order::with('items')->where('id', $orderId)->firstOrFail();
 
-        if ($order->user_id !== $userId) {
-            abort(403, "Você não tem permissão para acessar este pedido.");
-        }
-
-        if (!in_array($order->status, ['Entregue', 'Pago'])) {
+        if ($order->user_id !== $userId) abort(403, "Acesso negado.");
+        
+        if (!in_array($order->status, ['Entregue', 'Pago'])) 
             throw new Exception("Status do pedido não permite solicitação de reembolso.");
-        }
-
-        if ($order->refund_type) {
+        
+        if ($order->refund_type) 
             throw new Exception("Já existe uma solicitação de reembolso para este pedido.");
-        }
 
         DB::transaction(function () use ($order, $dto, $userId) {
-            $calculatedRefundAmount = 0;
             $refundType = $dto['refundType'] ?? 'Total';
-
+            
             if ($refundType === 'Parcial') {
                 if (empty($dto['items'])) throw new Exception("Nenhum item selecionado para reembolso parcial.");
-
+                
+                $calculatedAmount = 0;
                 $discountRatio = $order->sub_total > 0 ? $order->discount / $order->sub_total : 0;
 
-                foreach ($dto['items'] as $itemRequest) {
-                    $orderItem = $order->items->firstWhere('product_id', $itemRequest['productId']);
+                foreach ($dto['items'] as $reqItem) {
+                    $item = $order->items->firstWhere('product_id', $reqItem['productId']);
+                    if (!$item) throw new Exception("Produto {$reqItem['productId']} não pertence ao pedido.");
                     
-                    if (!$orderItem) throw new Exception("Produto {$itemRequest['productId']} não pertence a este pedido.");
+                    if ($reqItem['quantity'] > $item->quantity || $reqItem['quantity'] <= 0)
+                        throw new Exception("Quantidade inválida para {$item->product_name}.");
                     
-                    if ($itemRequest['quantity'] > $orderItem->quantity || $itemRequest['quantity'] <= 0) {
-                        throw new Exception("Quantidade inválida para o produto {$orderItem->product_name}.");
-                    }
+                    $item->refund_quantity = $reqItem['quantity'];
+                    $item->save();
 
-                    $orderItem->refund_quantity = $itemRequest['quantity'];
-                    $orderItem->save();
-
-                    $effectiveUnitPrice = $orderItem->unit_price * (1 - $discountRatio);
-                    $calculatedRefundAmount += $effectiveUnitPrice * $itemRequest['quantity'];
+                    $effectiveUnitPrice = $item->unit_price * (1 - $discountRatio);
+                    $calculatedAmount += $effectiveUnitPrice * $reqItem['quantity'];
                 }
-
-                $calculatedRefundAmount = round($calculatedRefundAmount, 2);
                 
                 $order->refund_type = 'Parcial';
-                $order->refund_requested_amount = $calculatedRefundAmount;
-
-                $this->addAuditLog($order, 'Reembolso Solicitado', 
-                    "Cliente solicitou reembolso PARCIAL de R$ " . number_format($calculatedRefundAmount, 2, ',', '.'), 
-                    $userId
-                );
-
+                $order->refund_requested_amount = round($calculatedAmount, 2);
+                $this->addAuditLog($order, 'Reembolso Solicitado', "Cliente solicitou reembolso PARCIAL de R$ " . number_format($order->refund_requested_amount, 2, ',', '.'), $userId);
             } else {
                 $order->refund_type = 'Total';
                 $order->refund_requested_amount = $order->total_amount;
                 
-                foreach ($order->items as $item) {
-                    $item->refund_quantity = $item->quantity;
-                    $item->save();
+                foreach($order->items as $i) { 
+                    $i->refund_quantity = $i->quantity; 
+                    $i->save(); 
                 }
                 
                 $this->addAuditLog($order, 'Reembolso Solicitado', "Cliente solicitou reembolso TOTAL.", $userId);
             }
-
             $order->save();
         });
     }
@@ -334,8 +413,6 @@ class OrderService
                     'ExpectedAmount' => $expectedAmount / 100.0,
                     'ReceivedAmount' => $receivedAmount / 100.0,
                     'Divergence' => abs($expectedAmount - $receivedAmount) / 100.0,
-                    'CustomerIp' => $order->customer_ip ?? "N/A",
-                    'UserAgent' => $order->user_agent ?? "N/A",
                     'Date' => now(),
                     'Year' => date('Y')
                 ]);
@@ -349,6 +426,7 @@ class OrderService
     {
         if ($order->user && $order->user->email) {
             $this->sendEmailHelper($order->user, 'OrderReceived', [
+                'name' => $order->user->full_name,
                 'orderNumber' => $order->id,
                 'total' => number_format($order->total_amount, 2, ',', '.'),
                 'items' => $order->items->map(fn($i) => [
@@ -389,14 +467,11 @@ class OrderService
     private function sendEmailHelper($user, $templateKey, $data)
     {
         try {
-            // Adiciona dados comuns
             $data['Name'] = $user->full_name;
             $data['Year'] = date('Y');
-            
-            // Chama o EmailService diretamente, sem renderizar aqui
             $this->emailService->send($user->email, $templateKey, $data);
         } catch (Exception $e) {
-            Log::error("Erro ao enviar email {$templateKey}: " . $e->getMessage());
+            Log::error("Erro envio email {$templateKey}: " . $e->getMessage());
         }
     }
 }

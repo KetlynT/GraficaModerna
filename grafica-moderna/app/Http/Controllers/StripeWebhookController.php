@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Webhook;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Services\OrderService;
@@ -9,8 +9,8 @@ use App\Models\ProcessedWebhookEvent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Stripe\Webhook;
-use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
+use Exception;
 
 class StripeWebhookController extends Controller
 {
@@ -33,18 +33,15 @@ class StripeWebhookController extends Controller
 
         if (!$endpointSecret) {
             Log::critical('STRIPE_WEBHOOK_SECRET não configurado.');
-            return response()->json(null, 500);
+            return response()->json(['message' => 'Configuração inválida'], 500);
         }
 
         try {
-            $event = Webhook::constructEvent(
-                $payload,
-                $signature,
-                $endpointSecret
-            );
+            $event = Webhook::constructEvent($payload, $signature, $endpointSecret);
 
+            // Idempotência: Evita processar o mesmo evento duas vezes
             if (ProcessedWebhookEvent::where('event_id', $event->id)->exists()) {
-                Log::info("Evento {$event->id} já processado. Ignorando.");
+                Log::info("[Webhook] Evento {$event->id} já processado. Ignorando.");
                 return response()->json(null, 200);
             }
 
@@ -60,50 +57,45 @@ class StripeWebhookController extends Controller
                     break;
 
                 default:
-                    Log::info("[Webhook] Evento não tratado: {$event->type} ({$event->id})");
+                    Log::info("[Webhook] Evento não monitorado: {$event->type}");
             }
 
+            // Marca evento como processado
             try {
-                ProcessedWebhookEvent::create([
-                    'event_id' => $event->id,
-                ]);
-            } catch (\Throwable $e) {
-                Log::warning('Race condition ao salvar webhook processado', [
-                    'event_id' => $event->id,
-                    'error' => $e->getMessage(),
-                ]);
+                ProcessedWebhookEvent::create(['event_id' => $event->id]);
+            } catch (\Exception $e) {
+                // Se der erro ao salvar (race condition), apenas loga
+                Log::warning('Erro ao salvar ProcessedWebhookEvent', ['id' => $event->id]);
             }
 
             return response()->json(null, 200);
-        }
-        catch (SignatureVerificationException $e) {
+
+        } catch (SignatureVerificationException $e) {
             Log::error('[Webhook] Assinatura Stripe inválida.');
             return response()->json('Invalid signature', 400);
-        }
-        catch (\Throwable $e) {
-            Log::error('[Webhook] Erro interno ao processar webhook.', [
-                'exception' => $e
-            ]);
-            return response()->json('Internal server error', 500);
+        } catch (\Throwable $e) {
+            Log::error('[Webhook] Erro interno:', ['error' => $e->getMessage()]);
+            return response()->json('Internal Server Error', 500);
         }
     }
 
-    protected function processCheckoutSession(Event $event): void
+    protected function processCheckoutSession($event): void
     {
         $session = $event->data->object;
-
-        if (!$session || empty($session->metadata['order_data'])) {
-            Log::warning("[Webhook] Metadados ausentes no evento {$event->id}");
+        
+        // Acesso aos metadados (depende da versão da lib do Stripe, geralmente array ou objeto)
+        // No PHP SDK recente, $session->metadata é um StripeObject que age como array
+        $metadata = $session->metadata; 
+        
+        if (!isset($metadata['order_data'])) {
+            Log::warning("[Webhook] Metadados 'order_data' ausentes no evento {$event->id}");
             return;
         }
 
         try {
-            $plainOrderId = $this->securityService->unprotect($session->metadata['order_data']);
-
-            if (!\Ramsey\Uuid\Uuid::isValid($plainOrderId)) {
-                throw new \Exception('Invalid Order ID format');
-            }
-
+            // Descriptografa o ID do pedido
+            $plainOrderId = $this->securityService->unprotect($metadata['order_data']);
+            
             $transactionId = $session->payment_intent;
             $amountPaid = $session->amount_total ?? 0;
 
@@ -112,7 +104,7 @@ class StripeWebhookController extends Controller
                 return;
             }
 
-            Log::info("[Webhook] Confirmando pagamento Order {$plainOrderId}, Transaction {$transactionId}");
+            Log::info("[Webhook] Processando pagamento Order {$plainOrderId}, Transaction {$transactionId}");
 
             $this->orderService->confirmPaymentViaWebhook(
                 $plainOrderId,
@@ -120,21 +112,11 @@ class StripeWebhookController extends Controller
                 $amountPaid
             );
 
-            Log::info("[Webhook] Pagamento confirmado. Order {$plainOrderId}");
-        }
-        catch (\Exception $e) {
-            Log::critical("[SECURITY ALERT] Violação de integridade no webhook {$event->id}");
-            throw $e;
-        }
-        catch (\Throwable $e) {
-            if (str_contains($e->getMessage(), 'FATAL') || str_contains($e->getMessage(), 'SECURITY')) {
-                Log::critical("[SECURITY ALERT] Tentativa de fraude Order {$plainOrderId}", [
-                    'exception' => $e
-                ]);
-                throw $e;
-            }
+            Log::info("[Webhook] Sucesso Order {$plainOrderId}");
 
-            throw $e;
+        } catch (Exception $e) {
+            Log::critical("[SECURITY ALERT] Falha ao processar webhook {$event->id}: " . $e->getMessage());
+            throw $e; // Relança para o Stripe tentar de novo (500)
         }
     }
 }

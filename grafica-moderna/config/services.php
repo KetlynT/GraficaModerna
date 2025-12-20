@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'security' => [
+        'active_version' => env('SECURITY_PEPPER_ACTIVE_VERSION', 'v1'),
+        'peppers' => [
+            'v1' => env('SECURITY_PEPPER_V1'),
+            'v2' => env('SECURITY_PEPPER_V2'),
+        ],
+    ],
+
 ];
