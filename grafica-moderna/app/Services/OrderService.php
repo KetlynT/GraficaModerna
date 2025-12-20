@@ -252,4 +252,171 @@ class OrderService
             ]);
         });
     }
+    public function updateOrderStatus(string $orderId, string $newStatus, string $adminUserId, array $data = [])
+    {
+        $order = Order::findOrFail($orderId);
+        $oldStatus = $order->status;
+        $auditMessage = "Status alterado manualmente para {$newStatus}";
+
+        DB::transaction(function () use ($order, $newStatus, $oldStatus, $adminUserId, $data, &$auditMessage) {
+            
+            // Lógica para Aguardando Devolução
+            if ($newStatus === 'Aguardando Devolução') {
+                if (!empty($data['reverseLogisticsCode'])) {
+                    $order->reverse_logistics_code = $data['reverseLogisticsCode'];
+                }
+                $order->return_instructions = $data['returnInstructions'] ?? "Instruções padrão de devolução...";
+                $auditMessage .= ". Instruções geradas.";
+            }
+
+            // Lógica para Rejeição de Reembolso
+            if (in_array($newStatus, ['Reembolso Reprovado', 'Reembolsado', 'Cancelado'])) {
+                if (!empty($data['refundRejectionReason'])) {
+                    $order->refund_rejection_reason = $data['refundRejectionReason'];
+                }
+                if ($newStatus === 'Reembolso Reprovado') {
+                    $auditMessage .= ". Justificativa anexada.";
+                }
+            }
+
+            // Lógica de Reembolso Stripe
+            if (in_array($newStatus, ['Reembolsado', 'Reembolsado Parcialmente', 'Cancelado']) 
+                && !in_array($oldStatus, ['Reembolsado', 'Reembolsado Parcialmente', 'Cancelado'])
+                && $order->stripe_payment_intent_id) {
+                
+                $amountToRefund = $data['refundAmount'] ?? ($order->refund_requested_amount ?? $order->total_amount);
+
+                // Validações de valor
+                if ($amountToRefund > $order->total_amount) {
+                    throw new Exception("O valor do reembolso não pode ser maior que o total do pedido.");
+                }
+
+                // Executa Reembolso no Stripe
+                $this->paymentService->refund($order->stripe_payment_intent_id, (float)$amountToRefund);
+                
+                $auditMessage .= ". Reembolso de R$ " . number_format($amountToRefund, 2, ',', '.') . " processado no Stripe.";
+
+                // Ajusta status se for parcial
+                if ($newStatus === 'Reembolsado' && $amountToRefund < $order->total_amount) {
+                    $newStatus = 'Reembolsado Parcialmente';
+                }
+            }
+
+            if ($newStatus === 'Entregue' && $oldStatus !== 'Entregue') {
+                $order->delivery_date = now();
+            }
+
+            if (!empty($data['trackingCode'])) {
+                $order->tracking_code = $data['trackingCode'];
+                $auditMessage .= " (Rastreio: {$data['trackingCode']})";
+            }
+
+            $order->status = $newStatus;
+            $order->save();
+
+            // Log no Histórico
+            $order->history()->create([
+                'status' => $newStatus,
+                'message' => $auditMessage,
+                'changed_by' => "Admin:{$adminUserId}",
+                'timestamp' => now()
+            ]);
+
+            // Envio de Email
+            if ($oldStatus !== $newStatus) {
+                $this->sendOrderUpdateEmail($order, $newStatus);
+            }
+        });
+    }
+
+    /**
+     * Solicitação de Reembolso pelo Usuário
+     */
+    public function requestRefund(string $userId, string $orderId, array $data)
+    {
+        $order = Order::where('id', $orderId)->where('user_id', $userId)->firstOrFail();
+
+        if (!in_array($order->status, ['Entregue', 'Pago'])) {
+            throw new Exception("Status do pedido não permite solicitação de reembolso.");
+        }
+
+        if ($order->refund_type) {
+            throw new Exception("Já existe uma solicitação de reembolso para este pedido.");
+        }
+
+        $refundType = $data['refundType'] ?? 'Total';
+        $calculatedRefundAmount = 0;
+
+        DB::transaction(function () use ($order, $refundType, $data, $userId, &$calculatedRefundAmount) {
+            if ($refundType === 'Parcial') {
+                if (empty($data['items'])) throw new Exception("Nenhum item selecionado para reembolso parcial.");
+
+                $discountRatio = $order->sub_total > 0 ? $order->discount / $order->sub_total : 0;
+
+                foreach ($data['items'] as $itemRequest) {
+                    $orderItem = $order->items()->where('product_id', $itemRequest['productId'])->first();
+                    
+                    if (!$orderItem) throw new Exception("Produto não pertence ao pedido.");
+                    if ($itemRequest['quantity'] > $orderItem->quantity) throw new Exception("Quantidade inválida.");
+
+                    $orderItem->refund_quantity = $itemRequest['quantity'];
+                    $orderItem->save();
+
+                    $effectiveUnitPrice = $orderItem->unit_price * (1 - $discountRatio);
+                    $calculatedRefundAmount += $effectiveUnitPrice * $itemRequest['quantity'];
+                }
+
+                $order->refund_type = 'Parcial';
+                $order->refund_requested_amount = round($calculatedRefundAmount, 2);
+                
+                $message = "Cliente solicitou reembolso PARCIAL de R$ " . number_format($calculatedRefundAmount, 2);
+
+            } else {
+                $order->refund_type = 'Total';
+                $order->refund_requested_amount = $order->total_amount;
+                
+                // Marca todos os itens
+                foreach ($order->items as $item) {
+                    $item->refund_quantity = $item->quantity;
+                    $item->save();
+                }
+                
+                $message = "Cliente solicitou reembolso TOTAL.";
+            }
+
+            $order->status = 'Reembolso Solicitado'; // Ou manter status e usar flag
+            $order->save();
+
+            $order->history()->create([
+                'status' => 'Reembolso Solicitado',
+                'message' => $message,
+                'changed_by' => $userId,
+                'timestamp' => now()
+            ]);
+        });
+    }
+
+    private function sendOrderUpdateEmail(Order $order, string $newStatus)
+    {
+        $templateMap = [
+            'Pago' => 'PaymentConfirmed',
+            'Enviado' => 'OrderShipped',
+            'Entregue' => 'OrderDelivered',
+            'Cancelado' => 'OrderCanceled',
+            'Reembolsado' => 'OrderRefunded',
+            'Reembolsado Parcialmente' => 'OrderPartiallyRefunded',
+            'Aguardando Devolução' => 'OrderReturnInstructions',
+            'Reembolso Reprovado' => 'OrderRefundRejected',
+        ];
+
+        if (!isset($templateMap[$newStatus]) || !$order->user) return;
+
+        $this->emailService->send($order->user->email, $templateMap[$newStatus], [
+            'name' => $order->user->full_name,
+            'orderNumber' => $order->id,
+            'trackingCode' => $order->tracking_code,
+            'returnInstructions' => $order->return_instructions,
+            'rejectionReason' => $order->refund_rejection_reason
+        ]);
+    }
 }
