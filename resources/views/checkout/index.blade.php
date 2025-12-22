@@ -88,7 +88,7 @@
 
 @push('scripts')
 <script>
-    let addresses = []; // Será populado via fetch
+    let addresses = [];
     let selectedAddress = null;
     let selectedShipping = null;
     const cartSubtotal = {{ $cartTotal }};
@@ -100,12 +100,10 @@
 
     async function loadAddresses() {
         try {
-            // Assumindo que você criou uma rota API ou Web que retorna JSON
             const response = await fetch('/api/user/addresses'); 
             addresses = await response.json();
             renderAddresses();
             
-            // Seleciona padrão ou primeiro
             if (addresses.length > 0) {
                 const defaultAddr = addresses.find(a => a.is_default) || addresses[0];
                 selectAddress(defaultAddr.id);
@@ -138,7 +136,6 @@
         selectedShipping = null;
         renderAddresses();
         
-        // Calcular Frete
         document.getElementById('shipping-section').classList.remove('hidden');
         document.getElementById('shipping-loading').classList.remove('hidden');
         document.getElementById('shipping-options').innerHTML = '';
@@ -181,10 +178,6 @@
 
     function selectShipping(option) {
         selectedShipping = option;
-        // Re-render para atualizar estilos
-        // (Em uma app real, idealmente só atualiza classes, mas aqui reconstruo para simplicidade)
-        // renderShippingOptions(...) seria ideal se tivesse salvo as options globais
-        // Atualiza visualmente via DOM traversal ou salvar options globalmente
         const labels = document.querySelectorAll('#shipping-options label');
         labels.forEach(l => {
             if(l.innerText.includes(option.name)) {

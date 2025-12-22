@@ -21,7 +21,6 @@ class AddressService
     public function create(string $userId, array $data)
     {
         $cleanData = InputCleaner::clean($data);
-        // Se for o primeiro endereço ou marcado como padrão, remove o padrão dos outros
         $isFirst = !UserAddress::where('user_id', $userId)->exists();
         $isDefault = $cleanData['isDefault'] ?? false;
 
@@ -54,7 +53,6 @@ class AddressService
             $this->unsetDefaultAddress($userId);
         }
 
-        // Mapeamento de camelCase (JSON) para snake_case (DB)
         $address->update([
             'name' => $cleanData['name'],
             'receiver_name' => $cleanData['receiverName'],

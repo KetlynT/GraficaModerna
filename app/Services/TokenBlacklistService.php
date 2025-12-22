@@ -3,23 +3,20 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 
 class TokenBlacklistService
 {
-    // Adiciona o token na blacklist até a data de expiração dele
-    public function blacklist(string $token, int $expiresInMinutes)
+    public function blacklist(string $token, int $expiresAtTimestamp): void
     {
-        // Usamos o hash do token como chave para economizar espaço
-        $key = 'blacklist_' . hash('sha256', $token);
+        $ttl = $expiresAtTimestamp - time();
         
-        // Cache::put(chave, valor, tempo_em_minutos)
-        Cache::put($key, true, $expiresInMinutes);
+        if ($ttl > 0) {
+            Cache::put("jwt_blacklist_{$token}", true, $ttl);
+        }
     }
 
     public function isBlacklisted(string $token): bool
     {
-        $key = 'blacklist_' . hash('sha256', $token);
-        return Cache::has($key);
+        return Cache::has("jwt_blacklist_{$token}");
     }
 }

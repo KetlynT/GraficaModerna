@@ -6,28 +6,29 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-Schema::create('users', function (Blueprint $table) {
-    $table->uuid('id')->primary();
-    $table->string('full_name');
-    $table->string('email')->unique();
-    $table->timestamp('email_verified_at')->nullable();
-    $table->string('password');
-    $table->string('cpf_cnpj', 14)->nullable();
-    $table->string('phone_number')->nullable();
-    $table->string('role')->default('User'); // Simples string ou use spatie/laravel-permission
-    
-    // Refresh Tokens (pode ser feito via tabela separada ou aqui se for simples)
-    $table->string('refresh_token_hash')->nullable();
-    $table->timestamp('refresh_token_expiry')->nullable();
-    
-    $table->rememberToken();
-    $table->timestamps();
-});
+        Schema::create('users', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('full_name');
+            $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
+            $table->string('cpf_cnpj', 14)->nullable();
+            $table->string('phone_number')->nullable();
+            $table->string('role')->default('User');
+            
+            $table->string('confirmation_token')->nullable();
+            $table->boolean('email_confirmed')->default(false);
+            $table->integer('access_failed_count')->default(0);
+            $table->timestamp('lockout_end')->nullable();
+            
+            $table->string('refresh_token_hash')->nullable();
+            $table->timestamp('refresh_token_expiry')->nullable();
+            
+            $table->rememberToken();
+            $table->timestamps();
+        });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
@@ -45,9 +46,6 @@ Schema::create('users', function (Blueprint $table) {
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');

@@ -9,8 +9,6 @@ class DashboardStatsResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Mapeia DashboardStatsDto.cs
-        // A entrada ($this->resource) é um array vindo do Service
         return [
             'totalOrders' => (int) $this['totalOrders'],
             'totalRevenue' => (float) $this['totalRevenue'],
@@ -26,7 +24,7 @@ class DashboardStatsResource extends JsonResource
                 'id' => $o['id'],
                 'totalAmount' => (float) $o['total_amount'],
                 'status' => $o['status'],
-                'orderDate' => $o['created_at'], // Laravel casta data automaticamente
+                'orderDate' => $o['created_at'],
                 'customerName' => $o['user']['full_name'] ?? 'N/A',
                 'customerEmail' => $o['user']['email'] ?? 'N/A'
             ]),

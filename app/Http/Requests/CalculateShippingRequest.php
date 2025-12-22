@@ -27,16 +27,12 @@ class CalculateShippingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // [Required, RegularExpression(@"^\d{8}$")]
             'destinationCep' => 'required|string|size:8',
 
-            // [Required, MinLength(1), MaxLength(50)] - Lista de itens
             'items' => 'required|array|min:1|max:50',
 
-            // Validação dos itens internos (ShippingItemDto)
             'items.*.productId' => 'required|uuid|exists:products,id',
             
-            // [Range(1, 1000)]
             'items.*.quantity'  => 'required|integer|min:1|max:1000',
         ];
     }

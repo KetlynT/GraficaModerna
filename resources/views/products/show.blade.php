@@ -7,7 +7,6 @@
     $images = $product->imageUrls ?? ['https://placehold.co/600x400?text=Sem+Imagem'];
     $currentImage = $images[0];
     
-    // Função auxiliar simples para verificar video (pode ser movida para um helper global)
     $isVideo = function($url) {
         return preg_match('/\.(mp4|webm|ogg)$/i', $url);
     };

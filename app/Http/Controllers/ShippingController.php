@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Services\ContentService;
 use App\Services\ProductService;
-// Certifique-se de registrar o MelhorEnvioService no AppServiceProvider como ShippingServiceInterface
 use App\Services\Interfaces\ShippingServiceInterface; 
-use App\Http\Requests\CalculateShippingRequest; // Nome corrigido
-use App\Http\Resources\ShippingOptionResource; // Resource novo
+use App\Http\Requests\CalculateShippingRequest;
+use App\Http\Resources\ShippingOptionResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -15,7 +14,6 @@ class ShippingController extends Controller
 {
     private const MAX_ITEMS_PER_CALCULATION = 50;
 
-    // Injeta array de serviços (MelhorEnvio, etc)
     protected $shippingServices; 
     protected ProductService $productService;
     protected ContentService $contentService;
@@ -23,8 +21,6 @@ class ShippingController extends Controller
     public function __construct(
         ProductService $productService,
         ContentService $contentService,
-        // No Laravel, para injetar array de interfaces, você configura no ServiceProvider tagged services
-        // ou injeta classe concreta se for apenas uma. Assumindo injeção via Tag 'shipping.services'
         iterable $shippingServices 
     ) {
         $this->productService = $productService;
@@ -35,7 +31,6 @@ class ShippingController extends Controller
     private function checkPurchaseEnabled(): void
     {
         $settings = $this->contentService->getSettings();
-        // PHP array key access
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
             throw new \Exception('Cálculo de frete temporariamente indisponível. Utilize o orçamento personalizado.');
         }
@@ -47,12 +42,10 @@ class ShippingController extends Controller
             $this->checkPurchaseEnabled();
             
             $data = $request->validated();
-            // Limpeza de CEP igual ao C#
             $cleanCep = preg_replace('/\D/', '', $data['destinationCep']);
 
             $validatedItems = [];
             foreach ($data['items'] as $item) {
-                // Validações de qtd (C# logic)
                 if ($item['quantity'] <= 0) throw new \Exception("Item {$item['productId']} possui quantidade inválida.");
                 if ($item['quantity'] > 1000) throw new \Exception("Quantidade excessiva para o item {$item['productId']}.");
 
@@ -72,15 +65,12 @@ class ShippingController extends Controller
             if (empty($validatedItems)) return response()->json(['message' => 'Nenhum produto válido encontrado.'], 400);
 
             $allOptions = [];
-            // Executa em série (PHP não tem Task.WhenAll nativo fácil sem bibliotecas async, manter loop simples)
             foreach ($this->shippingServices as $service) {
                 $allOptions = array_merge($allOptions, $service->calculate($cleanCep, $validatedItems));
             }
 
-            // Ordenação
             usort($allOptions, fn ($a, $b) => $a['price'] <=> $b['price']);
 
-            // Usa Resource
             return ShippingOptionResource::collection($allOptions);
 
         } catch (\Exception $e) {

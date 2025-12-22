@@ -35,7 +35,6 @@ class ContentController extends Controller
     {
         $settingsList = $this->service->getSettings();
 
-        // Garante o mesmo comportamento do ToDictionary do .NET
         $settingsDict = [];
         foreach ($settingsList as $setting) {
             $settingsDict[$setting['key']] = $setting['value'];

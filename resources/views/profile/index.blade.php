@@ -3,7 +3,7 @@
 @section('content')
 <div class="max-w-4xl mx-auto px-4 py-12">
     <h1 class="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-2">
-        <i data-lucide="user" class="text-[var(--color-primary)]"></i> Minha Conta
+        <i data-lucide="user" class="text-primary"></i> Minha Conta
     </h1>
 
     <div class="grid md:grid-cols-3 gap-8">
@@ -84,7 +84,6 @@
 
 @push('scripts')
 <script>
-    // Reaproveitando as máscaras
     function maskCpfCnpj(input) {
         let v = input.value.replace(/\D/g,"");
         if (v.length <= 11) {

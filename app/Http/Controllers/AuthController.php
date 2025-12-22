@@ -49,7 +49,6 @@ class AuthController extends Controller
     public function login(LoginRequest $request)
     {
         $data = $request->validated();
-        // Define flag interna para diferenciar login de Admin vs Cliente (Lógica do C#)
         $data['isAdminLogin'] = false; 
 
         $result = $this->authService->login($data);
@@ -69,9 +68,13 @@ class AuthController extends Controller
 
         if ($token) {
             try {
-                $decoded = JWT::decode($token, new Key(config('app.jwt_secret'), 'HS256'));
-                if (isset($decoded->exp)) {
-                    $this->blacklistService->blacklist($token, $decoded->exp);
+                try {
+                    $decoded = JWT::decode($token, new Key(config('app.jwt_secret'), 'HS256'));
+                    if (isset($decoded->exp)) {
+                        $this->blacklistService->blacklist($token, $decoded->exp);
+                    }
+                } catch (\Exception $e) {
+                    $this->blacklistService->blacklist($token, time() + 3600);
                 }
             } catch (\Exception $e) {
                 Log::warning('Erro ao processar blacklist no logout', ['message' => $e->getMessage()]);
@@ -88,12 +91,15 @@ class AuthController extends Controller
         if (!$request->user()) {
             return response()->json(['isAuthenticated' => false, 'role' => null]);
         }
-        return response()->json(['isAuthenticated' => true, 'role' => $request->user()->role]);
+        return response()->json([
+            'isAuthenticated' => true, 
+            'role' => $request->user()->role,
+            'user' => new UserProfileResource($request->user())
+        ]);
     }
 
     public function getProfile(Request $request)
     {
-        // Retorna camelCase via Resource
         return new UserProfileResource($request->user());
     }
 
@@ -101,7 +107,6 @@ class AuthController extends Controller
     {
         $settings = $this->contentService->getSettings();
         
-        // Bloqueio de edição em modo orçamento (exceto Admin)
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
             if ($request->user()->role !== 'Admin') {
                 return response()->json(['message' => 'Edição de perfil desativada temporariamente.'], 403);
@@ -121,7 +126,6 @@ class AuthController extends Controller
             return response()->json(['message' => 'Tokens não encontrados nos cookies.'], 400);
         }
 
-        // Passa os tokens para o serviço validar e rotacionar
         $result = $this->authService->refreshToken($accessToken, $refreshToken);
 
         $this->setTokenCookies($result['accessToken'], $result['refreshToken']);
@@ -172,28 +176,10 @@ class AuthController extends Controller
 
     private function setTokenCookies(string $access, string $refresh): void
     {
-        // Access Token: 15 minutos, HttpOnly, Secure, SameSite Lax
-        Cookie::queue(cookie('jwt', $access, 15, null, null, true, true, false, 'Lax'));
+        $secure = app()->environment('production');
+
+        Cookie::queue(cookie('jwt', $access, 15, null, null, $secure, true, false, 'Lax'));
         
-        // Refresh Token: 7 dias
-        Cookie::queue(cookie('refreshToken', $refresh, 60 * 24 * 7, null, null, true, true, false, 'Lax'));
-    }
-
-    public function logout()
-    {
-        auth()->logout();
-        return response()->json(['message' => 'Successfully logged out']);
-    }
-
-    public function checkAuth()
-    {
-        if (auth()->check()) {
-            return response()->json([
-                'isAuthenticated' => true,
-                'role' => auth()->user()->role,
-                'user' => auth()->user()
-            ]);
-        }
-        return response()->json(['isAuthenticated' => false], 200);
+        Cookie::queue(cookie('refreshToken', $refresh, 60 * 24 * 7, null, null, $secure, true, false, 'Lax'));
     }
 }

@@ -13,7 +13,6 @@ class AddressRequest extends FormRequest
 
     public function prepareForValidation()
     {
-        // Limpeza de dados antes de validar (igual aos seus Setters no C# ou InputCleaner)
         if ($this->has('zipCode')) {
             $this->merge([
                 'zipCode' => preg_replace('/\D/', '', $this->zipCode)
@@ -24,15 +23,15 @@ class AddressRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'          => 'required|string|max:50',     // Nome do local (Casa, Trabalho)
+            'name'          => 'required|string|max:50',
             'receiverName'  => 'required|string|max:100',
-            'zipCode'       => 'required|string|size:8',     // CEP limpo tem 8 chars
+            'zipCode'       => 'required|string|size:8',
             'street'        => 'required|string|max:200',
             'number'        => 'required|string|max:20',
             'neighborhood'  => 'required|string|max:100',
             'city'          => 'required|string|max:100',
-            'state'         => 'required|string|size:2',     // UF
-            'phoneNumber'   => 'required|string|max:20',     // DDD + Numero
+            'state'         => 'required|string|size:2',
+            'phoneNumber'   => 'required|string|max:20',
             'complement'    => 'nullable|string|max:100',
             'reference'     => 'nullable|string|max:200',
             'isDefault'     => 'boolean',

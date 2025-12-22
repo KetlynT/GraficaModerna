@@ -48,14 +48,13 @@ class AuthService
     {
         $this->checkRegistrationEnabled();
 
-        // Instanciação manual garante segurança contra Mass Assignment em campos sensíveis
         $user = new User();
         $user->full_name = $data['fullName'];
         $user->email = $data['email'];
         $user->password = $this->securityService->hashPassword($data['password']);
         $user->cpf_cnpj = $data['cpfCnpj'];
         $user->phone_number = $data['phoneNumber'] ?? null;
-        $user->role = 'User'; // Define explicitamente como Usuário comum
+        $user->role = 'User'; 
         $user->email_confirmed = false;
         $user->save();
 
@@ -87,13 +86,11 @@ class AuthService
 
         $user = User::where('email', $data['email'])->first();
 
-        // 1. Verifica Bloqueio Temporário
         if ($user && $user->lockout_end && Carbon::parse($user->lockout_end)->isFuture()) {
             $timeLeft = Carbon::parse($user->lockout_end)->diffInMinutes(now());
             throw new Exception("Conta bloqueada temporariamente. Tente novamente em " . ceil($timeLeft) . " minutos.");
         }
 
-        // 2. Verifica Credenciais
         if (!$user || !$this->securityService->verifyPassword($data['password'], $user->password)) {
             if ($user) {
                 $user->increment('access_failed_count');
@@ -112,7 +109,6 @@ class AuthService
             $user->update(['access_failed_count' => 0, 'lockout_end' => null]);
         }
 
-        // 3. Verifica Roles
         $isAdmin = $user->role === 'Admin';
         if (!empty($data['isAdminLogin']) && $data['isAdminLogin']) {
             if (!$isAdmin) throw new Exception("Acesso não autorizado para contas de cliente.");
@@ -120,13 +116,11 @@ class AuthService
             if ($isAdmin) throw new Exception("Administradores devem acessar exclusivamente pelo Painel Administrativo.");
         }
 
-        // 4. Rehash
         if ($this->securityService->needsRehash($user->password)) {
             $user->password = $this->securityService->hashPassword($data['password']);
             $user->save();
         }
 
-        // 5. Alerta de Login
         try {
             $this->emailService->send($user->email, 'LoginAlert', [
                 'name' => $user->full_name,
@@ -139,13 +133,20 @@ class AuthService
 
     public function refreshToken(string $accessToken, string $refreshTokenRaw)
     {
-        $user = User::where('refresh_token_expiry', '>', now())->get()
-            ->first(function ($u) use ($refreshTokenRaw) {
-                return Hash::check($refreshTokenRaw, $u->refresh_token_hash);
-            });
+        $userId = $this->extractUserIdFromToken($accessToken);
 
-        if (!$user) {
-            throw new Exception("Refresh token inválido ou expirado.");
+        if (!$userId) {
+            throw new Exception("Token de acesso inválido ou malformado.");
+        }
+
+        $user = User::find($userId);
+
+        if (!$user || !$user->refresh_token_expiry || Carbon::parse($user->refresh_token_expiry)->isPast()) {
+            throw new Exception("Refresh token expirado ou inválido.");
+        }
+
+        if (!Hash::check($refreshTokenRaw, $user->refresh_token_hash)) {
+            throw new Exception("Refresh token inválido.");
         }
 
         if ($user->lockout_end && Carbon::parse($user->lockout_end)->isFuture()) {
@@ -153,6 +154,19 @@ class AuthService
         }
 
         return $this->generateAuthResponse($user);
+    }
+
+    private function extractUserIdFromToken(string $token): ?string
+    {
+        try {
+            $parts = explode('.', $token);
+            if (count($parts) !== 3) return null;
+
+            $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+            return $payload['sub'] ?? null;
+        } catch (Exception $e) {
+            return null;
+        }
     }
 
     public function getProfile(string $userId)

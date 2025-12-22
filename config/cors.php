@@ -5,7 +5,6 @@ return [
 
     'allowed_methods' => ['*'],
 
-    // Pega a lista do .env (equivalente ao split do C#)
     'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000')),
 
     'allowed_origins_patterns' => [],
@@ -16,5 +15,5 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true, // Importante para Cookies (JWT/RefreshToken)
+    'supports_credentials' => true,
 ];

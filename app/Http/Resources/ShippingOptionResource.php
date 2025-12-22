@@ -9,9 +9,8 @@ class ShippingOptionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Mapeia ShippingOptionDto.cs
         return [
-            'name' => $this->resource['name'], // Array associativo do Service
+            'name' => $this->resource['name'],
             'price' => (float) $this->resource['price'],
             'deliveryDays' => (int) $this->resource['deliveryDays'],
             'provider' => $this->resource['provider'],

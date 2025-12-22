@@ -187,7 +187,6 @@ class OrderService
                 return;
             }
 
-            // CORREÇÃO DE ARREDONDAMENTO
             $expectedAmount = (int) round($order->total_amount * 100);
             
             if ($expectedAmount !== $amountPaidInCents) {

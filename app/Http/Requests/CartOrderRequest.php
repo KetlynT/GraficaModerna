@@ -14,10 +14,8 @@ class CartOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // [Required] public Guid ProductId
             'productId' => 'required|uuid|exists:products,id',
 
-            // [Range(1, 1000)] public int Quantity
             'quantity'  => 'required|integer|min:1|max:1000',
         ];
     }

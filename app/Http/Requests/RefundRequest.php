@@ -15,17 +15,12 @@ class RefundRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // [Required] public string RefundType (Total ou Parcial)
             'refundType' => ['required', 'string', Rule::in(['Total', 'Parcial'])],
 
-            // Lógica do C#: if (RefundType == "Parcial" && (Items == null || !Items.Any()))
-            // Tradução Laravel: required_if:refundType,Parcial
             'items' => 'array|required_if:refundType,Parcial',
 
-            // Validação dos itens de reembolso (RefundItemDto)
             'items.*.productId' => 'required|uuid',
             
-            // [Range(1, 1000)]
             'items.*.quantity'  => 'required|integer|min:1|max:1000',
         ];
     }

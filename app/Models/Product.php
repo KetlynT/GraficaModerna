@@ -21,7 +21,6 @@ class Product extends Model
         'is_active' => 'boolean',
     ];
 
-    // Métodos de domínio (Lógica de negócio na entidade)
     public function debitStock(int $quantity)
     {
         if ($quantity < 0) throw new \InvalidArgumentException("Quantidade inválida.");

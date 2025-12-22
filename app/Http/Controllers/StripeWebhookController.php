@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\OrderService;
 use App\Services\MetadataSecurityService;
 use App\Models\ProcessedWebhookEvent;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Stripe\Webhook;
@@ -39,7 +40,6 @@ class StripeWebhookController extends Controller
         try {
             $event = Webhook::constructEvent($payload, $signature, $endpointSecret);
 
-            // Idempotência: Evita processar o mesmo evento duas vezes
             if (ProcessedWebhookEvent::where('event_id', $event->id)->exists()) {
                 Log::info("[Webhook] Evento {$event->id} já processado. Ignorando.");
                 return response()->json(null, 200);
@@ -60,11 +60,9 @@ class StripeWebhookController extends Controller
                     Log::info("[Webhook] Evento não monitorado: {$event->type}");
             }
 
-            // Marca evento como processado
             try {
                 ProcessedWebhookEvent::create(['event_id' => $event->id]);
             } catch (\Illuminate\Database\QueryException $e) {
-                // Se der erro ao salvar (race condition), apenas loga
                 if ($e->getCode() === '23000') return response()->json(null, 200);
                 throw $e;
             }
@@ -83,41 +81,51 @@ class StripeWebhookController extends Controller
     protected function processCheckoutSession($event): void
     {
         $session = $event->data->object;
-        
-        // Acesso aos metadados (depende da versão da lib do Stripe, geralmente array ou objeto)
-        // No PHP SDK recente, $session->metadata é um StripeObject que age como array
         $metadata = $session->metadata; 
         
-        if (!isset($metadata['order_data'])) {
-            Log::warning("[Webhook] Metadados 'order_data' ausentes no evento {$event->id}");
-            return;
+        $orderId = null;
+
+        if (isset($metadata['order_data'])) {
+            try {
+                $orderId = $this->securityService->unprotect($metadata['order_data']);
+            } catch (Exception $e) {
+                Log::error("[Webhook] Falha ao descriptografar order_data: " . $e->getMessage());
+            }
+        }
+
+        if (!$orderId) {
+            Log::warning("[Webhook] Metadados falharam. Tentando busca por Session ID.");
+            $order = Order::where('stripe_session_id', $session->id)->first();
+            if ($order) {
+                $orderId = $order->id;
+            } else {
+                Log::error("[Webhook] Pedido não encontrado para Session {$session->id}");
+                return;
+            }
         }
 
         try {
-            // Descriptografa o ID do pedido
-            $plainOrderId = $this->securityService->unprotect($metadata['order_data']);
-            
             $transactionId = $session->payment_intent;
             $amountPaid = $session->amount_total ?? 0;
 
             if (!$transactionId) {
-                Log::error("[Webhook] PaymentIntent ausente. Order {$plainOrderId}");
+                Log::error("[Webhook] PaymentIntent ausente. Order {$orderId}");
                 return;
             }
 
-            Log::info("[Webhook] Processando pagamento Order {$plainOrderId}, Transaction {$transactionId}");
+            Log::info("[Webhook] Processando pagamento Order {$orderId}, Transaction {$transactionId}");
 
             $this->orderService->confirmPaymentViaWebhook(
-                $plainOrderId,
+                $orderId,
                 $transactionId,
                 $amountPaid
             );
 
-            Log::info("[Webhook] Sucesso Order {$plainOrderId}");
+            Log::info("[Webhook] Sucesso Order {$orderId}");
 
         } catch (Exception $e) {
             Log::critical("[SECURITY ALERT] Falha ao processar webhook {$event->id}: " . $e->getMessage());
-            throw $e; // Relança para o Stripe tentar de novo (500)
+            throw $e; 
         }
     }
 }

@@ -9,9 +9,9 @@ return new class extends Migration {
     {
         Schema::create('email_templates', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('event_type')->unique(); // Ex: REGISTRATION_CONFIRMATION, ORDER_PLACED
+            $table->string('event_type')->unique();
             $table->string('subject');
-            $table->longText('html_content'); // O corpo do HTML com variáveis {{var}}
+            $table->longText('html_content');
             $table->string('description')->nullable();
             $table->timestamps();
         });

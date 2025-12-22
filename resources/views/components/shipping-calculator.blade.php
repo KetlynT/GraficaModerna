@@ -48,7 +48,6 @@
         optionsDiv.innerHTML = '';
         
         try {
-            // Ajuste a rota da API conforme necessário no Laravel
             const response = await fetch('/api/shipping/calculate', {
                 method: 'POST',
                 headers: {
@@ -58,7 +57,6 @@
                 body: JSON.stringify({
                     cep: cep,
                     product_id: '{{ $productId }}',
-                    // Se estiver no carrinho, o backend pega da sessão
                 })
             });
 
@@ -104,7 +102,6 @@
     }
 
     async function selectShippingOption(option) {
-        // Envia para o backend para salvar na sessão e recarrega a página para atualizar totais
         await fetch('/cart/shipping', {
             method: 'POST',
             headers: {

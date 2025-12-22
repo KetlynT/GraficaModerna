@@ -15,24 +15,20 @@ class CartService
 
     public function getCart(string $userId): Cart
     {
-        // GetOrCreate logic igual ao C#
         $cart = Cart::firstOrCreate(
             ['user_id' => $userId],
             ['last_updated' => now()]
         );
 
-        // Carrega items e produtos para montar o DTO
         $cart->load('items.product');
 
-        // Lógica de Órfãos (Produtos nulos ou inativos) - C# Linhas 29-34
         $orphanedItems = $cart->items->filter(function ($item) {
             return $item->product === null || !$item->product->is_active;
         });
 
         if ($orphanedItems->isNotEmpty()) {
             CartItem::destroy($orphanedItems->pluck('id'));
-            $cart->refresh(); // Recarrega o carrinho limpo
-            // Commit é automático no final da request do Laravel, diferente do C# explícito
+            $cart->refresh();
         }
 
         return $cart;
@@ -45,10 +41,8 @@ class CartService
         if ($dto['quantity'] > self::MAX_QUANTITY_PER_ITEM) 
             throw new Exception("Quantidade excede o limite permitido de " . self::MAX_QUANTITY_PER_ITEM . ".");
 
-        // Loop de retry do C# é abstraído pelo segundo parâmetro do transaction (3 tentativas)
         DB::transaction(function () use ($userId, $dto) {
             
-            // GetByIdWithLockAsync (C#) -> lockForUpdate (Laravel)
             $product = Product::where('id', $dto['productId'])->lockForUpdate()->first();
 
             if (!$product || !$product->is_active) 
@@ -62,7 +56,6 @@ class CartService
                 ['last_updated' => now()]
             );
 
-            // Bloqueia o item do carrinho se existir
             $existingItem = CartItem::where('cart_id', $cart->id)
                 ->where('product_id', $dto['productId'])
                 ->lockForUpdate() 
@@ -74,7 +67,6 @@ class CartService
                 if ($newTotal > self::MAX_QUANTITY_PER_ITEM)
                     throw new Exception("O total de itens excederia o limite máximo de " . self::MAX_QUANTITY_PER_ITEM . ".");
 
-                // Em PHP int overflow vira float, mas verificamos lógica
                 if ($product->stock_quantity < $newTotal)
                     throw new Exception("Não é possível adicionar mais itens: estoque insuficiente.");
 
@@ -92,7 +84,7 @@ class CartService
 
             Log::info("Item adicionado ao carrinho. User: {$userId}, Product: {$dto['productId']}, Qty: {$dto['quantity']}");
 
-        }, 3); // 3 tentativas (MaxConcurrencyRetries)
+        }, 3);
     }
 
     public function updateItemQuantity(string $userId, string $itemId, int $quantity): void
@@ -135,7 +127,7 @@ class CartService
     {
         if (empty($userId)) throw new Exception("userId inválido.");
 
-        $cart = $this->getCart($userId); // Reutiliza lógica de criar se não existir
+        $cart = $this->getCart($userId);
         
         $item = $cart->items->where('id', $itemId)->first();
 

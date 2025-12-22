@@ -15,7 +15,6 @@
     </a>
 </div>
 <script>
-    // Mostrar apenas se não for rota bloqueada (lógica simples em JS)
     const blockedRoutes = ['/login', '/cadastro'];
     if (!blockedRoutes.some(r => window.location.pathname.startsWith(r))) {
         document.getElementById('whatsapp-widget').classList.remove('hidden');

@@ -18,12 +18,11 @@ return new class extends Migration {
 
         Schema::create('coupon_usages', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->uuid('user_id'); // Referência ao User
+            $table->uuid('user_id');
             $table->string('coupon_code');
-            $table->uuid('order_id'); // Referência ao Order
+            $table->uuid('order_id');
             $table->timestamp('used_at')->useCurrent();
             
-            // Índices para performance
             $table->index('user_id');
             $table->index('coupon_code');
         });

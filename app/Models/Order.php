@@ -25,19 +25,16 @@ class Order extends Model
         'total_amount' => 'decimal:2',
     ];
 
-    // Relacionamento com User
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    // Relacionamento com Items (equivalente a List<OrderItem>)
     public function items()
     {
         return $this->hasMany(OrderItem::class);
     }
 
-    // Relacionamento com History (equivalente a List<OrderHistory>)
     public function history()
     {
         return $this->hasMany(OrderHistory::class);

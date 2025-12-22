@@ -2,41 +2,54 @@
 
 namespace App\Services;
 
-use App\Models\EmailTemplate;
-use App\DynamicTemplateMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use App\Models\EmailTemplate;
+use App\Mail\DynamicTemplateMail;
 
 class EmailService
 {
-    protected $templateService;
-
-    public function __construct(TemplateService $templateService)
-    {
-        $this->templateService = $templateService;
-    }
-
-    public function send(string $to, string $eventType, array $variables)
+    public function send(string $to, string $templateType, array $data = [])
     {
         try {
-            $template = EmailTemplate::where('event_type', $eventType)->first();
+            $template = EmailTemplate::where('event_type', $templateType)->first();
 
-            // Fallback se o template não existir no banco
             if (!$template) {
-                Log::warning("Template de email não encontrado: {$eventType}");
+                Log::warning("EmailService: Template '{$templateType}' não encontrado.");
                 return;
             }
 
-            // Processa Assunto e Corpo
-            $parsedBody = $this->templateService->parse($template->html_content, $variables);
-            $parsedSubject = $this->templateService->parse($template->subject, $variables);
+            $subject = $this->replaceVariables($template->subject, $data);
+            $body = $this->replaceVariables($template->html_content, $data);
 
-            // Envia (Queue é recomendado em produção)
-            Mail::to($to)->send(new DynamicTemplateMail($parsedSubject, $parsedBody));
+            Mail::to($to)->send(new DynamicTemplateMail($subject, $body));
+
+            Log::info("Email '{$templateType}' enviado para {$to}");
 
         } catch (\Exception $e) {
-            Log::error("Erro ao enviar email ({$eventType}) para {$to}: " . $e->getMessage());
-            // Não relançamos o erro para não travar o fluxo do usuário (ex: checkout)
+            Log::error("Erro envio email ({$templateType}): " . $e->getMessage());
         }
+    }
+
+    private function replaceVariables(string $content, array $data): string
+    {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $listHtml = "<ul>";
+                foreach ($value as $item) {
+                    if (isset($item['productName'])) {
+                        $listHtml .= "<li>{$item['quantity']}x {$item['productName']} (R$ {$item['price']})</li>";
+                    } else {
+                        $listHtml .= "<li>" . print_r($item, true) . "</li>";
+                    }
+                }
+                $listHtml .= "</ul>";
+                $content = str_replace('{' . $key . '}', $listHtml, $content);
+            } 
+            elseif (is_string($value) || is_numeric($value)) {
+                $content = str_replace('{' . $key . '}', (string) $value, $content);
+            }
+        }
+        return $content;
     }
 }

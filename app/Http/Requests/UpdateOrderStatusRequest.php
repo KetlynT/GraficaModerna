@@ -31,7 +31,6 @@ class UpdateOrderStatusRequest extends FormRequest
                     'Reembolso Reprovado'
                 ])
             ],
-            // Campos opcionais para lógica de admin (Reembolso/Devolução)
             'trackingCode' => 'nullable|string',
             'reverseLogisticsCode' => 'nullable|string',
             'returnInstructions' => 'nullable|string',

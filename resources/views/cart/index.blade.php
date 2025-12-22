@@ -5,7 +5,6 @@
     $subTotal = collect($cartItems)->sum(fn($i) => $i['totalPrice']);
     $coupon = session('coupon');
     $discountAmount = $coupon ? $subTotal * ($coupon['discountPercentage'] / 100) : 0;
-    // O frete selecionado geralmente é guardado na sessão após o cálculo
     $selectedShipping = session('selected_shipping'); 
     $shippingCost = $selectedShipping['price'] ?? 0;
     $total = $subTotal - $discountAmount + $shippingCost;

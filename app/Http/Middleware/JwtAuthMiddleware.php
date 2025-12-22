@@ -9,9 +9,17 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Exception;
 use App\Models\User;
+use App\Services\TokenBlacklistService;
 
 class JwtAuthMiddleware
 {
+    protected TokenBlacklistService $blacklistService;
+
+    public function __construct(TokenBlacklistService $blacklistService)
+    {
+        $this->blacklistService = $blacklistService;
+    }
+
     public function handle(Request $request, Closure $next): Response
     {
         $header = $request->header('Authorization');
@@ -22,6 +30,10 @@ class JwtAuthMiddleware
 
         $token = substr($header, 7);
 
+        if ($this->blacklistService->isBlacklisted($token)) {
+            return response()->json(['message' => 'Token inválido (logout realizado).'], 401);
+        }
+
         try {
             $key = config('app.jwt_secret');
             if (!$key) {
@@ -30,13 +42,11 @@ class JwtAuthMiddleware
 
             $decoded = JWT::decode($token, new Key($key, 'HS256'));
 
-            // Opcional: Verificar se o user ainda existe no banco
             $user = User::find($decoded->sub);
             if (!$user) {
                 return response()->json(['message' => 'Usuário não encontrado.'], 401);
             }
 
-            // Injeta o usuário na requisição para ser usado nos Controllers ($request->user())
             $request->setUserResolver(function () use ($user) {
                 return $user;
             });

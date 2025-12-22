@@ -9,7 +9,6 @@ class AddressResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Mapeia AddressDto.cs
         return [
             'id' => $this->id,
             'name' => $this->name,

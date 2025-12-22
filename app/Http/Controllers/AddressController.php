@@ -28,7 +28,6 @@ class AddressController extends Controller
         $settings = $this->contentService->getSettings();
 
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
-            // Lança exceção para retornar 400 (conforme ExceptionMiddleware)
             throw new \Exception('Gerenciamento de endereços indisponível no modo orçamento.');
         }
     }
@@ -36,7 +35,6 @@ class AddressController extends Controller
     public function index()
     {
         $addresses = $this->service->getUserAddresses(Auth::id());
-        // Retorna collection formatada em camelCase via Resource
         return AddressResource::collection($addresses);
     }
 
@@ -55,7 +53,6 @@ class AddressController extends Controller
         try {
             $this->checkPurchaseEnabled();
 
-            // create retorna o Model, envolvemos no Resource
             $created = $this->service->create(Auth::id(), $request->validated());
 
             return response()->json(new AddressResource($created), 201);

@@ -34,7 +34,6 @@
                         } elseif (in_array($order->status, ['Entregue', 'delivered'])) {
                             $showRefundSection = true;
                             if (!$order->delivery_date) {
-                                // Assume que pode se não tiver data (legado) ou ajusta lógica
                                 $canRefund = true;
                                 $refundLabel = "Solicitar Devolução";
                             } else {

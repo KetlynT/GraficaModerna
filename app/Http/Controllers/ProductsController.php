@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ProductService;
-use App\Http\Resources\ProductResource; // Importar o Resource
+use App\Http\Resources\ProductResource;
 use Illuminate\Http\Request;
 
 class ProductsController extends Controller
@@ -21,7 +21,7 @@ class ProductsController extends Controller
         $sort = $request->query('sort');
         $order = $request->query('order');
         $page = max((int)$request->query('page', 1), 1);
-        $pageSize = min((int)$request->query('pageSize', 8), 50); // C# limita a 50
+        $pageSize = min((int)$request->query('pageSize', 8), 50);
 
         $paginator = $this->service->getCatalog(
             $search,
@@ -31,8 +31,6 @@ class ProductsController extends Controller
             $pageSize
         );
 
-        // Transforma a coleção paginada usando o Resource para garantir camelCase
-        // Isso gera uma estrutura { data: [...], meta: ..., links: ... }
         return ProductResource::collection($paginator);
     }
 

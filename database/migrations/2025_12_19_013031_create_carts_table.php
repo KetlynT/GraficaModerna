@@ -23,7 +23,6 @@ return new class extends Migration {
             $table->foreign('cart_id')->references('id')->on('carts')->onDelete('cascade');
             $table->foreign('product_id')->references('id')->on('products')->onDelete('cascade');
             
-            // Garante que um produto só aparece uma vez por carrinho
             $table->unique(['cart_id', 'product_id']); 
         });
     }

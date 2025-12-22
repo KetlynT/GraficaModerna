@@ -11,7 +11,7 @@ use App\Http\Controllers\AddressController;
 use App\Http\Controllers\ContentController;
 use App\Http\Controllers\StripeWebhookController;
 
-Route::post('webhook/stripe', [StripeWebhookController::class, 'handleWebhook']);
+Route::post('webhook/stripe', [StripeWebhookController::class, 'handleStripe']);
 
 Route::middleware(['api', 'throttle:60,1'])->group(function () {
     
@@ -34,13 +34,12 @@ Route::middleware(['api', 'throttle:60,1'])->group(function () {
     Route::middleware('throttle:10,1')->post('admin/auth/login', [AdminController::class, 'login']);
 });
 
-Route::middleware(['api', 'auth.jwt', 'jwt.blacklist', 'throttle:100,1'])->group(function () {
+Route::middleware(['api', 'auth.jwt', 'throttle:100,1'])->group(function () {
 
     Route::post('auth/logout', [AuthController::class, 'logout']);
-    Route::get('auth/me', [AuthController::class, 'me']);
-    Route::get('auth/profile', [AuthController::class, 'me']); 
+    Route::get('auth/me', [AuthController::class, 'getProfile']);
+    Route::get('auth/profile', [AuthController::class, 'getProfile']); 
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
-    Route::post('auth/change-password', [AuthController::class, 'changePassword']);
 
     Route::prefix('cart')->group(function () {
         Route::get('/', [CartController::class, 'getCart']);
@@ -61,13 +60,15 @@ Route::middleware(['api', 'auth.jwt', 'jwt.blacklist', 'throttle:100,1'])->group
     Route::post('orders/{id}/request-refund', [OrdersController::class, 'requestRefund']);
 });
 
-Route::middleware(['api', 'auth.jwt', 'jwt.blacklist', 'admin', 'throttle:100,1'])->prefix('admin')->group(function () {
+Route::middleware(['api', 'auth.jwt', 'admin', 'throttle:100,1'])->prefix('admin')->group(function () {
 
     Route::get('dashboard/stats', [AdminController::class, 'dashboardStats']);
 
     Route::post('upload', [AdminController::class, 'upload']);
 
     Route::get('orders', [AdminController::class, 'getOrders']);
+    Route::get('refund-requests', [AdminController::class, 'getRefundRequests']);
+    Route::post('refund-requests/{id}/process', [AdminController::class, 'processRefundRequest']);
     Route::patch('orders/{id}/status', [AdminController::class, 'updateOrderStatus']);
 
     Route::get('products', [AdminController::class, 'getProducts']);

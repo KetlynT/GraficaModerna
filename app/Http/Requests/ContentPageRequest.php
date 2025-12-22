@@ -18,8 +18,6 @@ class ContentPageRequest extends FormRequest
             'content' => 'required|string',
         ];
 
-        // Apenas no cadastro (POST) o slug é obrigatório e único.
-        // Na edição (PUT/PATCH), o slug geralmente não muda ou é tratado diferente.
         if ($this->isMethod('post')) {
             $rules['slug'] = 'required|string|max:100|unique:content_pages,slug';
         }

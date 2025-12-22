@@ -76,7 +76,6 @@
 
     async function checkStatus() {
         try {
-            // Ajuste a rota da API conforme necessário
             const response = await fetch(`/api/orders/${orderId}/status`);
             const data = await response.json();
             
@@ -108,15 +107,12 @@
     }
 
     function showStatus(status) {
-        // Esconde todos
         ['verifying', 'success', 'processing', 'issue'].forEach(id => {
             document.getElementById(`status-${id}`).classList.add('hidden');
         });
         
-        // Mostra o atual
         document.getElementById(`status-${status}`).classList.remove('hidden');
 
-        // Mostra botões se não estiver verificando
         const actions = document.getElementById('action-buttons');
         if (status !== 'verifying') {
             actions.classList.remove('hidden');

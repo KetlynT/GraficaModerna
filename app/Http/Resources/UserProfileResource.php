@@ -9,7 +9,6 @@ class UserProfileResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Mapeia UserProfileDto.cs
         return [
             'fullName' => $this->full_name,
             'email' => $this->email,

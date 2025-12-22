@@ -17,7 +17,6 @@ class Coupon extends Model
         'discount_percentage' => 'decimal:2'
     ];
 
-    // Método de domínio IsValid()
     public function isValid(): bool
     {
         return $this->is_active && $this->expiry_date > now();

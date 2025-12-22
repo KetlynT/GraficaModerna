@@ -19,7 +19,6 @@ class UserAddress extends Model
         'is_default' => 'boolean',
     ];
 
-    // Accessor para ToString (equivalente ao C#)
     public function getFullDescriptionAttribute()
     {
         return "{$this->street}, {$this->number} - {$this->complement} - {$this->neighborhood}, {$this->city}/{$this->state} - CEP: {$this->zip_code} (Ref: {$this->reference}) - A/C: {$this->receiver_name} - Tel: {$this->phone_number}";

@@ -1,4 +1,4 @@
-<div id="toast-container" class="fixed top-4 right-4 z-[9999] space-y-4 pointer-events-none">
+<div id="toast-container" class="fixed top-4 right-4 z-9999 space-y-4 pointer-events-none">
     @if(session('success'))
         <div class="toast-message bg-white border-l-4 border-green-500 shadow-lg rounded-r p-4 flex items-center gap-3 animate-slide-in pointer-events-auto min-w-[300px]">
             <div class="text-green-500"><i data-lucide="check-circle"></i></div>
@@ -20,7 +20,6 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // Auto remover após 5 segundos
         const toasts = document.querySelectorAll('.toast-message');
         toasts.forEach(t => {
             setTimeout(() => {
@@ -31,7 +30,6 @@
         });
     });
 
-    // Função global para chamar via JS (ex: fetch)
     window.showToast = (message, type = 'success') => {
         const container = document.getElementById('toast-container');
         const div = document.createElement('div');

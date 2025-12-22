@@ -3,7 +3,6 @@
     $siteName = $settings->site_name ?? 'Gráfica Online';
     $logoUrl = $settings->site_logo ?? null;
     $purchaseEnabled = ($settings->purchase_enabled ?? 'true') !== 'false';
-    // Assumindo que $cartCount é compartilhado globalmente via ViewComposer
     $cartCount = $cartCount ?? 0; 
 @endphp
 

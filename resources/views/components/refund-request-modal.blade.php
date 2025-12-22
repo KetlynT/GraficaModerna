@@ -52,7 +52,6 @@
         document.querySelector('input[name="type"][value="Total"]').checked = true;
         
         modal.classList.remove('hidden');
-        // Pequeno delay para animação
         setTimeout(() => {
             modal.classList.remove('opacity-0');
             modal.classList.add('flex');
@@ -95,7 +94,6 @@
         container.innerHTML = '';
         
         currentRefundOrder.items.forEach(item => {
-            // Garante uso do ID correto (order_item_id)
             const unitPrice = parseFloat(item.unit_price || item.price || 0);
             
             const div = document.createElement('div');

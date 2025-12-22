@@ -19,13 +19,11 @@ class DashboardService
             default => Carbon::now()->subDays(7),
         };
 
-        // Resumo Geral
         $totalRevenue = Order::where('status', '!=', 'Cancelado')->sum('total_amount');
         $totalOrders = Order::count();
         $totalProducts = Product::count();
         $totalCustomers = User::where('role', 'User')->count();
 
-        // Dados do Gráfico (Vendas por dia)
         $salesChart = Order::select(
                 DB::raw('DATE(created_at) as date'), 
                 DB::raw('SUM(total_amount) as total')
@@ -40,14 +38,12 @@ class DashboardService
                 'value' => (float)$item->total
             ]);
 
-        // Produtos com estoque baixo (menos de 10)
         $lowStockProducts = Product::where('stock_quantity', '<', 10)
             ->where('is_active', true)
             ->select('id', 'name', 'stock_quantity', 'image_urls')
             ->limit(5)
             ->get();
 
-        // Últimos Pedidos
         $recentOrders = Order::with('user:id,full_name')
             ->orderBy('created_at', 'desc')
             ->limit(10)

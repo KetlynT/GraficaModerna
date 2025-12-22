@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\DB;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizer;
@@ -32,10 +33,11 @@ use App\Http\Resources\ContentPageResource;
 use App\Http\Resources\EmailTemplateResource;
 
 use App\Models\EmailTemplate;
+use App\Models\RefundRequest;
 
 class AdminController extends Controller
 {
-    private const MAX_FILE_SIZE = 52428800; // 50MB
+    private const MAX_FILE_SIZE = 52428800; 
     private const MAX_IMAGE_DIMENSION = 2048;
 
     protected AuthService $authService;
@@ -165,7 +167,6 @@ class AdminController extends Controller
         return response()->json($query->orderBy('created_at', 'desc')->paginate(10));
     }
 
-    // Processa (Aprova/Rejeita)
     public function processRefundRequest(Request $request, $id)
     {
         $refundRequest = RefundRequest::findOrFail($id);
@@ -173,11 +174,10 @@ class AdminController extends Controller
         $request->validate([
             'action' => 'required|in:approve,reject',
             'admin_notes' => 'nullable|string',
-            // Campos se for aprovar
             'refunded_amount' => 'required_if:action,approve|numeric|min:0',
             'proof_file' => 'nullable|file|max:2048',
             'restock_items' => 'nullable|array',
-            'restock_items.*.item_id' => 'required_with:restock_items|integer', // ID da tabela refund_request_items
+            'restock_items.*.item_id' => 'required_with:restock_items|integer', 
             'restock_items.*.quantity_to_stock' => 'required_with:restock_items|integer|min:0'
         ]);
 
@@ -188,11 +188,10 @@ class AdminController extends Controller
                     'status' => 'rejected',
                     'admin_notes' => $request->admin_notes
                 ]);
-                // Volta pedido para status anterior ou finalizado
+                
                 $refundRequest->order->update(['status' => 'delivered']);
             } 
             else {
-                // APROVAÇÃO
                 $path = null;
                 if ($request->hasFile('proof_file')) {
                     $path = $request->file('proof_file')->store('refunds', 'public');
@@ -205,16 +204,13 @@ class AdminController extends Controller
                     'proof_file' => $path
                 ]);
 
-                // Lógica de Estoque
                 if ($request->has('restock_items')) {
                     foreach ($request->restock_items as $restockData) {
                         $reqItem = $refundRequest->items()->where('id', $restockData['item_id'])->first();
                         
                         if ($reqItem && $restockData['quantity_to_stock'] > 0) {
-                            // Atualiza registro histórico
                             $reqItem->update(['quantity_restocked' => $restockData['quantity_to_stock']]);
 
-                            // Devolve ao estoque real do produto
                             $product = $reqItem->orderItem->product;
                             if ($product) {
                                 $product->increment('stock', $restockData['quantity_to_stock']);
@@ -223,7 +219,7 @@ class AdminController extends Controller
                     }
                 }
                 
-                $refundRequest->order->update(['status' => 'refunded']); // ou partially_refunded
+                $refundRequest->order->update(['status' => 'refunded']); 
             }
 
             return response()->json(['message' => 'Processado com sucesso', 'data' => $refundRequest]);
@@ -366,8 +362,10 @@ class AdminController extends Controller
 
     private function setTokenCookies(string $accessToken, string $refreshToken): void
     {
-        Cookie::queue(cookie('jwt', $accessToken, 15, null, null, true, true, false, 'Lax'));
-        Cookie::queue(cookie('refreshToken', $refreshToken, 60 * 24 * 7, null, null, true, true, false, 'Lax'));
+        $secure = app()->environment('production');
+        
+        Cookie::queue(cookie('jwt', $accessToken, 15, null, null, $secure, true, false, 'Lax'));
+        Cookie::queue(cookie('refreshToken', $refreshToken, 60 * 24 * 7, null, null, $secure, true, false, 'Lax'));
     }
 
     private function isVideo(string $ext): bool

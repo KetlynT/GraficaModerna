@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\CartService;
 use App\Services\ContentService;
 use App\Http\Resources\CartResource;
-use App\Http\Requests\CartOrderRequest; // Nome do request no Laravel
+use App\Http\Requests\CartOrderRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,7 +24,6 @@ class CartController extends Controller
     {
         $settings = $this->contentService->getSettings();
         if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
-            // Lança exceção para ser capturada pelo bloco try/catch e retornar 400
             throw new \Exception("Funcionalidade de compra indisponível temporariamente.");
         }
     }
@@ -34,7 +33,7 @@ class CartController extends Controller
         try {
             $this->checkPurchaseEnabled();
             $cart = $this->service->getCart(Auth::id());
-            return new CartResource($cart); // Retorna CartDto
+            return new CartResource($cart);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
@@ -45,7 +44,7 @@ class CartController extends Controller
         try {
             $this->checkPurchaseEnabled();
             $this->service->addItem(Auth::id(), $request->validated());
-            return response()->json([], 200); // Ok()
+            return response()->json([], 200);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

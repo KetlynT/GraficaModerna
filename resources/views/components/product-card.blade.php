@@ -3,7 +3,6 @@
     $purchaseEnabled = ($settings->purchase_enabled ?? 'true') !== 'false';
     $isAdmin = auth()->check() && auth()->user()->role === 'Admin';
     $imageUrl = $product->imageUrls[0] ?? 'https://placehold.co/400x300?text=Sem+Imagem';
-    // Se tiver helper de imagem, use-o aqui
 @endphp
 
 <div class="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col h-full overflow-hidden">

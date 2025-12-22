@@ -11,10 +11,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Aqui chamamos nossos seeders específicos
         $this->call([
             EmailTemplateSeeder::class,
-            // AdminUserSeeder::class, // Se quiser criar um admin padrão depois
         ]);
     }
 }

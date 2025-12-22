@@ -9,14 +9,11 @@ class UpdateProfileRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; // Requer auth, mas o middleware resolve isso
+        return true;
     }
 
     public function rules(): array
     {
-        // Ignora o ID do usuário atual na validação de unique se necessário
-        // $userId = $this->user()->id; 
-
         return [
             'fullName'    => 'required|string|min:3|max:100',
             'phoneNumber' => 'nullable|string|max:20',
