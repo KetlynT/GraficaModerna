@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@section('head')
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+@endsection
+
 @section('content')
 <div class="max-w-4xl mx-auto px-4 py-12">
     <h1 class="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-3">
@@ -17,21 +21,22 @@
         <div class="space-y-6">
             @foreach($orders as $order)
                 @php
-                    // Lógica de Status convertida para PHP
-                    $validStatuses = ['Pago', 'Enviado', 'Entregue'];
+                    $validStatuses = ['Pago', 'Enviado', 'Entregue', 'paid', 'delivered'];
                     $showRefundSection = false;
                     $canRefund = false;
                     $refundLabel = '';
                     
                     if (in_array($order->status, $validStatuses)) {
-                        if ($order->status === 'Pago' || $order->status === 'Enviado') {
+                        if (in_array($order->status, ['Pago', 'Enviado', 'paid'])) {
                             $showRefundSection = true;
                             $canRefund = true;
                             $refundLabel = "Solicitar Cancelamento";
-                        } elseif ($order->status === 'Entregue') {
+                        } elseif (in_array($order->status, ['Entregue', 'delivered'])) {
                             $showRefundSection = true;
                             if (!$order->delivery_date) {
-                                $refundLabel = "Aguardando data...";
+                                // Assume que pode se não tiver data (legado) ou ajusta lógica
+                                $canRefund = true;
+                                $refundLabel = "Solicitar Devolução";
                             } else {
                                 $deadline = \Carbon\Carbon::parse($order->delivery_date)->addDays(7);
                                 $canRefund = now()->lte($deadline);
@@ -57,7 +62,7 @@
                         <div class="flex items-center justify-between md:justify-end gap-4">
                             <div class="text-right">
                                 <div class="text-xs text-gray-500 uppercase font-bold">Total</div>
-                                <div class="text-xl font-bold text-green-600">R$ {{ number_format($order->total_amount, 2, ',', '.') }}</div>
+                                <div class="text-xl font-bold text-green-600">R$ {{ number_format($order->total_amount ?? $order->total, 2, ',', '.') }}</div>
                             </div>
                             
                             @if($order->status === 'Pendente')
@@ -73,7 +78,7 @@
                     <div class="order-details hidden border-t border-gray-100">
                         <div class="p-6 bg-white">
                             
-                            @if($order->status === 'Reembolso Reprovado')
+                            @if($order->status === 'Reembolso Reprovado' || $order->status === 'refund_rejected')
                                 <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 mx-6 mt-4">
                                     <h4 class="text-red-800 font-bold flex items-center gap-2 mb-2">
                                         <i data-lucide="alert-triangle" width="18"></i> Solicitação de Reembolso Negada
@@ -82,7 +87,7 @@
                                         <div>
                                             <span class="text-xs font-bold text-red-700 uppercase block mb-1">Motivo da Análise:</span>
                                             <p class="text-sm text-gray-800 bg-white p-3 rounded border border-red-100">
-                                                {{ $order->refund_rejection_reason ?? "Contate o suporte." }}
+                                                {{ $order->refund_rejection_reason ?? "Entre em contato com o suporte para mais detalhes." }}
                                             </p>
                                         </div>
                                     </div>
@@ -107,7 +112,7 @@
                                     <i data-lucide="map-pin" width="18" class="mt-0.5 text-primary"></i>
                                     <div>
                                         <span class="block font-bold text-primary text-sm">Endereço</span>
-                                        <span class="text-sm">{{ $order->shipping_address }}</span>
+                                        <span class="text-sm">{{ $order->shipping_address ?? 'Endereço registrado' }}</span>
                                     </div>
                                 </div>
                                 <div class="flex-1 space-y-2">
@@ -123,20 +128,20 @@
                                 <tbody class="divide-y border-b border-gray-100">
                                     @foreach($order->items as $item)
                                         <tr>
-                                            <td class="py-2 font-medium text-gray-800">{{ $item->quantity }}x {{ $item->product_name }}</td>
-                                            <td class="py-2 text-right font-bold text-gray-800">R$ {{ number_format($item->total, 2, ',', '.') }}</td>
+                                            <td class="py-2 font-medium text-gray-800">{{ $item->quantity }}x {{ $item->product->name ?? $item->product_name }}</td>
+                                            <td class="py-2 text-right font-bold text-gray-800">R$ {{ number_format($item->total ?? ($item->quantity * ($item->unit_price ?? $item->price)), 2, ',', '.') }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
                             </table>
 
                             <div class="flex flex-col items-end gap-1 text-sm text-gray-700 mb-6">
-                                <div class="flex justify-between w-full max-w-60"><span>Subtotal:</span><span>R$ {{ number_format($order->sub_total, 2, ',', '.') }}</span></div>
-                                @if($order->discount > 0)
+                                <div class="flex justify-between w-full max-w-60"><span>Subtotal:</span><span>R$ {{ number_format($order->sub_total ?? $order->total, 2, ',', '.') }}</span></div>
+                                @if(($order->discount ?? 0) > 0)
                                     <div class="flex justify-between w-full max-w-60 text-green-600"><span>Desconto:</span><span>- R$ {{ number_format($order->discount, 2, ',', '.') }}</span></div>
                                 @endif
-                                <div class="flex justify-between w-full max-w-60 text-primary"><span>Frete:</span><span>R$ {{ number_format($order->shipping_cost, 2, ',', '.') }}</span></div>
-                                <div class="flex justify-between w-full max-w-60 font-bold text-lg mt-2 border-t pt-2 border-gray-200"><span>Total:</span><span>R$ {{ number_format($order->total_amount, 2, ',', '.') }}</span></div>
+                                <div class="flex justify-between w-full max-w-60 text-primary"><span>Frete:</span><span>R$ {{ number_format($order->shipping_cost ?? 0, 2, ',', '.') }}</span></div>
+                                <div class="flex justify-between w-full max-w-60 font-bold text-lg mt-2 border-t pt-2 border-gray-200"><span>Total:</span><span>R$ {{ number_format($order->total_amount ?? $order->total, 2, ',', '.') }}</span></div>
                             </div>
 
                             @if($showRefundSection)
@@ -169,6 +174,8 @@
     .status-pago { @apply bg-green-100 text-green-800; }
     .status-enviado { @apply bg-blue-100 text-blue-800; }
     .status-cancelado { @apply bg-red-100 text-red-800; }
+    .status-entregue { @apply bg-gray-100 text-gray-800; }
+    .status-delivered { @apply bg-gray-100 text-gray-800; }
 </style>
 
 @push('scripts')
@@ -180,10 +187,10 @@
         
         if (details.classList.contains('hidden')) {
             details.classList.remove('hidden');
-            chevron.classList.add('rotate-180');
+            if(chevron) chevron.classList.add('rotate-180');
         } else {
             details.classList.add('hidden');
-            chevron.classList.remove('rotate-180');
+            if(chevron) chevron.classList.remove('rotate-180');
         }
     }
 </script>

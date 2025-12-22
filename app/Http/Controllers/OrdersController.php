@@ -10,19 +10,18 @@ use Illuminate\Support\Facades\DB;
 
 class OrdersController extends Controller
 {
-    public function checkout(Request $request)
-    {
-        return response()->json(['message' => 'Stub checkout']);
-    }
-
     public function index(Request $request)
     {
         $orders = Order::where('user_id', auth()->id())
-            ->with(['refundRequests']) 
+            ->with(['items.product', 'refundRequests']) 
             ->orderBy('created_at', 'desc')
             ->paginate($request->get('pageSize', 10));
 
-        return response()->json($orders);
+        if ($request->wantsJson()) {
+            return response()->json($orders);
+        }
+
+        return view('profile.orders.index', compact('orders'));
     }
 
     public function show($id)
@@ -33,6 +32,11 @@ class OrdersController extends Controller
             ->firstOrFail();
 
         return response()->json($order);
+    }
+
+    public function checkout(Request $request)
+    {
+        return response()->json(['message' => 'Stub checkout']);
     }
 
     public function requestRefund(Request $request, $id)
@@ -47,8 +51,10 @@ class OrdersController extends Controller
         $user = auth()->user();
         $order = Order::where('id', $id)->where('user_id', $user->id)->firstOrFail();
 
-        if (!in_array($order->status, ['paid', 'delivered'])) {
-            return response()->json(['message' => 'Status inválido para reembolso.'], 400);
+        $allowedStatus = ['Pago', 'Entregue', 'delivered', 'paid'];
+        
+        if (!in_array($order->status, $allowedStatus)) {
+            return response()->json(['message' => 'Status inválido para solicitação.'], 400);
         }
 
         return DB::transaction(function () use ($request, $order, $user) {
@@ -61,11 +67,10 @@ class OrdersController extends Controller
             ]);
 
             foreach ($request->items as $itemData) {
-                // Valida se o item pertence ao pedido
                 $orderItem = $order->items()->where('id', $itemData['order_item_id'])->firstOrFail();
                 
                 if ($itemData['quantity'] > $orderItem->quantity) {
-                    throw new \Exception("Quantidade solicitada maior que a comprada para o item #{$orderItem->id}");
+                    throw new \Exception("Quantidade solicitada maior que a comprada.");
                 }
 
                 RefundRequestItem::create([
@@ -75,13 +80,12 @@ class OrdersController extends Controller
                 ]);
             }
 
-            // Atualiza status global do pedido apenas visualmente
-            $order->status = 'refund_processing';
+            $order->status = 'Em Análise de Reembolso';
             $order->save();
 
             return response()->json([
-                'message' => 'Solicitação de reembolso criada com sucesso.',
-                'refund_request' => $refundRequest->load('items')
+                'message' => 'Solicitação enviada com sucesso.',
+                'refund_request' => $refundRequest
             ]);
         });
     }
