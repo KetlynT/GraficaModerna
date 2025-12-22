@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="relative bg-gradient-to-r from-blue-600 to-blue-800 text-white overflow-hidden">
+<div class="relative bg-linear-to-r from-blue-600 to-blue-800 text-white overflow-hidden">
     <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 relative z-10 text-center">
         <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight mb-6">
@@ -79,7 +79,7 @@
                             @endif
                         </div>
 
-                        <div class="p-5 flex flex-col flex-grow">
+                        <div class="p-5 flex flex-col grow">
                             <div class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">
                                 {{ $product->category }}
                             </div>
@@ -90,7 +90,7 @@
                                 </h3>
                             </a>
                             
-                            <p class="text-gray-500 text-sm mb-4 line-clamp-2 flex-grow">
+                            <p class="text-gray-500 text-sm mb-4 line-clamp-2 grow">
                                 {{ $product->description }}
                             </p>
 
