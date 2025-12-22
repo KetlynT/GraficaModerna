@@ -51,21 +51,30 @@ class CartController extends Controller
         }
     }
 
-    public function updateItem(Request $request, string $itemId)
+    public function updateItem(Request $request, $id)
     {
-        // O C# usa [FromBody] UpdateCartItemDto dto, que só tem Quantity
-        // Aqui podemos validar inline ou criar um Request específico
         $request->validate([
-            'quantity' => 'required|integer|min:0'
+            'quantity' => 'required|integer|min:1'
         ]);
 
-        try {
-            $this->checkPurchaseEnabled();
-            $this->service->updateItemQuantity(Auth::id(), $itemId, $request->input('quantity'));
-            return response()->json([], 200);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+        $cart = auth()->user()->cart;
+        if (!$cart) {
+            return response()->json(['message' => 'Cart not found'], 404);
         }
+
+        $item = $cart->items()->where('id', $id)->first(); 
+    
+        if (!$item) {
+            $item = $cart->items()->where('product_id', $id)->first();
+        }
+
+        if (!$item) {
+            return response()->json(['message' => 'Item not found in cart'], 404);
+        }
+
+        $item->quantity = $request->quantity;
+        $item->save();
+        return response()->json($cart->load('items.product'));
     }
 
     public function removeItem(string $itemId)

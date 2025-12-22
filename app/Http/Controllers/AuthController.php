@@ -178,4 +178,22 @@ class AuthController extends Controller
         // Refresh Token: 7 dias
         Cookie::queue(cookie('refreshToken', $refresh, 60 * 24 * 7, null, null, true, true, false, 'Lax'));
     }
+
+    public function logout()
+    {
+        auth()->logout();
+        return response()->json(['message' => 'Successfully logged out']);
+    }
+
+    public function checkAuth()
+    {
+        if (auth()->check()) {
+            return response()->json([
+                'isAuthenticated' => true,
+                'role' => auth()->user()->role,
+                'user' => auth()->user()
+            ]);
+        }
+        return response()->json(['isAuthenticated' => false], 200);
+    }
 }

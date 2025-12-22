@@ -2,85 +2,87 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\OrderService;
-use App\Services\ContentService;
-use App\Http\Requests\CheckoutRequest;
-use App\Http\Requests\RefundRequest;
-use App\Http\Resources\OrderResource;
+use App\Models\Order;
+use App\Models\RefundRequest;
+use App\Models\RefundRequestItem;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 
 class OrdersController extends Controller
 {
-    protected OrderService $orderService;
-    protected ContentService $contentService;
-
-    public function __construct(OrderService $orderService, ContentService $contentService)
+    public function checkout(Request $request)
     {
-        $this->orderService = $orderService;
-        $this->contentService = $contentService;
-    }
-
-    private function checkPurchaseEnabled(): void
-    {
-        $settings = $this->contentService->getSettings(); // Adapte se seu ContentService retornar array direto
-        // Em PHP array 'false' string pode ser tricky, verifique se vem booleano ou string
-        if (isset($settings['purchase_enabled']) && $settings['purchase_enabled'] === 'false') {
-             // throw new Exception igual ao C# InvalidOperationException, que o Handler transforma em erro
-             abort(403, "Novos pedidos estão desativados temporariamente. Entre em contato para orçamento.");
-        }
-    }
-
-    public function checkout(CheckoutRequest $request)
-    {
-        $this->checkPurchaseEnabled();
-
-        $validated = $request->validated();
-        $userId = Auth::id();
-
-        $order = $this->orderService->createOrderFromCart(
-            $userId,
-            $validated['address'], // Certifique-se que o Request valida AddressDto structure
-            $validated['couponCode'] ?? null,
-            $validated['shippingMethod']
-        );
-
-        // Retorna usando o Resource para garantir camelCase e estrutura correta
-        return new OrderResource($order);
+        return response()->json(['message' => 'Stub checkout']);
     }
 
     public function index(Request $request)
     {
-        $userId = Auth::id();
-        $page = (int) $request->query('page', 1);
-        $pageSize = (int) $request->query('pageSize', 10);
+        $orders = Order::where('user_id', auth()->id())
+            ->with(['refundRequests']) 
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->get('pageSize', 10));
 
-        $paginator = $this->orderService->getUserOrders($userId, $page, $pageSize);
-
-        // Resource::collection lida com o paginator automaticamente (meta, links, data)
-        return OrderResource::collection($paginator);
+        return response()->json($orders);
     }
 
-    public function requestRefund(RefundRequest $request, string $id)
+    public function show($id)
     {
-        $userId = Auth::id();
-        $validated = $request->validated();
+        $order = Order::with(['items.product', 'address', 'refundRequests.items'])
+            ->where('user_id', auth()->id())
+            ->where('id', $id)
+            ->firstOrFail();
 
-        $this->orderService->requestRefund($id, $userId, $validated);
-
-        return response()->json([], 200);
+        return response()->json($order);
     }
 
-    public function show(string $id)
+    public function requestRefund(Request $request, $id)
     {
-        try {
-            $userId = Auth::id();
-            $order = $this->orderService->getOrderById($id, $userId);
-            
-            return new OrderResource($order);
-        } catch (ModelNotFoundException $e) {
-            return response()->json(['message' => 'Pedido não encontrado.'], 404);
+        $request->validate([
+            'reason' => 'required|string|min:10',
+            'items'  => 'required|array|min:1',
+            'items.*.order_item_id' => 'required|integer',
+            'items.*.quantity' => 'required|integer|min:1',
+        ]);
+
+        $user = auth()->user();
+        $order = Order::where('id', $id)->where('user_id', $user->id)->firstOrFail();
+
+        if (!in_array($order->status, ['paid', 'delivered'])) {
+            return response()->json(['message' => 'Status inválido para reembolso.'], 400);
         }
+
+        return DB::transaction(function () use ($request, $order, $user) {
+            
+            $refundRequest = RefundRequest::create([
+                'order_id' => $order->id,
+                'user_id' => $user->id,
+                'reason' => $request->reason,
+                'status' => 'pending'
+            ]);
+
+            foreach ($request->items as $itemData) {
+                // Valida se o item pertence ao pedido
+                $orderItem = $order->items()->where('id', $itemData['order_item_id'])->firstOrFail();
+                
+                if ($itemData['quantity'] > $orderItem->quantity) {
+                    throw new \Exception("Quantidade solicitada maior que a comprada para o item #{$orderItem->id}");
+                }
+
+                RefundRequestItem::create([
+                    'refund_request_id' => $refundRequest->id,
+                    'order_item_id' => $orderItem->id,
+                    'quantity_requested' => $itemData['quantity']
+                ]);
+            }
+
+            // Atualiza status global do pedido apenas visualmente
+            $order->status = 'refund_processing';
+            $order->save();
+
+            return response()->json([
+                'message' => 'Solicitação de reembolso criada com sucesso.',
+                'refund_request' => $refundRequest->load('items')
+            ]);
+        });
     }
 }

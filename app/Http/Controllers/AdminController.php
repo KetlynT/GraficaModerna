@@ -153,6 +153,82 @@ class AdminController extends Controller
         
         return OrderResource::collection($orders);
     }
+    
+    public function getRefundRequests(Request $request)
+    {
+        $query = RefundRequest::with(['order', 'user', 'items.orderItem.product']);
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        return response()->json($query->orderBy('created_at', 'desc')->paginate(10));
+    }
+
+    // Processa (Aprova/Rejeita)
+    public function processRefundRequest(Request $request, $id)
+    {
+        $refundRequest = RefundRequest::findOrFail($id);
+        
+        $request->validate([
+            'action' => 'required|in:approve,reject',
+            'admin_notes' => 'nullable|string',
+            // Campos se for aprovar
+            'refunded_amount' => 'required_if:action,approve|numeric|min:0',
+            'proof_file' => 'nullable|file|max:2048',
+            'restock_items' => 'nullable|array',
+            'restock_items.*.item_id' => 'required_with:restock_items|integer', // ID da tabela refund_request_items
+            'restock_items.*.quantity_to_stock' => 'required_with:restock_items|integer|min:0'
+        ]);
+
+        return DB::transaction(function () use ($request, $refundRequest) {
+            
+            if ($request->action === 'reject') {
+                $refundRequest->update([
+                    'status' => 'rejected',
+                    'admin_notes' => $request->admin_notes
+                ]);
+                // Volta pedido para status anterior ou finalizado
+                $refundRequest->order->update(['status' => 'delivered']);
+            } 
+            else {
+                // APROVAÇÃO
+                $path = null;
+                if ($request->hasFile('proof_file')) {
+                    $path = $request->file('proof_file')->store('refunds', 'public');
+                }
+
+                $refundRequest->update([
+                    'status' => 'approved',
+                    'refunded_amount' => $request->refunded_amount,
+                    'admin_notes' => $request->admin_notes,
+                    'proof_file' => $path
+                ]);
+
+                // Lógica de Estoque
+                if ($request->has('restock_items')) {
+                    foreach ($request->restock_items as $restockData) {
+                        $reqItem = $refundRequest->items()->where('id', $restockData['item_id'])->first();
+                        
+                        if ($reqItem && $restockData['quantity_to_stock'] > 0) {
+                            // Atualiza registro histórico
+                            $reqItem->update(['quantity_restocked' => $restockData['quantity_to_stock']]);
+
+                            // Devolve ao estoque real do produto
+                            $product = $reqItem->orderItem->product;
+                            if ($product) {
+                                $product->increment('stock', $restockData['quantity_to_stock']);
+                            }
+                        }
+                    }
+                }
+                
+                $refundRequest->order->update(['status' => 'refunded']); // ou partially_refunded
+            }
+
+            return response()->json(['message' => 'Processado com sucesso', 'data' => $refundRequest]);
+        });
+    }
 
     public function updateOrderStatus(string $id, Request $request)
     {
@@ -313,5 +389,17 @@ class AdminController extends Controller
         if (strlen($bytes) >= 8 && substr($bytes, 4, 4) === "ftyp") return ".mp4";
 
         return null;
+    }
+
+    public function getAllPages()
+    {
+        $pages = \App\Models\ContentPage::all();
+        return response()->json($pages);
+    }
+
+    public function getPageBySlug($slug)
+    {
+        $page = \App\Models\ContentPage::where('slug', $slug)->firstOrFail();
+        return response()->json($page);
     }
 }
