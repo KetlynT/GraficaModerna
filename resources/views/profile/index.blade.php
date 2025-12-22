@@ -1,102 +1,90 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container mx-auto px-4 py-12 max-w-2xl">
-    <h1 class="text-3xl font-bold text-gray-900 mb-8">Meu Perfil</h1>
-    
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="p-6 sm:p-8">
-            
-            @if(session('success'))
-                <div class="bg-green-100 text-green-700 p-3 rounded mb-6">
-                    {{ session('success') }}
-                </div>
-            @endif
+<div class="max-w-4xl mx-auto px-4 py-12">
+    <h1 class="text-3xl font-bold text-gray-900 mb-8 flex items-center gap-2">
+        <i data-lucide="user" class="text-[var(--color-primary)]"></i> Minha Conta
+    </h1>
 
-            <form action="/perfil/atualizar" method="POST" class="space-y-6">
-                @csrf
-                @method('PUT')
-                
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">E-mail (não alterável)</label>
-                    <input 
-                        value="{{ auth()->user()->email }}"
-                        readonly
-                        class="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-500 cursor-not-allowed"
-                    />
+    <div class="grid md:grid-cols-3 gap-8">
+        <div class="space-y-4">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center">
+                <div class="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-gray-600">
+                    {{ substr(auth()->user()->name, 0, 1) }}
                 </div>
+                <h3 class="font-bold text-gray-800">{{ auth()->user()->name }}</h3>
+                <p class="text-xs text-gray-500">{{ auth()->user()->email }}</p>
+                <p class="text-xs text-blue-600 mt-1 font-mono">ID: #{{ auth()->id() }}</p>
+            </div>
 
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
-                    <div class="relative">
-                        <i data-lucide="user" class="absolute left-3 top-3 text-gray-400" width="18"></i>
-                        <input 
-                            name="name"
-                            value="{{ old('name', auth()->user()->name) }}"
-                            class="w-full border border-gray-300 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-primary outline-none"
-                            required
-                        />
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">CPF ou CNPJ</label>
-                    <div class="relative">
-                        <i data-lucide="file-text" class="absolute left-3 top-3 text-gray-400" width="18"></i>
-                        <input 
-                            name="cpf_cnpj"
-                            value="{{ old('cpf_cnpj', auth()->user()->cpf_cnpj) }}"
-                            class="w-full border border-gray-300 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-primary outline-none"
-                            placeholder="000.000.000-00"
-                            maxlength="18"
-                            required
-                            oninput="maskCpfCnpj(this)"
-                        />
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">Telefone / Celular</label>
-                    <div class="relative">
-                        <i data-lucide="phone" class="absolute left-3 top-3 text-gray-400" width="18"></i>
-                        <input 
-                            name="phone"
-                            value="{{ old('phone', auth()->user()->phone) }}"
-                            class="w-full border border-gray-300 rounded-lg pl-10 p-3 focus:ring-2 focus:ring-primary outline-none"
-                            placeholder="(00) 00000-0000"
-                            maxlength="15"
-                            required
-                            oninput="maskPhone(this)"
-                        />
-                    </div>
-                </div>
-
-                <div class="pt-4 flex gap-4">
-                    <button 
-                        type="submit"
-                        class="flex-1 bg-primary hover:brightness-90 text-white font-bold py-3 rounded-lg flex justify-center items-center gap-2 shadow-lg shadow-blue-900/30 transition-all"
-                    >
-                        <i data-lucide="save" width="20"></i> Salvar Alterações
+            <nav class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <a href="/perfil/pedidos" class="flex items-center gap-3 px-6 py-4 hover:bg-gray-50 border-b border-gray-100 transition-colors">
+                    <i data-lucide="package" width="18" class="text-blue-600"></i>
+                    <span class="font-medium text-gray-700">Meus Pedidos</span>
+                </a>
+                <form action="/logout" method="POST">
+                    @csrf
+                    <button type="submit" class="w-full flex items-center gap-3 px-6 py-4 hover:bg-red-50 text-red-600 transition-colors text-left">
+                        <i data-lucide="log-out" width="18"></i>
+                        <span class="font-medium">Sair da Conta</span>
                     </button>
+                </form>
+            </nav>
+        </div>
 
-                    <form action="/logout" method="POST">
-                        @csrf
-                        <button 
-                            type="submit"
-                            class="px-6 py-3 border border-red-200 text-red-600 font-bold rounded-lg hover:bg-red-50 transition-colors h-full"
-                        >
-                            Sair da Conta
+        <div class="md:col-span-2 space-y-8">
+            
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h2 class="text-xl font-bold text-gray-800 mb-6 border-b pb-2">Dados Pessoais</h2>
+                
+                @if(session('success'))
+                    <div class="bg-green-100 text-green-700 p-3 rounded mb-6 text-sm flex items-center gap-2">
+                        <i data-lucide="check-circle" width="16"></i> {{ session('success') }}
+                    </div>
+                @endif
+
+                <form action="/perfil/atualizar" method="POST" class="space-y-4">
+                    @csrf
+                    @method('PUT')
+                    
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
+                            <input name="name" value="{{ old('name', auth()->user()->name) }}" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-600 outline-none" required />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">E-mail</label>
+                            <input value="{{ auth()->user()->email }}" class="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-gray-500 cursor-not-allowed" readonly />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">CPF/CNPJ</label>
+                            <input name="cpf_cnpj" value="{{ old('cpf_cnpj', auth()->user()->cpf_cnpj) }}" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-600 outline-none" oninput="maskCpfCnpj(this)" maxlength="18" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Telefone</label>
+                            <input name="phone" value="{{ old('phone', auth()->user()->phone) }}" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-600 outline-none" oninput="maskPhone(this)" maxlength="15" />
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button type="submit" class="bg-gray-900 hover:bg-black text-white px-6 py-2.5 rounded-lg font-bold text-sm transition-colors flex items-center gap-2">
+                            <i data-lucide="save" width="16"></i> Salvar Dados
                         </button>
-                    </form>
-                </div>
-            </form>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                @include('components.address-manager')
+            </div>
+
         </div>
     </div>
 </div>
 
 @push('scripts')
 <script>
-    // As mesmas funções de máscara do cadastro podem ser reutilizadas aqui
+    // Reaproveitando as máscaras
     function maskCpfCnpj(input) {
         let v = input.value.replace(/\D/g,"");
         if (v.length <= 11) {
@@ -111,7 +99,6 @@
         }
         input.value = v;
     }
-
     function maskPhone(input) {
         let v = input.value.replace(/\D/g,"");
         v = v.replace(/^(\d{2})(\d)/g,"($1) $2");
